@@ -1,24 +1,24 @@
 import React, { useState } from 'react'
 import { useStore } from '../store/useStore'
-import { ChevronDown, ChevronUp, Palette, Eye, EyeOff } from 'lucide-react'
+import { ChevronDown, ChevronUp, Palette } from 'lucide-react'
 
 const Section = ({ title, children, isOpen, onToggle }) => (
     <div className="border-b border-gray-700 last:border-0">
         <button
             onClick={onToggle}
-            className="w-full flex items-center justify-between p-3 bg-gray-800 hover:bg-gray-750 text-xs font-bold uppercase tracking-wider text-gray-300 transition-colors"
+            className="w-full flex items-center justify-between p-2 bg-gray-800 hover:bg-gray-750 text-[10px] font-bold uppercase tracking-wider text-gray-300 transition-colors"
         >
             {title}
-            {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            {isOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
         </button>
-        {isOpen && <div className="p-3 bg-gray-900 space-y-3">{children}</div>}
+        {isOpen && <div className="p-2 bg-gray-900 space-y-2">{children}</div>}
     </div>
 )
 
 const ControlRow = ({ label, children }) => (
-    <div className="flex items-center justify-between gap-2">
-        <label className="text-xs text-gray-400 font-medium">{label}</label>
-        <div className="flex items-center gap-2">{children}</div>
+    <div className="flex items-center justify-between gap-1">
+        <label className="text-[10px] text-gray-400 font-medium">{label}</label>
+        <div className="flex items-center gap-1">{children}</div>
     </div>
 )
 
@@ -28,21 +28,345 @@ const ColorPicker = ({ value, onChange }) => (
             type="color"
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className="w-6 h-6 rounded border-0 p-0 overflow-hidden cursor-pointer"
+            className="w-5 h-5 rounded border-0 p-0 overflow-hidden cursor-pointer"
         />
         <div className="absolute inset-0 ring-1 ring-white/20 rounded pointer-events-none group-hover:ring-white/40" />
     </div>
 )
 
+const Slider = ({ value, onChange, min = 0, max = 1, step = 0.1, className = "w-14" }) => (
+    <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        className={`h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500 ${className}`}
+    />
+)
+
+const LineStyleSelector = ({ dashed, dashSize, gapSize, onChange, onDashChange, onGapChange }) => (
+    <div className="space-y-1">
+        <div className="flex gap-1">
+            <button
+                onClick={() => onChange(false)}
+                className={`flex-1 text-[9px] px-1 py-0.5 rounded border transition-colors ${
+                    !dashed ? 'bg-blue-900 border-blue-500 text-blue-100' : 'bg-transparent border-gray-600 text-gray-400 hover:border-gray-500'
+                }`}
+            >
+                SOLID
+            </button>
+            <button
+                onClick={() => onChange(true)}
+                className={`flex-1 text-[9px] px-1 py-0.5 rounded border transition-colors ${
+                    dashed ? 'bg-blue-900 border-blue-500 text-blue-100' : 'bg-transparent border-gray-600 text-gray-400 hover:border-gray-500'
+                }`}
+            >
+                DASH
+            </button>
+        </div>
+        {dashed && (
+            <div className="grid grid-cols-2 gap-1">
+                <div className="flex items-center gap-1">
+                    <span className="text-[9px] text-gray-500">D</span>
+                    <input
+                        type="number"
+                        min="0.5"
+                        max="10"
+                        step="0.5"
+                        value={dashSize}
+                        onChange={(e) => onDashChange(parseFloat(e.target.value))}
+                        className="w-10 bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-[9px] text-white"
+                    />
+                </div>
+                <div className="flex items-center gap-1">
+                    <span className="text-[9px] text-gray-500">G</span>
+                    <input
+                        type="number"
+                        min="0.5"
+                        max="10"
+                        step="0.5"
+                        value={gapSize}
+                        onChange={(e) => onGapChange(parseFloat(e.target.value))}
+                        className="w-10 bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-[9px] text-white"
+                    />
+                </div>
+            </div>
+        )}
+    </div>
+)
+
+// Style controls for a single model (existing or proposed)
+const ModelStyleControls = ({ model, styles, setStyle, openSections, toggleSection }) => {
+    const prefix = model // 'existing' or 'proposed'
+
+    return (
+        <div className="flex-1 min-w-0">
+            {/* Lot Boundaries */}
+            <Section
+                title="Lot Lines"
+                isOpen={openSections[`${prefix}_lot`]}
+                onToggle={() => toggleSection(`${prefix}_lot`)}
+            >
+                <ControlRow label="Color">
+                    <ColorPicker
+                        value={styles.lotLines.color}
+                        onChange={(c) => setStyle(model, 'lotLines', 'color', c)}
+                    />
+                </ControlRow>
+                <ControlRow label="Width">
+                    <Slider
+                        value={styles.lotLines.width}
+                        onChange={(v) => setStyle(model, 'lotLines', 'width', v)}
+                        min={1}
+                        max={10}
+                        step={0.5}
+                    />
+                    <span className="text-[9px] text-gray-400 w-4 font-mono">{styles.lotLines.width}</span>
+                </ControlRow>
+                <ControlRow label="Opacity">
+                    <Slider
+                        value={styles.lotLines.opacity}
+                        onChange={(v) => setStyle(model, 'lotLines', 'opacity', v)}
+                    />
+                    <span className="text-[9px] text-gray-400 w-4 font-mono">{styles.lotLines.opacity.toFixed(1)}</span>
+                </ControlRow>
+                <div className="pt-1">
+                    <LineStyleSelector
+                        dashed={styles.lotLines.dashed}
+                        dashSize={styles.lotLines.dashSize}
+                        gapSize={styles.lotLines.gapSize}
+                        onChange={(v) => setStyle(model, 'lotLines', 'dashed', v)}
+                        onDashChange={(v) => setStyle(model, 'lotLines', 'dashSize', v)}
+                        onGapChange={(v) => setStyle(model, 'lotLines', 'gapSize', v)}
+                    />
+                </div>
+            </Section>
+
+            {/* Lot Fill */}
+            <Section
+                title="Lot Fill"
+                isOpen={openSections[`${prefix}_lotFill`]}
+                onToggle={() => toggleSection(`${prefix}_lotFill`)}
+            >
+                <ControlRow label="Visible">
+                    <button
+                        onClick={() => setStyle(model, 'lotFill', 'visible', !styles.lotFill.visible)}
+                        className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                            styles.lotFill.visible
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-gray-700 text-gray-400'
+                        }`}
+                    >
+                        {styles.lotFill.visible ? 'ON' : 'OFF'}
+                    </button>
+                </ControlRow>
+                <ControlRow label="Color">
+                    <ColorPicker
+                        value={styles.lotFill.color}
+                        onChange={(c) => setStyle(model, 'lotFill', 'color', c)}
+                    />
+                </ControlRow>
+                <ControlRow label="Opacity">
+                    <Slider
+                        value={styles.lotFill.opacity}
+                        onChange={(v) => setStyle(model, 'lotFill', 'opacity', v)}
+                        min={0}
+                        max={1}
+                        step={0.1}
+                    />
+                    <span className="text-[9px] text-gray-400 w-4 font-mono">{styles.lotFill.opacity.toFixed(1)}</span>
+                </ControlRow>
+            </Section>
+
+            {/* Setbacks */}
+            <Section
+                title="Setbacks"
+                isOpen={openSections[`${prefix}_setbacks`]}
+                onToggle={() => toggleSection(`${prefix}_setbacks`)}
+            >
+                <ControlRow label="Color">
+                    <ColorPicker
+                        value={styles.setbacks.color}
+                        onChange={(c) => setStyle(model, 'setbacks', 'color', c)}
+                    />
+                </ControlRow>
+                <ControlRow label="Width">
+                    <Slider
+                        value={styles.setbacks.width}
+                        onChange={(v) => setStyle(model, 'setbacks', 'width', v)}
+                        min={1}
+                        max={10}
+                        step={0.5}
+                    />
+                    <span className="text-[9px] text-gray-400 w-4 font-mono">{styles.setbacks.width}</span>
+                </ControlRow>
+                <ControlRow label="Opacity">
+                    <Slider
+                        value={styles.setbacks.opacity}
+                        onChange={(v) => setStyle(model, 'setbacks', 'opacity', v)}
+                    />
+                    <span className="text-[9px] text-gray-400 w-4 font-mono">{styles.setbacks.opacity.toFixed(1)}</span>
+                </ControlRow>
+                <div className="pt-1">
+                    <LineStyleSelector
+                        dashed={styles.setbacks.dashed}
+                        dashSize={styles.setbacks.dashSize}
+                        gapSize={styles.setbacks.gapSize}
+                        onChange={(v) => setStyle(model, 'setbacks', 'dashed', v)}
+                        onDashChange={(v) => setStyle(model, 'setbacks', 'dashSize', v)}
+                        onGapChange={(v) => setStyle(model, 'setbacks', 'gapSize', v)}
+                    />
+                </div>
+            </Section>
+
+            {/* Building Edges */}
+            <Section
+                title="Building Edges"
+                isOpen={openSections[`${prefix}_edges`]}
+                onToggle={() => toggleSection(`${prefix}_edges`)}
+            >
+                <ControlRow label="Visible">
+                    <button
+                        onClick={() => setStyle(model, 'buildingEdges', 'visible', !styles.buildingEdges.visible)}
+                        className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                            styles.buildingEdges.visible
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-gray-700 text-gray-400'
+                        }`}
+                    >
+                        {styles.buildingEdges.visible ? 'ON' : 'OFF'}
+                    </button>
+                </ControlRow>
+                <ControlRow label="Color">
+                    <ColorPicker
+                        value={styles.buildingEdges.color}
+                        onChange={(c) => setStyle(model, 'buildingEdges', 'color', c)}
+                    />
+                </ControlRow>
+                <ControlRow label="Width">
+                    <Slider
+                        value={styles.buildingEdges.width}
+                        onChange={(v) => setStyle(model, 'buildingEdges', 'width', v)}
+                        min={0.5}
+                        max={5}
+                        step={0.5}
+                    />
+                    <span className="text-[9px] text-gray-400 w-4 font-mono">{styles.buildingEdges.width}</span>
+                </ControlRow>
+                <ControlRow label="Opacity">
+                    <Slider
+                        value={styles.buildingEdges.opacity}
+                        onChange={(v) => setStyle(model, 'buildingEdges', 'opacity', v)}
+                    />
+                    <span className="text-[9px] text-gray-400 w-4 font-mono">{styles.buildingEdges.opacity.toFixed(1)}</span>
+                </ControlRow>
+            </Section>
+
+            {/* Building Mass */}
+            <Section
+                title="Building Mass"
+                isOpen={openSections[`${prefix}_faces`]}
+                onToggle={() => toggleSection(`${prefix}_faces`)}
+            >
+                <ControlRow label="Color">
+                    <ColorPicker
+                        value={styles.buildingFaces.color}
+                        onChange={(c) => setStyle(model, 'buildingFaces', 'color', c)}
+                    />
+                </ControlRow>
+                <ControlRow label="Opacity">
+                    <Slider
+                        value={styles.buildingFaces.opacity}
+                        onChange={(v) => setStyle(model, 'buildingFaces', 'opacity', v)}
+                    />
+                    <span className="text-[9px] text-gray-400 w-4 font-mono">{styles.buildingFaces.opacity.toFixed(1)}</span>
+                </ControlRow>
+            </Section>
+        </div>
+    )
+}
+
+// Color presets - now applies to both models with different tints
+const colorPresets = {
+    default: {
+        name: 'Default',
+        existing: {
+            lotLines: '#000000', setbacks: '#000000', buildingEdges: '#000000',
+            buildingFaces: '#D5D5D5', lotFill: '#D4EAAA'
+        },
+        proposed: {
+            lotLines: '#000000', setbacks: '#000000', buildingEdges: '#000000',
+            buildingFaces: '#d7bcff', lotFill: '#bbd77f'
+        },
+        ground: '#1a1a2e'
+    },
+    blueprint: {
+        name: 'Blueprint',
+        existing: {
+            lotLines: '#4169E1', setbacks: '#00CED1', buildingEdges: '#1E90FF',
+            buildingFaces: '#B0C4DE', lotFill: '#4169E1'
+        },
+        proposed: {
+            lotLines: '#00BFFF', setbacks: '#00FFFF', buildingEdges: '#87CEEB',
+            buildingFaces: '#E6F3FF', lotFill: '#87CEEB'
+        },
+        ground: '#0a0a1a'
+    },
+    contrast: {
+        name: 'Contrast',
+        existing: {
+            lotLines: '#FF0000', setbacks: '#FF6600', buildingEdges: '#CC0000',
+            buildingFaces: '#FFCCCC', lotFill: '#FF6666'
+        },
+        proposed: {
+            lotLines: '#00FF00', setbacks: '#00CC00', buildingEdges: '#006600',
+            buildingFaces: '#CCFFCC', lotFill: '#66FF66'
+        },
+        ground: '#111111'
+    },
+    monochrome: {
+        name: 'Mono',
+        existing: {
+            lotLines: '#666666', setbacks: '#888888', buildingEdges: '#444444',
+            buildingFaces: '#AAAAAA', lotFill: '#666666'
+        },
+        proposed: {
+            lotLines: '#FFFFFF', setbacks: '#CCCCCC', buildingEdges: '#EEEEEE',
+            buildingFaces: '#FFFFFF', lotFill: '#DDDDDD'
+        },
+        ground: '#111111'
+    }
+}
+
 const StyleEditor = () => {
     const styleSettings = useStore((state) => state.viewSettings.styleSettings)
     const setStyle = useStore((state) => state.setStyle)
-    const [openSections, setOpenSections] = useState({ lot: true })
+    const [openSections, setOpenSections] = useState({})
     const [isPanelOpen, setIsPanelOpen] = useState(false)
 
     const toggleSection = (key) => setOpenSections(prev => ({ ...prev, [key]: !prev[key] }))
 
-    if (!styleSettings) return null
+    const applyPreset = (presetKey) => {
+        const preset = colorPresets[presetKey]
+        // Apply existing styles
+        setStyle('existing', 'lotLines', 'color', preset.existing.lotLines)
+        setStyle('existing', 'setbacks', 'color', preset.existing.setbacks)
+        setStyle('existing', 'buildingEdges', 'color', preset.existing.buildingEdges)
+        setStyle('existing', 'buildingFaces', 'color', preset.existing.buildingFaces)
+        setStyle('existing', 'lotFill', 'color', preset.existing.lotFill)
+        // Apply proposed styles
+        setStyle('proposed', 'lotLines', 'color', preset.proposed.lotLines)
+        setStyle('proposed', 'setbacks', 'color', preset.proposed.setbacks)
+        setStyle('proposed', 'buildingEdges', 'color', preset.proposed.buildingEdges)
+        setStyle('proposed', 'buildingFaces', 'color', preset.proposed.buildingFaces)
+        setStyle('proposed', 'lotFill', 'color', preset.proposed.lotFill)
+        // Apply ground
+        setStyle('ground', 'color', preset.ground)
+    }
+
+    if (!styleSettings || !styleSettings.existing || !styleSettings.proposed) return null
 
     return (
         <>
@@ -58,115 +382,93 @@ const StyleEditor = () => {
 
             {/* Panel */}
             {isPanelOpen && (
-                <div className="absolute top-20 right-16 z-20 w-64 bg-gray-900 border border-gray-700 rounded-lg shadow-xl overflow-hidden max-h-[80vh] overflow-y-auto custom-scrollbar">
-                    <div className="p-3 bg-gray-800 border-b border-gray-700 font-bold text-sm text-white flex justify-between items-center">
+                <div className="absolute top-20 right-16 z-20 w-[480px] bg-gray-900 border border-gray-700 rounded-lg shadow-xl overflow-hidden max-h-[85vh] overflow-y-auto custom-scrollbar">
+                    <div className="p-2 bg-gray-800 border-b border-gray-700 font-bold text-sm text-white flex justify-between items-center">
                         <span>Style Manager</span>
                     </div>
 
-                    {/* Lot Lines */}
-                    <Section
-                        title="Lot Boundaries"
-                        isOpen={openSections.lot}
-                        onToggle={() => toggleSection('lot')}
-                    >
-                        <ControlRow label="Color">
-                            <ColorPicker
-                                value={styleSettings.lotLines.color}
-                                onChange={(c) => setStyle('lotLines', 'color', c)}
-                            />
-                        </ControlRow>
-                        <ControlRow label="Width">
-                            <input
-                                type="range" min="1" max="10" step="0.5"
-                                value={styleSettings.lotLines.width}
-                                onChange={(e) => setStyle('lotLines', 'width', parseFloat(e.target.value))}
-                                className="w-24 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                            />
-                            <span className="text-xs text-gray-400 w-4 font-mono">{styleSettings.lotLines.width}</span>
-                        </ControlRow>
-                        <ControlRow label="Style">
-                            <button
-                                onClick={() => setStyle('lotLines', 'dashed', !styleSettings.lotLines.dashed)}
-                                className={`text-[10px] px-2 py-1 rounded border ${styleSettings.lotLines.dashed ? 'bg-blue-900 border-blue-500 text-blue-100' : 'bg-transparent border-gray-600 text-gray-400'}`}
-                            >
-                                {styleSettings.lotLines.dashed ? 'DASHED' : 'SOLID'}
-                            </button>
-                        </ControlRow>
-                    </Section>
+                    {/* Color Presets */}
+                    <div className="p-2 border-b border-gray-700">
+                        <label className="text-[9px] text-gray-500 uppercase tracking-wider mb-1 block">Quick Presets</label>
+                        <div className="flex flex-wrap gap-1">
+                            {Object.entries(colorPresets).map(([key, preset]) => (
+                                <button
+                                    key={key}
+                                    onClick={() => applyPreset(key)}
+                                    className="px-2 py-1 text-[9px] bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded text-gray-300 transition-colors"
+                                >
+                                    {preset.name}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
 
-                    {/* Setbacks */}
-                    <Section
-                        title="Setbacks"
-                        isOpen={openSections.setbacks}
-                        onToggle={() => toggleSection('setbacks')}
-                    >
-                        <ControlRow label="Color">
-                            <ColorPicker
-                                value={styleSettings.setbacks.color}
-                                onChange={(c) => setStyle('setbacks', 'color', c)}
-                            />
-                        </ControlRow>
-                        <ControlRow label="Width">
-                            <input
-                                type="range" min="1" max="10" step="0.5"
-                                value={styleSettings.setbacks.width}
-                                onChange={(e) => setStyle('setbacks', 'width', parseFloat(e.target.value))}
-                                className="w-24 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                            />
-                        </ControlRow>
-                        <ControlRow label="Style">
-                            <button
-                                onClick={() => setStyle('setbacks', 'dashed', !styleSettings.setbacks.dashed)}
-                                className={`text-[10px] px-2 py-1 rounded border ${styleSettings.setbacks.dashed ? 'bg-blue-900 border-blue-500 text-blue-100' : 'bg-transparent border-gray-600 text-gray-400'}`}
-                            >
-                                DASHED
-                            </button>
-                        </ControlRow>
-                    </Section>
+                    {/* Two Column Headers */}
+                    <div className="flex border-b border-gray-700">
+                        <div className="flex-1 p-2 bg-gray-800 text-center border-r border-gray-700">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-orange-400">Existing</span>
+                        </div>
+                        <div className="flex-1 p-2 bg-gray-800 text-center">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-green-400">Proposed</span>
+                        </div>
+                    </div>
 
-                    {/* Building Edges */}
-                    <Section
-                        title="Building Edges"
-                        isOpen={openSections.edges}
-                        onToggle={() => toggleSection('edges')}
-                    >
-                        <ControlRow label="Edge Color">
-                            <ColorPicker
-                                value={styleSettings.buildingEdges.color}
-                                onChange={(c) => setStyle('buildingEdges', 'color', c)}
+                    {/* Two Column Style Controls */}
+                    <div className="flex">
+                        <div className="flex-1 border-r border-gray-700">
+                            <ModelStyleControls
+                                model="existing"
+                                styles={styleSettings.existing}
+                                setStyle={setStyle}
+                                openSections={openSections}
+                                toggleSection={toggleSection}
                             />
-                        </ControlRow>
-                        <ControlRow label="Thickness">
-                            <input
-                                type="range" min="0.5" max="5" step="0.5"
-                                value={styleSettings.buildingEdges.width}
-                                onChange={(e) => setStyle('buildingEdges', 'width', parseFloat(e.target.value))}
-                                className="w-24 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                        </div>
+                        <div className="flex-1">
+                            <ModelStyleControls
+                                model="proposed"
+                                styles={styleSettings.proposed}
+                                setStyle={setStyle}
+                                openSections={openSections}
+                                toggleSection={toggleSection}
                             />
-                        </ControlRow>
-                    </Section>
+                        </div>
+                    </div>
 
-                    {/* Building Faces */}
-                    <Section
-                        title="Building Mass"
-                        isOpen={openSections.faces}
-                        onToggle={() => toggleSection('faces')}
-                    >
-                        <ControlRow label="Fill Color">
-                            <ColorPicker
-                                value={styleSettings.buildingFaces.color}
-                                onChange={(c) => setStyle('buildingFaces', 'color', c)}
-                            />
-                        </ControlRow>
-                        <ControlRow label="Opacity">
-                            <input
-                                type="range" min="0" max="1" step="0.1"
-                                value={styleSettings.buildingFaces.opacity}
-                                onChange={(e) => setStyle('buildingFaces', 'opacity', parseFloat(e.target.value))}
-                                className="w-24 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                            />
-                        </ControlRow>
-                    </Section>
+                    {/* Ground Plane - Shared */}
+                    <div className="border-t border-gray-700">
+                        <Section
+                            title="Ground Plane (Shared)"
+                            isOpen={openSections.ground}
+                            onToggle={() => toggleSection('ground')}
+                        >
+                            <ControlRow label="Visible">
+                                <button
+                                    onClick={() => setStyle('ground', 'visible', !styleSettings.ground.visible)}
+                                    className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                                        styleSettings.ground.visible
+                                            ? 'bg-blue-600 text-white'
+                                            : 'bg-gray-700 text-gray-400'
+                                    }`}
+                                >
+                                    {styleSettings.ground.visible ? 'ON' : 'OFF'}
+                                </button>
+                            </ControlRow>
+                            <ControlRow label="Color">
+                                <ColorPicker
+                                    value={styleSettings.ground.color}
+                                    onChange={(c) => setStyle('ground', 'color', c)}
+                                />
+                            </ControlRow>
+                            <ControlRow label="Opacity">
+                                <Slider
+                                    value={styleSettings.ground.opacity}
+                                    onChange={(v) => setStyle('ground', 'opacity', v)}
+                                />
+                                <span className="text-[9px] text-gray-400 w-4 font-mono">{styleSettings.ground.opacity.toFixed(1)}</span>
+                            </ControlRow>
+                        </Section>
+                    </div>
                 </div>
             )}
         </>

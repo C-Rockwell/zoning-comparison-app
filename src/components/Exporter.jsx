@@ -22,53 +22,53 @@ const Exporter = ({ target }) => {
                     // 1. SAVE STATE
                     const originalSize = new THREE.Vector2()
                     gl.getSize(originalSize)
-                    const originalAspect = camera.aspect
 
                     const originalPosition = camera.position.clone()
                     const originalQuaternion = camera.quaternion.clone()
-                    const originalUp = camera.up.clone() // Save up vector just in case
+                    const originalUp = camera.up.clone()
+                    const originalZoom = camera.zoom
+
+                    // Save orthographic or perspective specific properties
+                    const originalOrtho = camera.isOrthographicCamera ? {
+                        left: camera.left,
+                        right: camera.right,
+                        top: camera.top,
+                        bottom: camera.bottom
+                    } : null
+                    const originalAspect = camera.aspect
 
                     // 2. CONFIGURE FOR EXPORT
-
-                    // A. Resolution / Aspect
                     const { width, height } = exportSettings
-                    gl.setSize(width, height, false) // Resize buffer only
+                    const exportAspect = width / height
+
+                    // Save original pixel ratio
+                    const originalPixelRatio = gl.getPixelRatio()
+
+                    // Set pixel ratio to 1 for consistent export sizing
+                    gl.setPixelRatio(1)
+
+                    // Resize the renderer - use true to update CSS size as well
+                    gl.setSize(width, height, true)
 
                     if (camera.isOrthographicCamera) {
-                        // Orthographic: Maintain vertical frustum, adjust horizontal
-                        // Note: three-drei/OrthographicCamera maintains consistent zoom usually
-                        // But raw properties are left/right/top/bottom.
-                        // Let's assume the camera is setup such that (top-bottom) represents the height unit.
+                        // For orthographic: scale the frustum to match export aspect ratio
+                        // while keeping the same visible area (vertically)
+                        const currentFrustumHeight = (camera.top - camera.bottom)
 
-                        const aspect = width / height
+                        // Calculate new frustum maintaining vertical extent
+                        const halfHeight = currentFrustumHeight / 2
+                        const halfWidth = halfHeight * exportAspect
 
-                        // Current vertical height
-                        const frustumHeight = (camera.top - camera.bottom) / camera.zoom
-
-                        // We can just update properties. 
-                        // To be safe, let's keep the current "Scale". 
-                        // If we change Aspect, we change Width relative to Height.
-
-                        // Simple approach: Update standard frustum planes based on aspect
-                        // If we assume a base frustum size (e.g. view size of 1000 units),
-                        // But camera.zoom handles the actual magnification.
-                        // Let's just update the camera's aspect-dependent planes.
-
-                        // We rely on the fact that for standard ThreeJS Ortho cam, we usually set
-                        // left = -d * aspect, right = d * aspect, top = d, bottom = -d
-
-                        // Let's infer 'd' (half-height) from current top
-                        const d = Math.abs(camera.top) || 100 // Fallback
-
-                        camera.left = -d * aspect
-                        camera.right = d * aspect
-                        camera.top = d
-                        camera.bottom = -d
-
+                        camera.left = -halfWidth
+                        camera.right = halfWidth
+                        camera.top = halfHeight
+                        camera.bottom = -halfHeight
                     } else {
                         // Perspective
-                        camera.aspect = width / height
+                        camera.aspect = exportAspect
                     }
+
+                    camera.updateProjectionMatrix()
 
                     // B. Viewpoint Override
                     if (exportView !== 'current') {
@@ -106,6 +106,22 @@ const Exporter = ({ target }) => {
                     }
 
                     camera.updateProjectionMatrix()
+
+                    // For PNG export, use transparent background
+                    const isImageExport = exportFormat === 'png' || exportFormat === 'jpg'
+                    let originalBackground = null
+                    let originalClearColor = new THREE.Color()
+                    let originalClearAlpha = gl.getClearAlpha()
+
+                    if (isImageExport && exportFormat === 'png') {
+                        // Save original background
+                        originalBackground = scene.background
+                        gl.getClearColor(originalClearColor)
+
+                        // Set transparent background for PNG
+                        scene.background = null
+                        gl.setClearColor(0x000000, 0)
+                    }
 
                     // Force a render frame to update buffers with new camera/size
                     gl.render(scene, camera)
@@ -163,6 +179,12 @@ const Exporter = ({ target }) => {
                         const url = gl.domElement.toDataURL('image/png')
                         downloadFile(url, 'zoning-model.png', 'image/png', true)
 
+                        // Restore background after PNG capture
+                        if (originalBackground !== null) {
+                            scene.background = originalBackground
+                        }
+                        gl.setClearColor(originalClearColor, originalClearAlpha)
+
                     } else if (exportFormat === 'jpg') {
                         const url = gl.domElement.toDataURL('image/jpeg', 0.9)
                         downloadFile(url, 'zoning-model.jpg', 'image/jpeg', true)
@@ -176,17 +198,36 @@ const Exporter = ({ target }) => {
                     tempGroup.clear()
 
                     // 4. RESTORE STATE (Immediately after capture)
-                    gl.setSize(originalSize.x, originalSize.y, false)
-                    camera.aspect = originalAspect
+                    // Restore background if it was changed (safety restore)
+                    if (originalBackground !== null && scene.background === null) {
+                        scene.background = originalBackground
+                        gl.setClearColor(originalClearColor, originalClearAlpha)
+                    }
+
+                    // Restore pixel ratio first
+                    gl.setPixelRatio(originalPixelRatio)
+                    gl.setSize(originalSize.x, originalSize.y, true)
+
+                    // Restore camera properties
+                    if (originalOrtho) {
+                        camera.left = originalOrtho.left
+                        camera.right = originalOrtho.right
+                        camera.top = originalOrtho.top
+                        camera.bottom = originalOrtho.bottom
+                    } else {
+                        camera.aspect = originalAspect
+                    }
+                    camera.zoom = originalZoom
 
                     // Restore Camera Pose
                     camera.position.copy(originalPosition)
                     camera.quaternion.copy(originalQuaternion)
-                    camera.up.copy(originalUp) // Restore up vector
+                    camera.up.copy(originalUp)
 
                     camera.updateProjectionMatrix()
-                    // Optional: Render one frame to restore view to user immediately
-                    // gl.render(scene, camera) 
+
+                    // Render one frame to restore view immediately
+                    gl.render(scene, camera) 
 
                 } catch (error) {
                     console.error("Export failed:", error)

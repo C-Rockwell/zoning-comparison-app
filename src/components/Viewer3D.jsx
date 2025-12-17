@@ -1,18 +1,97 @@
 import { useRef, useEffect, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls, GizmoHelper, GizmoViewport, CameraControls, Grid, PerspectiveCamera, OrthographicCamera } from '@react-three/drei'
+import { GizmoHelper, GizmoViewport, CameraControls, Grid, PerspectiveCamera, OrthographicCamera, SoftShadows, ContactShadows } from '@react-three/drei'
+import { EffectComposer, N8AO, ToneMapping, SMAA } from '@react-three/postprocessing'
+import { ToneMappingMode } from 'postprocessing'
 import * as THREE from 'three'
 import SceneContent from './SceneContent'
 import { useStore } from '../store/useStore'
 import CameraHandler from './CameraHandler'
 import Exporter from './Exporter'
 import StyleEditor from './StyleEditor'
+import { Sun, Moon } from 'lucide-react'
+
+// High-quality lighting setup
+const StudioLighting = ({ backgroundMode }) => {
+    const isLight = backgroundMode === 'light'
+
+    return (
+        <>
+            {/* Main key light - soft directional */}
+            <directionalLight
+                position={[50, 30, 80]}
+                intensity={isLight ? 1.2 : 1.5}
+                castShadow
+                shadow-mapSize-width={4096}
+                shadow-mapSize-height={4096}
+                shadow-camera-far={500}
+                shadow-camera-left={-150}
+                shadow-camera-right={150}
+                shadow-camera-top={150}
+                shadow-camera-bottom={-150}
+                shadow-bias={-0.0001}
+                shadow-normalBias={0.02}
+            />
+
+            {/* Fill light from opposite side */}
+            <directionalLight
+                position={[-40, 20, 60]}
+                intensity={isLight ? 0.4 : 0.6}
+                color="#b4d7ff"
+            />
+
+            {/* Rim/back light for depth */}
+            <directionalLight
+                position={[0, 80, -50]}
+                intensity={0.3}
+                color="#fff5e6"
+            />
+
+            {/* Ambient fill */}
+            <ambientLight intensity={isLight ? 0.3 : 0.4} />
+
+            {/* Hemisphere for natural sky/ground bounce */}
+            <hemisphereLight
+                skyColor={isLight ? '#ffffff' : '#c9d9f0'}
+                groundColor={isLight ? '#d4d4d4' : '#3d3d4a'}
+                intensity={0.5}
+            />
+        </>
+    )
+}
+
+// Post-processing effects
+const PostProcessing = ({ renderSettings }) => {
+    const { ambientOcclusion, aoIntensity, aoRadius, toneMapping, antialiasing } = renderSettings
+
+    return (
+        <EffectComposer multisampling={0}>
+            {ambientOcclusion && (
+                <N8AO
+                    aoRadius={aoRadius}
+                    intensity={aoIntensity}
+                    aoSamples={16}
+                    denoiseSamples={8}
+                    denoiseRadius={12}
+                    distanceFalloff={1.0}
+                    screenSpaceRadius
+                    halfRes={false}
+                    color="black"
+                />
+            )}
+            {toneMapping && (
+                <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+            )}
+            {antialiasing && <SMAA />}
+        </EffectComposer>
+    )
+}
 
 const Viewer3D = () => {
     const cameraControlsRef = useRef()
     const contentRef = useRef()
     const [isSaving, setIsSaving] = useState(false)
-    const savedViews = useStore(state => state.viewSettings.savedViews)
+    const savedViews = useStore(state => state.savedViews)
     const setSavedView = useStore(state => state.setSavedView)
     const showAxes = useStore(state => state.viewSettings.layers.axes)
     const projection = useStore(state => state.viewSettings.projection)
@@ -23,47 +102,49 @@ const Viewer3D = () => {
     const triggerExport = useStore(state => state.triggerExport)
     const exportFormat = useStore(state => state.viewSettings.exportFormat)
     const exportView = useStore(state => state.viewSettings.exportView)
-    const exportLabel = useStore(state => state.viewSettings.exportSettings.label)
     const toggleProjection = useStore(state => state.toggleProjection)
-    const setExportSettings = useStore(state => state.setExportSettings)
     const gimbalLayer = useStore(state => state.viewSettings.layers.gimbal)
     const gridLayer = useStore(state => state.viewSettings.layers.grid)
-
+    const backgroundMode = useStore(state => state.viewSettings.backgroundMode)
+    const toggleBackgroundMode = useStore(state => state.toggleBackgroundMode)
+    const renderSettings = useStore(state => state.renderSettings)
 
     const handlePresetClick = (index) => {
         if (isSaving) {
-            // SAVE VIEW
             if (cameraControlsRef.current) {
                 const controls = cameraControlsRef.current
-                // Capture current state
                 const position = new THREE.Vector3()
                 const target = new THREE.Vector3()
                 controls.getPosition(position)
                 controls.getTarget(target)
                 const zoom = cameraControlsRef.current.camera.zoom
-
                 setSavedView(index, { position, target, zoom })
-                setIsSaving(false) // Toggle off after save
+                setIsSaving(false)
             }
         } else {
-            // LOAD VIEW
             if (savedViews[index]) {
                 setCameraView(`custom-${index}`)
             }
         }
     }
 
-    // Ensure we trigger a control reset or update when projection changes
     useEffect(() => {
         if (cameraControlsRef.current) {
-            // Optional logic depending on drei version
+            // Optional logic
         }
     }, [projection])
 
     const views = ['iso', 'top', 'front', 'left', 'right']
 
+    // Background colors for light/dark modes
+    const bgColors = {
+        dark: { container: 'bg-gray-950', scene: '#0a0a0f', grid: { section: '#4a5568', cell: '#2d3748' } },
+        light: { container: 'bg-gray-200', scene: '#e5e7eb', grid: { section: '#9ca3af', cell: '#d1d5db' } }
+    }
+    const bg = bgColors[backgroundMode] || bgColors.dark
+
     return (
-        <div className="flex-1 bg-gray-950 relative overflow-hidden">
+        <div className={`flex-1 ${bg.container} relative overflow-hidden`}>
             {/* View Controls Overlay (Left) */}
             <div className="absolute top-4 left-4 flex flex-col gap-2 z-10 max-w-md">
                 {/* Standard Views */}
@@ -83,8 +164,7 @@ const Viewer3D = () => {
                         <button
                             key={view}
                             onClick={() => setCameraView(view)}
-                            className={`px-3 py-1 rounded text-sm font-semibold transition-colors ${currentView === view ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                                }`}
+                            className={`px-3 py-1 rounded text-sm font-semibold transition-colors ${currentView === view ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
                         >
                             {view.toUpperCase()}
                         </button>
@@ -93,13 +173,12 @@ const Viewer3D = () => {
 
                 {/* Custom Views Row */}
                 <div className="flex gap-2 items-center bg-gray-900/50 p-1 rounded backdrop-blur-sm shadow-lg border border-gray-800">
-                    {/* REC Toggle */}
                     <button
                         onClick={() => setIsSaving(!isSaving)}
                         className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-bold border transition-all ${isSaving
                             ? 'bg-red-600 border-red-500 text-white animate-pulse'
                             : 'bg-gray-800 border-gray-600 text-gray-400 hover:text-white hover:border-gray-400'
-                            }`}
+                        }`}
                         title="Toggle Record Mode"
                     >
                         <div className={`w-2 h-2 rounded-full ${isSaving ? 'bg-white' : 'bg-red-500'}`}></div>
@@ -108,7 +187,6 @@ const Viewer3D = () => {
 
                     <div className="w-[1px] h-6 bg-gray-600 mx-1 opacity-50"></div>
 
-                    {/* Presets 1-5 */}
                     {[1, 2, 3, 4, 5].map(index => {
                         const hasView = !!savedViews[index]
                         return (
@@ -117,11 +195,11 @@ const Viewer3D = () => {
                                 onClick={() => handlePresetClick(index)}
                                 disabled={!isSaving && !hasView}
                                 className={`w-8 h-8 rounded flex items-center justify-center text-sm font-bold transition-all border ${currentView === `custom-${index}`
-                                        ? 'bg-blue-600 border-blue-400 text-white ring-2 ring-blue-500/50'
-                                        : hasView
-                                            ? 'bg-gray-700 border-gray-500 text-white hover:bg-gray-600 hover:border-white'
-                                            : 'bg-gray-800 border-gray-700 text-gray-600' // Empty
-                                    } ${isSaving ? 'ring-2 ring-red-500 cursor-copy hover:bg-red-900/50 hover:border-red-400' : ''}`}
+                                    ? 'bg-blue-600 border-blue-400 text-white ring-2 ring-blue-500/50'
+                                    : hasView
+                                        ? 'bg-gray-700 border-gray-500 text-white hover:bg-gray-600 hover:border-white'
+                                        : 'bg-gray-800 border-gray-700 text-gray-600'
+                                } ${isSaving ? 'ring-2 ring-red-500 cursor-copy hover:bg-red-900/50 hover:border-red-400' : ''}`}
                                 title={hasView ? `Load View ${index}` : 'Empty Slot'}
                             >
                                 {index}
@@ -143,6 +221,15 @@ const Viewer3D = () => {
                         {projection === 'orthographic' ? '2D (Para)' : '3D (Persp)'}
                     </button>
 
+                    {/* Background Mode Toggle */}
+                    <button
+                        className={`p-1.5 rounded text-sm font-semibold transition-colors ${backgroundMode === 'light' ? 'bg-yellow-500 text-gray-900' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                        onClick={() => toggleBackgroundMode()}
+                        title={`Switch to ${backgroundMode === 'dark' ? 'Light' : 'Dark'} Background`}
+                    >
+                        {backgroundMode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+                    </button>
+
                     <div className="w-[1px] h-6 bg-gray-600 mx-1"></div>
 
                     {/* Export Controls */}
@@ -162,7 +249,7 @@ const Viewer3D = () => {
                     </select>
 
                     <select
-                        value={`${useStore.getState().viewSettings.exportSettings.width}x${useStore.getState().viewSettings.exportSettings.height}`} // Access directly to avoid crash if state mismatch? No, hook is fine.
+                        value={`${useStore.getState().viewSettings.exportSettings.width}x${useStore.getState().viewSettings.exportSettings.height}`}
                         onChange={(e) => {
                             const [width, height] = e.target.value.split('x').map(Number)
                             const label = e.target.options[e.target.selectedIndex].text
@@ -203,13 +290,38 @@ const Viewer3D = () => {
 
             <StyleEditor />
 
-            {/* Z-UP COORDINATE SYSTEM */}
+            {/* High-Quality Canvas */}
             <Canvas
-                shadows
-                gl={{ preserveDrawingBuffer: true }}
+                shadows="soft"
+                gl={{
+                    preserveDrawingBuffer: true,
+                    antialias: true,
+                    toneMapping: THREE.ACESFilmicToneMapping,
+                    toneMappingExposure: 1.0,
+                    alpha: true,
+                }}
+                style={{ background: bg.scene }}
             >
-                <ambientLight intensity={0.5} />
-                <directionalLight position={[10, 20, 30]} intensity={1} castShadow />
+                <color attach="background" args={[bg.scene]} />
+
+                {/* Soft shadows for better quality */}
+                <SoftShadows size={25} samples={16} focus={0.5} />
+
+                {/* Studio Lighting for realistic shading */}
+                <StudioLighting backgroundMode={backgroundMode} />
+
+                {/* Contact shadows for ground-level detail */}
+                {renderSettings.contactShadows && (
+                    <ContactShadows
+                        position={[0, 50, -0.15]}
+                        opacity={0.4}
+                        scale={200}
+                        blur={2}
+                        far={100}
+                        resolution={512}
+                        color="#000000"
+                    />
+                )}
 
                 {/* Cameras */}
                 <PerspectiveCamera
@@ -231,7 +343,6 @@ const Viewer3D = () => {
                 <CameraHandler controlsRef={cameraControlsRef} />
                 <Exporter target={contentRef} />
 
-
                 {showAxes && (
                     <primitive object={new THREE.AxesHelper(100)} />
                 )}
@@ -240,29 +351,27 @@ const Viewer3D = () => {
                     <SceneContent />
                 </group>
 
-                {
-                    gridLayer && (
-                        <Grid
-                            position={[0, 0, -0.1]}
-                            rotation={[Math.PI / 2, 0, 0]}
-                            args={[200, 200]}
-                            cellSize={10}
-                            sectionSize={50}
-                            fadeDistance={200}
-                            sectionColor="#4a5568"
-                            cellColor="#2d3748"
-                        />
-                    )
-                }
+                {gridLayer && (
+                    <Grid
+                        position={[0, 0, -0.1]}
+                        rotation={[Math.PI / 2, 0, 0]}
+                        args={[200, 200]}
+                        cellSize={10}
+                        sectionSize={50}
+                        fadeDistance={200}
+                        sectionColor={bg.grid.section}
+                        cellColor={bg.grid.cell}
+                    />
+                )}
 
-                {
-                    gimbalLayer && (
-                        <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
-                            <GizmoViewport axisColors={['#9d4b4b', '#2f7f4f', '#3b5b9d']} labelColor="white" />
-                        </GizmoHelper>
-                    )
-                }
+                {gimbalLayer && (
+                    <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
+                        <GizmoViewport axisColors={['#9d4b4b', '#2f7f4f', '#3b5b9d']} labelColor="white" />
+                    </GizmoHelper>
+                )}
 
+                {/* Post-processing effects */}
+                <PostProcessing renderSettings={renderSettings} />
             </Canvas>
         </div>
     )

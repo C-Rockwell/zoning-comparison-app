@@ -2,41 +2,37 @@ import { useStore } from '../store/useStore'
 import { useMemo } from 'react'
 import { Line, Edges } from '@react-three/drei'
 import * as THREE from 'three'
-import { useThree } from '@react-three/fiber'
-import Dimension from './Dimension'
 
-const Building = ({ width, depth, height, x, y, styles, scaleFactor = 1 }) => {
+const Building = ({ width, depth, height, x, y, styles, renderSettings, scaleFactor = 1 }) => {
     const { faces, edges } = styles
+
     return (
-        // Z-UP: Position center is [x, y, z=height/2]
-        // Three JS BoxGeometry args are [width, height, depth].
-        // We want width along X, depth along Y, height along Z.
-        // If we use BoxGeometry(width, depth, height) -> X=w, Y=d, Z=h.
         <mesh position={[x, y, height / 2]} castShadow receiveShadow>
             <boxGeometry args={[width, depth, height]} />
-            <meshStandardMaterial
+            <meshBasicMaterial
                 color={faces.color}
-                transparent
+                transparent={true}
                 opacity={faces.opacity}
+                side={THREE.DoubleSide}
+                depthWrite={faces.opacity >= 0.95}
             />
             {edges.visible && (
                 <Edges
                     linewidth={edges.width * scaleFactor}
-                    threshold={15} // Angle threshold to show edges
+                    threshold={15}
                     color={edges.color}
+                    transparent
+                    opacity={edges.opacity}
                 />
             )}
         </mesh>
     )
 }
 
-// Helper to construct geometry props
-const Lot = ({ width, depth, x, y, style, scaleFactor = 1 }) => {
-    // Convert box to line points for Line component (supports width)
+const Lot = ({ width, depth, x, y, style, fillStyle, scaleFactor = 1 }) => {
     const points = useMemo(() => {
         const w2 = width / 2
         const d2 = depth / 2
-        // Closed loop rectangle
         return [
             [-w2, -d2, 0],
             [w2, -d2, 0],
@@ -48,55 +44,47 @@ const Lot = ({ width, depth, x, y, style, scaleFactor = 1 }) => {
 
     return (
         <group position={[x, y, 0]}>
-            {/* Fill */}
-            <mesh position={[0, 0, -0.05]} receiveShadow>
-                <planeGeometry args={[width, depth]} />
-                <meshBasicMaterial color={style.color} opacity={0.1} transparent side={2} />
-            </mesh>
-            {/* Stroke */}
+            {fillStyle.visible && (
+                <mesh position={[0, 0, 0.02]} receiveShadow>
+                    <planeGeometry args={[width, depth]} />
+                    <meshLambertMaterial
+                        color={fillStyle.color}
+                        opacity={fillStyle.opacity}
+                        transparent={fillStyle.opacity < 1}
+                        side={THREE.DoubleSide}
+                        depthWrite={fillStyle.opacity >= 0.95}
+                    />
+                </mesh>
+            )}
             <Line
                 points={points}
                 color={style.color}
                 lineWidth={style.width * scaleFactor}
                 dashed={style.dashed}
                 dashScale={style.dashed ? 10 * scaleFactor : 1}
-                dashSize={1}
-                gapSize={0.5}
+                dashSize={style.dashSize || 1}
+                gapSize={style.gapSize || 0.5}
+                transparent
+                opacity={style.opacity}
             />
         </group>
     )
 }
 
-// Helper to draw setback lines
 const SetbackLayer = ({ lotWidth, lotDepth, setbacks, x, y, style, scaleFactor = 1 }) => {
-    // Calculate local corners of the buildable area
-    // Lot is centered at [x,y]. Local extents are +/- width/2, +/- depth/2.
-    // Front is at Y=0 (World). Back at Y=Depth.
-    // Lot Center Y = Depth/2.
-    // So Front (Y=0) corresponds to Local Y = -Depth/2.
-    // Rear (Y=Depth) corresponds to Local Y = +Depth/2.
-
-    // Left Edge (World) -> Local X = -Width/2.
-    // Right Edge (World) -> Local X = +Width/2.
-
     const { setbackFront, setbackRear, setbackSideLeft, setbackSideRight } = setbacks
 
-    // Calculate LOCAL coordinates for the setback rectangle
-    // Front line Y: -lotDepth/2 + setbackFront
     const y1 = -lotDepth / 2 + setbackFront
-    // Rear line Y: lotDepth/2 - setbackRear
     const y2 = lotDepth / 2 - setbackRear
-    // Left line X: -lotWidth/2 + setbackSideLeft
     const x1 = -lotWidth / 2 + setbackSideLeft
-    // Right line X: lotWidth/2 - setbackSideRight
     const x2 = lotWidth / 2 - setbackSideRight
 
     const points = [
-        [x1, y1, 0.1], // Bottom Left (raised slightly to avoid z-fight)
-        [x2, y1, 0.1], // Bottom Right
-        [x2, y2, 0.1], // Top Right
-        [x1, y2, 0.1], // Top Left
-        [x1, y1, 0.1]  // Close loop
+        [x1, y1, 0.1],
+        [x2, y1, 0.1],
+        [x2, y2, 0.1],
+        [x1, y2, 0.1],
+        [x1, y1, 0.1]
     ]
 
     return (
@@ -107,10 +95,30 @@ const SetbackLayer = ({ lotWidth, lotDepth, setbacks, x, y, style, scaleFactor =
                 lineWidth={style.width * scaleFactor}
                 dashed={style.dashed}
                 dashScale={(style.dashScale || 5) * scaleFactor}
-                dashSize={1}
-                gapSize={1}
+                dashSize={style.dashSize || 1}
+                gapSize={style.gapSize || 1}
+                transparent
+                opacity={style.opacity}
             />
         </group>
+    )
+}
+
+// Ground plane that receives shadows
+const GroundPlane = ({ style }) => {
+    if (!style.visible) return null
+
+    return (
+        <mesh position={[0, 50, -0.1]} receiveShadow>
+            <planeGeometry args={[300, 300]} />
+            <meshLambertMaterial
+                color={style.color}
+                opacity={style.opacity}
+                transparent={style.opacity < 1}
+                side={THREE.DoubleSide}
+                depthWrite={style.opacity >= 0.95}
+            />
+        </mesh>
     )
 }
 
@@ -119,17 +127,20 @@ const SceneContent = () => {
     const proposed = useStore((state) => state.proposed)
     const layers = useStore((state) => state.viewSettings.layers)
     const styleSettings = useStore((state) => state.viewSettings.styleSettings)
-    // const { size } = useThree() // Comment out useThree
+    const renderSettings = useStore((state) => state.renderSettings)
 
-    // Dynamic Scale Factor for High-Res Exports
-    const scaleFactor = 1 // Math.max(1, size.width / 1920)
+    const scaleFactor = 1
 
-    // Fallback if styles not loaded yet
-    if (!styleSettings) return null
+    if (!styleSettings || !styleSettings.existing || !styleSettings.proposed) return null
+
+    // Split styles for each model
+    const existingStyles = styleSettings.existing
+    const proposedStyles = styleSettings.proposed
 
     return (
         <group>
-            {/* Origin Marker */}
+            <GroundPlane style={styleSettings.ground} />
+
             {layers.origin && (
                 <mesh position={[0, 0, 0.5]}>
                     <sphereGeometry args={[0.5]} />
@@ -137,7 +148,7 @@ const SceneContent = () => {
                 </mesh>
             )}
 
-            {/* EXISTING SCENE */}
+            {/* EXISTING SCENE (Left - negative X) */}
             <group>
                 {layers.lotLines && (
                     <Lot
@@ -145,7 +156,8 @@ const SceneContent = () => {
                         depth={existing.lotDepth}
                         x={-existing.lotWidth / 2}
                         y={existing.lotDepth / 2}
-                        style={styleSettings.lotLines}
+                        style={existingStyles.lotLines}
+                        fillStyle={existingStyles.lotFill}
                         scaleFactor={scaleFactor}
                     />
                 )}
@@ -161,11 +173,10 @@ const SceneContent = () => {
                         }}
                         x={-existing.lotWidth / 2}
                         y={existing.lotDepth / 2}
-                        style={styleSettings.setbacks}
+                        style={existingStyles.setbacks}
                         scaleFactor={scaleFactor}
                     />
                 )}
-                {/* Building Mass (Existing) */}
                 {layers.buildings && (
                     <Building
                         width={existing.buildingWidth}
@@ -173,13 +184,14 @@ const SceneContent = () => {
                         height={existing.buildingHeight}
                         x={((-existing.lotWidth + existing.setbackSideLeft) - existing.setbackSideRight) / 2}
                         y={(existing.setbackFront + (existing.lotDepth - existing.setbackRear)) / 2}
-                        styles={{ faces: styleSettings.buildingFaces, edges: styleSettings.buildingEdges }}
+                        styles={{ faces: existingStyles.buildingFaces, edges: existingStyles.buildingEdges }}
+                        renderSettings={renderSettings}
                         scaleFactor={scaleFactor}
                     />
                 )}
             </group>
 
-            {/* PROPOSED SCENE */}
+            {/* PROPOSED SCENE (Right - positive X) */}
             <group>
                 {layers.lotLines && (
                     <Lot
@@ -187,7 +199,8 @@ const SceneContent = () => {
                         depth={proposed.lotDepth}
                         x={proposed.lotWidth / 2}
                         y={proposed.lotDepth / 2}
-                        style={styleSettings.lotLines}
+                        style={proposedStyles.lotLines}
+                        fillStyle={proposedStyles.lotFill}
                         scaleFactor={scaleFactor}
                     />
                 )}
@@ -203,11 +216,10 @@ const SceneContent = () => {
                         }}
                         x={proposed.lotWidth / 2}
                         y={proposed.lotDepth / 2}
-                        style={styleSettings.setbacks}
+                        style={proposedStyles.setbacks}
                         scaleFactor={scaleFactor}
                     />
                 )}
-                {/* Building Mass (Proposed) */}
                 {layers.buildings && (
                     <Building
                         width={proposed.buildingWidth}
@@ -215,7 +227,8 @@ const SceneContent = () => {
                         height={proposed.buildingHeight}
                         x={(proposed.setbackSideLeft + (proposed.lotWidth - proposed.setbackSideRight)) / 2}
                         y={(proposed.setbackFront + (proposed.lotDepth - proposed.setbackRear)) / 2}
-                        styles={{ faces: styleSettings.buildingFaces, edges: styleSettings.buildingEdges }}
+                        styles={{ faces: proposedStyles.buildingFaces, edges: proposedStyles.buildingEdges }}
+                        renderSettings={renderSettings}
                         scaleFactor={scaleFactor}
                     />
                 )}
