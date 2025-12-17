@@ -1,0 +1,328 @@
+import { useEffect } from 'react'
+import { useThree } from '@react-three/fiber'
+import { useStore } from '../store/useStore'
+import { OBJExporter, GLTFExporter, ColladaExporter } from 'three-stdlib'
+import * as THREE from 'three'
+
+const Exporter = ({ target }) => {
+    const exportRequested = useStore(state => state.viewSettings.exportRequested)
+    const exportFormat = useStore(state => state.viewSettings.exportFormat)
+    const exportSettings = useStore(state => state.viewSettings.exportSettings)
+    const exportView = useStore(state => state.viewSettings.exportView)
+    const resetExport = useStore(state => state.resetExport)
+    const { scene, gl, camera } = useThree()
+
+    useEffect(() => {
+        if (exportRequested) {
+            // Use target ref if provided, otherwise default to scene
+            const objectToExport = target?.current || scene
+
+            if (objectToExport) {
+                try {
+                    // 1. SAVE STATE
+                    const originalSize = new THREE.Vector2()
+                    gl.getSize(originalSize)
+                    const originalAspect = camera.aspect
+
+                    const originalPosition = camera.position.clone()
+                    const originalQuaternion = camera.quaternion.clone()
+                    const originalUp = camera.up.clone() // Save up vector just in case
+
+                    // 2. CONFIGURE FOR EXPORT
+
+                    // A. Resolution / Aspect
+                    const { width, height } = exportSettings
+                    gl.setSize(width, height, false) // Resize buffer only
+
+                    if (camera.isOrthographicCamera) {
+                        // Orthographic: Maintain vertical frustum, adjust horizontal
+                        // Note: three-drei/OrthographicCamera maintains consistent zoom usually
+                        // But raw properties are left/right/top/bottom.
+                        // Let's assume the camera is setup such that (top-bottom) represents the height unit.
+
+                        const aspect = width / height
+
+                        // Current vertical height
+                        const frustumHeight = (camera.top - camera.bottom) / camera.zoom
+
+                        // We can just update properties. 
+                        // To be safe, let's keep the current "Scale". 
+                        // If we change Aspect, we change Width relative to Height.
+
+                        // Simple approach: Update standard frustum planes based on aspect
+                        // If we assume a base frustum size (e.g. view size of 1000 units),
+                        // But camera.zoom handles the actual magnification.
+                        // Let's just update the camera's aspect-dependent planes.
+
+                        // We rely on the fact that for standard ThreeJS Ortho cam, we usually set
+                        // left = -d * aspect, right = d * aspect, top = d, bottom = -d
+
+                        // Let's infer 'd' (half-height) from current top
+                        const d = Math.abs(camera.top) || 100 // Fallback
+
+                        camera.left = -d * aspect
+                        camera.right = d * aspect
+                        camera.top = d
+                        camera.bottom = -d
+
+                    } else {
+                        // Perspective
+                        camera.aspect = width / height
+                    }
+
+                    // B. Viewpoint Override
+                    if (exportView !== 'current') {
+                        // Standard Views (Centered at Y=50, Z-Up)
+                        if (exportView === 'iso') {
+                            camera.position.set(200, -150, 200)
+                            camera.up.set(0, 0, 1)
+                            camera.lookAt(0, 50, 0)
+                            if (camera.isOrthographicCamera) camera.zoom = 6
+                        } else if (exportView === 'front') {
+                            // Looking from South to North, center Y=50
+                            camera.position.set(0, -50, 20)
+                            camera.up.set(0, 0, 1)
+                            camera.lookAt(0, 50, 20)
+                            if (camera.isOrthographicCamera) camera.zoom = 6
+                        } else if (exportView === 'side' || exportView === 'right') {
+                            // From East
+                            camera.position.set(150, 50, 20)
+                            camera.up.set(0, 0, 1)
+                            camera.lookAt(0, 50, 20)
+                            if (camera.isOrthographicCamera) camera.zoom = 6
+                        } else if (exportView === 'left') {
+                            // From West
+                            camera.position.set(-150, 50, 20)
+                            camera.up.set(0, 0, 1)
+                            camera.lookAt(0, 50, 20)
+                            if (camera.isOrthographicCamera) camera.zoom = 6
+                        } else if (exportView === 'top') {
+                            // Top view offset logic for Z-Up
+                            camera.position.set(0, 49.99, 150)
+                            camera.up.set(0, 0, 1)
+                            camera.lookAt(0, 50, 0)
+                            if (camera.isOrthographicCamera) camera.zoom = 6
+                        }
+                    }
+
+                    camera.updateProjectionMatrix()
+
+                    // Force a render frame to update buffers with new camera/size
+                    gl.render(scene, camera)
+
+                    // 3. EXPORT LOGIC
+                    const tempGroup = new THREE.Group()
+                    objectToExport.updateMatrixWorld(true)
+
+                    objectToExport.traverse((child) => {
+                        // Whitelist: Only BoxGeometry and PlaneGeometry Meshes
+                        if (child.isMesh) {
+                            const type = child.geometry?.type
+                            if (type === 'BoxGeometry' || type === 'PlaneGeometry') {
+                                const clone = child.clone(false)
+                                clone.matrix.copy(child.matrixWorld)
+                                clone.matrix.decompose(clone.position, clone.quaternion, clone.scale)
+                                tempGroup.add(clone)
+                            }
+                        }
+                    })
+
+                    // ... (rest of logic) ...
+
+                    if (tempGroup.children.length === 0 && exportFormat !== 'png' && exportFormat !== 'jpg' && exportFormat !== 'svg') {
+                        // Only warn for 3D exports. 2D exports capture the view even if no "Mesh" whitelist hit (e.g. lines)
+                        // Actually, SVG uses tempGroup too.
+                    }
+
+                    if (exportFormat === 'obj') {
+                        const exporter = new OBJExporter()
+                        const result = exporter.parse(tempGroup)
+                        downloadFile(result, 'zoning-model.obj', 'text/plain')
+
+                    } else if (exportFormat === 'glb') {
+                        const exporter = new GLTFExporter()
+                        exporter.parse(
+                            tempGroup,
+                            (result) => {
+                                downloadFile(result, 'zoning-model.glb', 'application/octet-stream')
+                            },
+                            (error) => console.error(error),
+                            { binary: true }
+                        )
+
+                    } else if (exportFormat === 'dae') {
+                        const exporter = new ColladaExporter()
+                        const result = exporter.parse(tempGroup)
+                        downloadFile(result.data, 'zoning-model.dae', 'application/xml')
+
+                    } else if (exportFormat === 'dxf') {
+                        const dxfString = generateDXF(tempGroup)
+                        downloadFile(dxfString, 'zoning-model.dxf', 'application/dxf')
+
+                    } else if (exportFormat === 'png') {
+                        const url = gl.domElement.toDataURL('image/png')
+                        downloadFile(url, 'zoning-model.png', 'image/png', true)
+
+                    } else if (exportFormat === 'jpg') {
+                        const url = gl.domElement.toDataURL('image/jpeg', 0.9)
+                        downloadFile(url, 'zoning-model.jpg', 'image/jpeg', true)
+
+                    } else if (exportFormat === 'svg') {
+                        // Use the configured width/height
+                        const svgString = generateSVG(tempGroup, camera, width, height)
+                        downloadFile(svgString, 'zoning-model.svg', 'image/svg+xml')
+                    }
+
+                    tempGroup.clear()
+
+                    // 4. RESTORE STATE (Immediately after capture)
+                    gl.setSize(originalSize.x, originalSize.y, false)
+                    camera.aspect = originalAspect
+
+                    // Restore Camera Pose
+                    camera.position.copy(originalPosition)
+                    camera.quaternion.copy(originalQuaternion)
+                    camera.up.copy(originalUp) // Restore up vector
+
+                    camera.updateProjectionMatrix()
+                    // Optional: Render one frame to restore view to user immediately
+                    // gl.render(scene, camera) 
+
+                } catch (error) {
+                    console.error("Export failed:", error)
+                    alert("Export failed: " + error.message)
+                }
+            }
+
+            resetExport()
+        }
+    }, [exportRequested, exportFormat, scene, gl, camera, resetExport, target, exportSettings, exportView])
+
+    return null
+}
+
+// Minimal DXF Generator for 3DFACEs (Mesh Geometry)
+const generateDXF = (group) => {
+    let s = `0\nSECTION\n2\nHEADER\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n`
+
+    group.traverse((child) => {
+        if (child.isMesh && child.geometry) {
+            const geom = child.geometry
+            // Ensure we have position attribute
+            const positions = geom.attributes.position
+            if (!positions) return
+
+            // We need to handle indices if they exist, or just iterate faces
+            // For BoxGeometry and PlaneGeometry, we usually have indices.
+
+            const localMatrix = child.matrix // Already has world transform applied during clone
+
+            // Helper to transform vertex
+            const getVert = (idx) => {
+                const arr = positions.array
+                const v = new THREE.Vector3(arr[idx * 3], arr[idx * 3 + 1], arr[idx * 3 + 2])
+                v.applyMatrix4(localMatrix)
+                return v
+            }
+
+            if (geom.index) {
+                const indices = geom.index.array
+                for (let i = 0; i < indices.length; i += 3) {
+                    const v1 = getVert(indices[i])
+                    const v2 = getVert(indices[i + 1])
+                    const v3 = getVert(indices[i + 2])
+                    // DXF 3DFACE requires 4 points. For a triangle, repeat the last one.
+                    s += `0\n3DFACE\n8\n0\n` // Layer 0
+                    // Z-UP UPDATE: We are now natively Z-up. 
+                    // DXF expects Z-up. So we map X->X, Y->Y, Z->Z.
+
+                    const formatVert = (code, v) => `${code}\n${v.x}\n${code + 10}\n${v.y}\n${code + 20}\n${v.z}` // Direct mapping
+
+                    s += formatVert(10, v1) + '\n'
+                    s += formatVert(11, v2) + '\n'
+                    s += formatVert(12, v3) + '\n'
+                    s += formatVert(13, v3) + '\n' // Repeat last for triangle
+                }
+            } else {
+                // Non-indexed (triangle list)
+                for (let i = 0; i < positions.count; i += 3) {
+                    const v1 = getVert(i)
+                    const v2 = getVert(i + 1)
+                    const v3 = getVert(i + 2)
+
+                    s += `0\n3DFACE\n8\n0\n`
+                    const formatVert = (code, v) => `${code}\n${v.x}\n${code + 10}\n${v.y}\n${code + 20}\n${v.z}` // Direct mapping
+                    s += formatVert(10, v1) + '\n'
+                    s += formatVert(11, v2) + '\n'
+                    s += formatVert(12, v3) + '\n'
+                    s += formatVert(13, v3) + '\n'
+                }
+            }
+        }
+    })
+
+    s += `0\nENDSEC\n0\nEOF\n`
+    return s
+}
+
+
+const generateSVG = (group, camera, width, height) => {
+    let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">`
+    svg += `<rect width="100%" height="100%" fill="white"/>` // White background
+    svg += `<g stroke="black" stroke-width="1" fill="none" stroke-linejoin="round" stroke-linecap="round">`
+
+    // Helper to project point to SVG coords
+    const project = (v) => {
+        const p = v.clone()
+        p.project(camera)
+        const x = (p.x * 0.5 + 0.5) * width
+        const y = (-(p.y * 0.5) + 0.5) * height
+        return { x, y }
+    }
+
+    group.traverse((child) => {
+        if (child.isMesh && child.geometry) {
+            // Create EdgesGeometry for clean wireframes
+            const edges = new THREE.EdgesGeometry(child.geometry, 15) // 15 deg threshold
+            const positions = edges.attributes.position
+
+            if (positions) {
+                const localMatrix = child.matrix // Already has world transform from clone
+                for (let i = 0; i < positions.count; i += 2) {
+                    const v1 = new THREE.Vector3().fromBufferAttribute(positions, i).applyMatrix4(localMatrix)
+                    const v2 = new THREE.Vector3().fromBufferAttribute(positions, i + 1).applyMatrix4(localMatrix)
+
+                    // Simple check if behind camera (optional, crude clipping)
+                    // A proper clipper is complex, but for simple "Export Current View" of a centralized model, this usually works ok.
+
+                    const p1 = project(v1)
+                    const p2 = project(v2)
+
+                    svg += `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" />`
+                }
+            }
+        }
+    })
+
+    svg += `</g></svg>`
+    return svg
+}
+
+
+const downloadFile = (data, filename, mimeType, isBase64 = false) => {
+    const link = document.createElement('a')
+    link.download = filename
+
+    if (isBase64) {
+        link.href = data
+    } else {
+        const blob = new Blob([data], { type: mimeType })
+        const url = URL.createObjectURL(blob)
+        link.href = url
+        setTimeout(() => URL.revokeObjectURL(url), 1000) // Delay revoke slightly
+    }
+
+    link.click()
+}
+
+export default Exporter
