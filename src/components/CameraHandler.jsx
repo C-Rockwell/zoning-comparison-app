@@ -17,8 +17,7 @@ const CameraHandler = ({ controlsRef }) => {
 
         // Note: We deliberately DO NOT force Perspective on Top/Front/Side views anymore.
         // This allows the user to stay in their preferred mode (2D or 3D).
-        // Exception: ISO view still defaults to Ortho as per original brief,
-        // but user can toggle back to 3D if desired.
+        // ISO view default logic is handled in the switch case.
 
         // Enforce Z-Up always to prevent rotation issues
         camera.up.set(0, 0, 1)
@@ -64,6 +63,24 @@ const CameraHandler = ({ controlsRef }) => {
                 controls.zoomTo(6, transition)
                 break
             default:
+                if (cameraView.startsWith('custom-')) {
+                    const index = parseInt(cameraView.split('-')[1])
+                    const viewData = useStore.getState().savedViews[index]
+
+                    if (viewData) {
+                        // Restore saved view
+                        // If it was saved in Ortho, should we switch to Ortho?
+                        // For now, let's respect the current projection or maybe store projection too?
+                        // Let's just restore position/target.
+                        const { position, target, zoom } = viewData
+                        controls.setLookAt(
+                            position.x, position.y, position.z,
+                            target.x, target.y, target.z,
+                            transition
+                        )
+                        if (zoom) controls.zoomTo(zoom, transition)
+                    }
+                }
                 break
         }
     }, [viewVersion, controlsRef, setProjection, camera, cameraView, projection]) // Depend on version

@@ -110,6 +110,15 @@ export const useStore = create((set) => ({
     setExportFormat: (format) => set((state) => ({ viewSettings: { ...state.viewSettings, exportFormat: format } })),
     setExportSettings: (settings) => set((state) => ({ viewSettings: { ...state.viewSettings, exportSettings: settings } })),
     setExportView: (view) => set((state) => ({ viewSettings: { ...state.viewSettings, exportView: view } })),
-    triggerExport: () => set((state) => ({ viewSettings: { ...state.viewSettings, exportRequested: true } })),
-    resetExport: () => set((state) => ({ viewSettings: { ...state.viewSettings, exportRequested: false } })),
+    savedViews: {
+        1: null,
+        2: null,
+        3: null,
+        4: null,
+        5: null
+    },
+    // ... actions ...
+    setSavedView: (index, data) => set((state) => ({
+        savedViews: { ...state.savedViews, [index]: data }
+    })),
 }))
