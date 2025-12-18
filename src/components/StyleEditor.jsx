@@ -51,17 +51,15 @@ const LineStyleSelector = ({ dashed, dashSize, gapSize, onChange, onDashChange, 
         <div className="flex gap-1">
             <button
                 onClick={() => onChange(false)}
-                className={`flex-1 text-[9px] px-1 py-0.5 rounded border transition-colors ${
-                    !dashed ? 'bg-blue-900 border-blue-500 text-blue-100' : 'bg-transparent border-gray-600 text-gray-400 hover:border-gray-500'
-                }`}
+                className={`flex-1 text-[9px] px-1 py-0.5 rounded border transition-colors ${!dashed ? 'bg-blue-900 border-blue-500 text-blue-100' : 'bg-transparent border-gray-600 text-gray-400 hover:border-gray-500'
+                    }`}
             >
                 SOLID
             </button>
             <button
                 onClick={() => onChange(true)}
-                className={`flex-1 text-[9px] px-1 py-0.5 rounded border transition-colors ${
-                    dashed ? 'bg-blue-900 border-blue-500 text-blue-100' : 'bg-transparent border-gray-600 text-gray-400 hover:border-gray-500'
-                }`}
+                className={`flex-1 text-[9px] px-1 py-0.5 rounded border transition-colors ${dashed ? 'bg-blue-900 border-blue-500 text-blue-100' : 'bg-transparent border-gray-600 text-gray-400 hover:border-gray-500'
+                    }`}
             >
                 DASH
             </button>
@@ -98,8 +96,87 @@ const LineStyleSelector = ({ dashed, dashSize, gapSize, onChange, onDashChange, 
 )
 
 // Style controls for a single model (existing or proposed)
-const ModelStyleControls = ({ model, styles, setStyle, openSections, toggleSection }) => {
+const ModelStyleControls = ({ model, styles, setStyle, setStyleOverride, openSections, toggleSection }) => {
     const prefix = model // 'existing' or 'proposed'
+
+    const renderOverrideControls = (category, currentStyle) => {
+        // Only for lotLines and setbacks
+        if (category !== 'lotLines' && category !== 'setbacks') return null
+
+        const sectionId = `${model}_${category}_granular`
+        const isOpen = openSections[sectionId]
+
+        return (
+            <div className="border-t border-gray-800 mt-2 pt-2">
+                <button
+                    onClick={() => toggleSection(sectionId)}
+                    className="w-full flex items-center justify-between text-[9px] text-gray-400 hover:text-white mb-2"
+                >
+                    <span className="flex items-center gap-1">
+                        <span className={`w-3 h-3 rounded flex items-center justify-center border ${isOpen ? 'bg-blue-600 border-blue-600' : 'border-gray-600'}`}>
+                            {isOpen && <span className="w-1.5 h-1.5 bg-white rounded-sm" />}
+                        </span>
+                        Customize Sides
+                    </span>
+                    {isOpen ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                </button>
+
+                {isOpen && ['front', 'rear', 'left', 'right'].map(side => {
+                    const override = currentStyle.overrides?.[side] || {}
+                    const isEnabled = override.enabled
+
+                    return (
+                        <div key={side} className="ml-2 mb-2 border-l border-gray-700 pl-2">
+                            <div className="flex items-center justify-between mb-1">
+                                <label className="text-[9px] uppercase font-bold text-gray-500">{side}</label>
+                                <button
+                                    onClick={() => setStyleOverride(model, category, side, 'enabled', !isEnabled)}
+                                    className={`text-[8px] px-1 rounded ${isEnabled ? 'bg-blue-900 text-blue-200' : 'bg-gray-800 text-gray-500'}`}
+                                >
+                                    {isEnabled ? 'CUSTOM' : 'DEFAULT'}
+                                </button>
+                            </div>
+
+                            {isEnabled && (
+                                <div className="space-y-1">
+                                    <ControlRow label="Color">
+                                        <ColorPicker
+                                            value={override.color || currentStyle.color}
+                                            onChange={(c) => setStyleOverride(model, category, side, 'color', c)}
+                                        />
+                                    </ControlRow>
+                                    <ControlRow label="Width">
+                                        <Slider
+                                            value={override.width || currentStyle.width}
+                                            onChange={(v) => setStyleOverride(model, category, side, 'width', v)}
+                                            min={1}
+                                            max={10}
+                                            step={0.5}
+                                            className="w-10"
+                                        />
+                                    </ControlRow>
+                                    <div className="flex gap-1">
+                                        <button
+                                            onClick={() => setStyleOverride(model, category, side, 'dashed', false)}
+                                            className={`flex-1 text-[8px] border rounded ${!override.dashed ? 'bg-blue-900 border-blue-500 text-white' : 'border-gray-700 text-gray-500'}`}
+                                        >
+                                            Solid
+                                        </button>
+                                        <button
+                                            onClick={() => setStyleOverride(model, category, side, 'dashed', true)}
+                                            className={`flex-1 text-[8px] border rounded ${override.dashed ? 'bg-blue-900 border-blue-500 text-white' : 'border-gray-700 text-gray-500'}`}
+                                        >
+                                            Dash
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )
+                })}
+            </div>
+        )
+    }
 
     return (
         <div className="flex-1 min-w-0">
@@ -142,6 +219,7 @@ const ModelStyleControls = ({ model, styles, setStyle, openSections, toggleSecti
                         onGapChange={(v) => setStyle(model, 'lotLines', 'gapSize', v)}
                     />
                 </div>
+                {renderOverrideControls('lotLines', styles.lotLines)}
             </Section>
 
             {/* Lot Fill */}
@@ -153,11 +231,10 @@ const ModelStyleControls = ({ model, styles, setStyle, openSections, toggleSecti
                 <ControlRow label="Visible">
                     <button
                         onClick={() => setStyle(model, 'lotFill', 'visible', !styles.lotFill.visible)}
-                        className={`px-2 py-0.5 rounded text-[9px] font-bold ${
-                            styles.lotFill.visible
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-gray-700 text-gray-400'
-                        }`}
+                        className={`px-2 py-0.5 rounded text-[9px] font-bold ${styles.lotFill.visible
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-700 text-gray-400'
+                            }`}
                     >
                         {styles.lotFill.visible ? 'ON' : 'OFF'}
                     </button>
@@ -219,6 +296,7 @@ const ModelStyleControls = ({ model, styles, setStyle, openSections, toggleSecti
                         onGapChange={(v) => setStyle(model, 'setbacks', 'gapSize', v)}
                     />
                 </div>
+                {renderOverrideControls('setbacks', styles.setbacks)}
             </Section>
 
             {/* Building Edges */}
@@ -230,11 +308,10 @@ const ModelStyleControls = ({ model, styles, setStyle, openSections, toggleSecti
                 <ControlRow label="Visible">
                     <button
                         onClick={() => setStyle(model, 'buildingEdges', 'visible', !styles.buildingEdges.visible)}
-                        className={`px-2 py-0.5 rounded text-[9px] font-bold ${
-                            styles.buildingEdges.visible
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-gray-700 text-gray-400'
-                        }`}
+                        className={`px-2 py-0.5 rounded text-[9px] font-bold ${styles.buildingEdges.visible
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-700 text-gray-400'
+                            }`}
                     >
                         {styles.buildingEdges.visible ? 'ON' : 'OFF'}
                     </button>
@@ -342,7 +419,13 @@ const colorPresets = {
 
 const StyleEditor = () => {
     const styleSettings = useStore((state) => state.viewSettings.styleSettings)
+    const lighting = useStore((state) => state.viewSettings.lighting)
+    const layoutSettings = useStore((state) => state.layoutSettings)
+    const setLighting = useStore((state) => state.setLighting)
+    const setLayoutSetting = useStore((state) => state.setLayoutSetting)
     const setStyle = useStore((state) => state.setStyle)
+    const setStyleOverride = useStore((state) => state.setStyleOverride)
+    const setDimensionSetting = useStore((state) => state.setDimensionSetting)
     const [openSections, setOpenSections] = useState({})
     const [isPanelOpen, setIsPanelOpen] = useState(false)
 
@@ -420,6 +503,7 @@ const StyleEditor = () => {
                                 model="existing"
                                 styles={styleSettings.existing}
                                 setStyle={setStyle}
+                                setStyleOverride={setStyleOverride}
                                 openSections={openSections}
                                 toggleSection={toggleSection}
                             />
@@ -429,10 +513,118 @@ const StyleEditor = () => {
                                 model="proposed"
                                 styles={styleSettings.proposed}
                                 setStyle={setStyle}
+                                setStyleOverride={setStyleOverride}
                                 openSections={openSections}
                                 toggleSection={toggleSection}
                             />
                         </div>
+                    </div>
+
+                    {/* Layout Settings - New Section */}
+                    <div className="border-t border-gray-700">
+                        <Section
+                            title="Layout"
+                            isOpen={openSections.layout}
+                            onToggle={() => toggleSection('layout')}
+                        >
+                            <ControlRow label="Spacing">
+                                <Slider
+                                    value={layoutSettings?.lotSpacing ?? 10}
+                                    onChange={(v) => setLayoutSetting('lotSpacing', v)}
+                                    min={0}
+                                    max={100}
+                                    step={1}
+                                />
+                                <span className="text-[9px] text-gray-400 w-8 font-mono text-right whitespace-nowrap">
+                                    {(layoutSettings?.lotSpacing ?? 10)}'
+                                </span>
+                            </ControlRow>
+                        </Section>
+                    </div>
+
+                    {/* Dimension Settings - New Section */}
+                    <div className="border-t border-gray-700">
+                        <Section
+                            title="Dimensions"
+                            isOpen={openSections.dimensions}
+                            onToggle={() => toggleSection('dimensions')}
+                        >
+                            <ControlRow label="Line Color">
+                                <ColorPicker
+                                    value={styleSettings.dimensionSettings?.lineColor ?? '#000000'}
+                                    onChange={(c) => setDimensionSetting('lineColor', c)}
+                                />
+                            </ControlRow>
+                            <ControlRow label="Text Color">
+                                <ColorPicker
+                                    value={styleSettings.dimensionSettings?.textColor ?? '#000000'}
+                                    onChange={(c) => setDimensionSetting('textColor', c)}
+                                />
+                            </ControlRow>
+                            <ControlRow label="Width">
+                                <Slider
+                                    value={styleSettings.dimensionSettings?.lineWidth ?? 1}
+                                    onChange={(v) => setDimensionSetting('lineWidth', v)}
+                                    min={0.5}
+                                    max={5}
+                                    step={0.5}
+                                />
+                                <span className="text-[9px] text-gray-400 w-4 font-mono">{styleSettings.dimensionSettings?.lineWidth ?? 1}</span>
+                            </ControlRow>
+                            <ControlRow label="Font Size">
+                                <Slider
+                                    value={styleSettings.dimensionSettings?.fontSize ?? 2}
+                                    onChange={(v) => setDimensionSetting('fontSize', v)}
+                                    min={1}
+                                    max={10}
+                                    step={0.5}
+                                />
+                                <span className="text-[9px] text-gray-400 w-4 font-mono">{styleSettings.dimensionSettings?.fontSize ?? 2}</span>
+                            </ControlRow>
+                            <ControlRow label="Marker">
+                                <div className="flex gap-1 text-[9px]">
+                                    {['tick', 'arrow', 'dot'].map(marker => (
+                                        <button
+                                            key={marker}
+                                            onClick={() => setDimensionSetting('endMarker', marker)}
+                                            className={`px-2 py-1 rounded border border-gray-600 ${(styleSettings.dimensionSettings?.endMarker || 'tick') === marker
+                                                ? 'bg-blue-600 text-white border-blue-500'
+                                                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                                                } capitalize`}
+                                        >
+                                            {marker}
+                                        </button>
+                                    ))}
+                                </div>
+                            </ControlRow>
+                        </Section>
+                    </div>
+
+                    {/* Dimension Text Customization - New Section */}
+                    <div className="border-t border-gray-700">
+                        <Section
+                            title="Text Style"
+                            isOpen={openSections.textSettings}
+                            onToggle={() => toggleSection('textSettings')}
+                        >
+                            <ControlRow label="Outline Clr">
+                                <ColorPicker
+                                    value={styleSettings.dimensionSettings?.outlineColor ?? '#ffffff'}
+                                    onChange={(c) => setDimensionSetting('outlineColor', c)}
+                                />
+                            </ControlRow>
+                            <ControlRow label="Outline Wid">
+                                <Slider
+                                    value={styleSettings.dimensionSettings?.outlineWidth ?? 0.1}
+                                    onChange={(v) => setDimensionSetting('outlineWidth', v)}
+                                    min={0}
+                                    max={0.5}
+                                    step={0.05}
+                                />
+                                <span className="text-[9px] text-gray-400 w-4 font-mono">{(styleSettings.dimensionSettings?.outlineWidth ?? 0.1).toFixed(2)}</span>
+                            </ControlRow>
+
+                        </Section>
                     </div>
 
                     {/* Ground Plane - Shared */}
@@ -445,11 +637,10 @@ const StyleEditor = () => {
                             <ControlRow label="Visible">
                                 <button
                                     onClick={() => setStyle('ground', 'visible', !styleSettings.ground.visible)}
-                                    className={`px-2 py-0.5 rounded text-[9px] font-bold ${
-                                        styleSettings.ground.visible
-                                            ? 'bg-blue-600 text-white'
-                                            : 'bg-gray-700 text-gray-400'
-                                    }`}
+                                    className={`px-2 py-0.5 rounded text-[9px] font-bold ${styleSettings.ground.visible
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-gray-700 text-gray-400'
+                                        }`}
                                 >
                                     {styleSettings.ground.visible ? 'ON' : 'OFF'}
                                 </button>
@@ -466,6 +657,51 @@ const StyleEditor = () => {
                                     onChange={(v) => setStyle('ground', 'opacity', v)}
                                 />
                                 <span className="text-[9px] text-gray-400 w-4 font-mono">{styleSettings.ground.opacity.toFixed(1)}</span>
+                            </ControlRow>
+                        </Section>
+                    </div>
+
+                    {/* Environment - Shared */}
+                    <div className="border-t border-gray-700">
+                        <Section
+                            title="Environment"
+                            isOpen={openSections.environment}
+                            onToggle={() => toggleSection('environment')}
+                        >
+                            <ControlRow label="Shadows">
+                                <button
+                                    onClick={() => setLighting('shadows', !lighting.shadows)}
+                                    className={`px-2 py-0.5 rounded text-[9px] font-bold ${lighting.shadows
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-gray-700 text-gray-400'
+                                        }`}
+                                >
+                                    {lighting.shadows ? 'ON' : 'OFF'}
+                                </button>
+                            </ControlRow>
+                            <ControlRow label="Direction">
+                                <Slider
+                                    value={(lighting.azimuth || 0) * (180 / Math.PI)}
+                                    onChange={(degrees) => setLighting('azimuth', degrees * (Math.PI / 180))}
+                                    min={0}
+                                    max={360}
+                                    step={15}
+                                />
+                                <span className="text-[9px] text-gray-400 w-8 font-mono text-right whitespace-nowrap">
+                                    {Math.round((lighting.azimuth || 0) * (180 / Math.PI))}°
+                                </span>
+                            </ControlRow>
+                            <ControlRow label="Intensity">
+                                <Slider
+                                    value={lighting.intensity || 1.5}
+                                    onChange={(v) => setLighting('intensity', v)}
+                                    min={0}
+                                    max={3}
+                                    step={0.1}
+                                />
+                                <span className="text-[9px] text-gray-400 w-8 font-mono text-right whitespace-nowrap">
+                                    {(lighting.intensity || 1.5).toFixed(1)}
+                                </span>
                             </ControlRow>
                         </Section>
                     </div>

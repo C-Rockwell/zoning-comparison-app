@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { GizmoHelper, GizmoViewport, CameraControls, Grid, PerspectiveCamera, OrthographicCamera, SoftShadows, ContactShadows } from '@react-three/drei'
-import { EffectComposer, N8AO, ToneMapping, SMAA } from '@react-three/postprocessing'
+import { EffectComposer, N8AO, ToneMapping, SMAA, Outline, Selection } from '@react-three/postprocessing'
 import { ToneMappingMode } from 'postprocessing'
 import * as THREE from 'three'
 import SceneContent from './SceneContent'
@@ -14,14 +14,32 @@ import { Sun, Moon } from 'lucide-react'
 // High-quality lighting setup
 const StudioLighting = ({ backgroundMode }) => {
     const isLight = backgroundMode === 'light'
+    const lighting = useStore(state => state.viewSettings.lighting)
+
+    // Default values if store is not yet ready or missing
+    const azimuth = lighting?.azimuth ?? 0.785
+    const altitude = lighting?.altitude ?? 0.523
+    const intensityRaw = lighting?.intensity ?? 1.5
+    const shadowsEnabled = lighting?.shadows ?? true
+
+    // Calculate light position from spherical coordinates
+    const radius = 100
+    const x = radius * Math.sin(azimuth) * Math.cos(altitude)
+    const y = radius * Math.cos(azimuth) * Math.cos(altitude)
+    const z = radius * Math.sin(altitude)
+
+    // Fill light is opposite to main light
+    const fillX = -x * 0.5
+    const fillY = -y * 0.5
+    const fillZ = z * 0.5
 
     return (
         <>
             {/* Main key light - soft directional */}
             <directionalLight
-                position={[50, 30, 80]}
-                intensity={isLight ? 1.2 : 1.5}
-                castShadow
+                position={[x, y, z]}
+                intensity={isLight ? intensityRaw : intensityRaw * 1.2}
+                castShadow={shadowsEnabled}
                 shadow-mapSize-width={4096}
                 shadow-mapSize-height={4096}
                 shadow-camera-far={500}
@@ -35,7 +53,7 @@ const StudioLighting = ({ backgroundMode }) => {
 
             {/* Fill light from opposite side */}
             <directionalLight
-                position={[-40, 20, 60]}
+                position={[fillX, fillY, fillZ]}
                 intensity={isLight ? 0.4 : 0.6}
                 color="#b4d7ff"
             />
@@ -83,6 +101,7 @@ const PostProcessing = ({ renderSettings }) => {
                 <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
             )}
             {antialiasing && <SMAA />}
+            <Outline blur edgeStrength={100} width={1000} visibleEdgeColor="white" hiddenEdgeColor="white" />
         </EffectComposer>
     )
 }
@@ -178,7 +197,7 @@ const Viewer3D = () => {
                         className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-bold border transition-all ${isSaving
                             ? 'bg-red-600 border-red-500 text-white animate-pulse'
                             : 'bg-gray-800 border-gray-600 text-gray-400 hover:text-white hover:border-gray-400'
-                        }`}
+                            }`}
                         title="Toggle Record Mode"
                     >
                         <div className={`w-2 h-2 rounded-full ${isSaving ? 'bg-white' : 'bg-red-500'}`}></div>
@@ -199,7 +218,7 @@ const Viewer3D = () => {
                                     : hasView
                                         ? 'bg-gray-700 border-gray-500 text-white hover:bg-gray-600 hover:border-white'
                                         : 'bg-gray-800 border-gray-700 text-gray-600'
-                                } ${isSaving ? 'ring-2 ring-red-500 cursor-copy hover:bg-red-900/50 hover:border-red-400' : ''}`}
+                                    } ${isSaving ? 'ring-2 ring-red-500 cursor-copy hover:bg-red-900/50 hover:border-red-400' : ''}`}
                                 title={hasView ? `Load View ${index}` : 'Empty Slot'}
                             >
                                 {index}
@@ -304,8 +323,8 @@ const Viewer3D = () => {
             >
                 <color attach="background" args={[bg.scene]} />
 
-                {/* Soft shadows for better quality */}
-                <SoftShadows size={25} samples={16} focus={0.5} />
+                {/* Soft shadows removed due to shader incompatibility with Three r182 */}
+                {/* <SoftShadows size={25} samples={16} focus={0.5} /> */}
 
                 {/* Studio Lighting for realistic shading */}
                 <StudioLighting backgroundMode={backgroundMode} />
@@ -347,9 +366,11 @@ const Viewer3D = () => {
                     <primitive object={new THREE.AxesHelper(100)} />
                 )}
 
-                <group ref={contentRef}>
-                    <SceneContent />
-                </group>
+                <Selection>
+                    <group ref={contentRef}>
+                        <SceneContent />
+                    </group>
+                </Selection>
 
                 {gridLayer && (
                     <Grid

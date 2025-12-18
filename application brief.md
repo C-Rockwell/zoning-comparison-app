@@ -68,6 +68,12 @@ Examples:
 - Annotation controls
 
 ## Basic Methodology Principles
-- Use of Cartesian coordinate system
-- “Existing” model (first column) and associated parameters always begin at the front right reference point at `0,0,0` on the x, y, z axis and have **negative** x, y values
-- “Proposed” model (second column) and associated parameters always begin at the front left corner or reference point at `0,0,0` on the x, y, z axis and have **positive** x, y values
+- **Z-Up Coordinate System**: The application uses a standard architectural coordinate system:
+  - **X Axis**: East/West
+  - **Y Axis**: North/South
+  - **Z Axis**: Height (Elevation)
+- **Origin**: `0,0,0` is the center of the lot.
+- **Orientation**: North is the +Y Axis (Top of screen in "Top View").
+- **Dual-Camera Navigation**:
+  - **Perspective**: For realistic "fly-through" views.
+  - **Orthographic**: For technical "Parallel Projection" (Isometric, Elevations).
