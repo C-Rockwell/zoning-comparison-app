@@ -1,44 +1,103 @@
 import { useStore } from '../store/useStore'
 import { useMemo, useState } from 'react'
 import { Line, Edges } from '@react-three/drei'
+import { useThree } from '@react-three/fiber'
 import { Select } from '@react-three/postprocessing'
 import * as THREE from 'three'
 import Dimension from './Dimension'
 
-const Building = ({ width, depth, height, x, y, styles, renderSettings, scaleFactor = 1 }) => {
+const Building = ({ width, depth, height, x, y, styles, renderSettings, scaleFactor = 1, onPositionChange, offsetGroupX = 0 }) => {
     const { faces, edges } = styles
     const [hovered, setHovered] = useState(false)
+    const [dragging, setDragging] = useState(false)
+    const { camera, gl, controls } = useThree()
+    const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), [])
+    const planeIntersectPoint = new THREE.Vector3()
+
+    const handlePointerDown = (e) => {
+        e.stopPropagation()
+        // Disable orbit controls while dragging
+        if (controls) controls.enabled = false
+        setDragging(true)
+        e.target.setPointerCapture(e.pointerId)
+    }
+
+    const handlePointerUp = (e) => {
+        e.stopPropagation()
+        setDragging(false)
+        if (controls) controls.enabled = true
+        e.target.releasePointerCapture(e.pointerId)
+    }
+
+    const handlePointerMove = (e) => {
+        if (!dragging) return
+        e.stopPropagation()
+
+        // Raycast to Z=0 plane. intersectPlane returns null if no intersection.
+        // We pass the target/result vector as second argument.
+        if (!e.ray.intersectPlane(plane, planeIntersectPoint)) return
+
+        // Convert world to local (subtract group offset)
+        const localX = planeIntersectPoint.x - offsetGroupX
+        const localY = planeIntersectPoint.y
+
+        // Snap to 1x1 grid
+        const snappedX = Math.round(localX)
+        const snappedY = Math.round(localY)
+
+        // Only update if value changed to prevent infinite re-render loops
+        if (onPositionChange && (snappedX !== x || snappedY !== y)) {
+            onPositionChange(snappedX, snappedY)
+        }
+    }
 
     return (
-        <Select enabled={hovered}>
-            <mesh
-                position={[x, y, height / 2]}
-                castShadow
-                receiveShadow
-                onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
-                onPointerOut={() => setHovered(false)}
-            >
-                <boxGeometry args={[width, depth, height]} />
-                <meshStandardMaterial
-                    color={faces.color}
-                    transparent={true}
-                    opacity={faces.opacity}
-                    side={THREE.DoubleSide}
-                    depthWrite={faces.opacity >= 0.95}
-                    roughness={0.7}
-                    metalness={0.1}
-                />
-                {edges.visible && (
-                    <Edges
-                        linewidth={edges.width * scaleFactor}
-                        threshold={15}
-                        color={edges.color}
-                        transparent
-                        opacity={edges.opacity}
+        <group>
+            <Select enabled={hovered}>
+                <mesh
+                    position={[x, y, height / 2]}
+                    castShadow
+                    receiveShadow
+                    onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
+                    onPointerOut={() => setHovered(false)}
+                    onPointerDown={handlePointerDown}
+                    onPointerUp={handlePointerUp}
+                    onPointerMove={handlePointerMove}
+                >
+                    <boxGeometry args={[width, depth, height]} />
+                    <meshStandardMaterial
+                        color={dragging ? '#ffff00' : faces.color} // Highlight when dragging
+                        transparent={true}
+                        opacity={dragging ? 0.8 : faces.opacity}
+                        side={THREE.DoubleSide}
+                        depthWrite={faces.opacity >= 0.95}
+                        roughness={0.7}
+                        metalness={0.1}
                     />
-                )}
-            </mesh>
-        </Select>
+                    {edges.visible && (
+                        <Edges
+                            linewidth={edges.width * scaleFactor}
+                            threshold={15}
+                            color={edges.color}
+                            transparent
+                            opacity={edges.opacity}
+                        />
+                    )}
+                </mesh>
+            </Select>
+            {/* Capture Plane for smooth dragging outside the box */}
+            {dragging && (
+                <mesh
+                    visible={false}
+                    position={[0, 0, 0]}
+                    rotation={[0, 0, 0]}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                >
+                    <planeGeometry args={[1000, 1000]} />
+                </mesh>
+            )}
+        </group>
     )
 }
 
@@ -233,6 +292,7 @@ const SceneContent = () => {
     const styleSettings = useStore((state) => state.viewSettings.styleSettings)
     const renderSettings = useStore((state) => state.renderSettings)
     const layoutSettings = useStore((state) => state.layoutSettings)
+    const setBuildingPosition = useStore((state) => state.setBuildingPosition)
 
     const scaleFactor = 1
     const spacing = layoutSettings?.lotSpacing ?? 0
@@ -295,11 +355,13 @@ const SceneContent = () => {
                         width={existing.buildingWidth}
                         depth={existing.buildingDepth}
                         height={existing.buildingHeight}
-                        x={((-existing.lotWidth + existing.setbackSideLeft) - existing.setbackSideRight) / 2}
-                        y={(existing.setbackFront + (existing.lotDepth - existing.setbackRear)) / 2}
+                        x={existing.buildingX}
+                        y={existing.buildingY}
                         styles={{ faces: existingStyles.buildingFaces, edges: existingStyles.buildingEdges }}
                         renderSettings={renderSettings}
                         scaleFactor={scaleFactor}
+                        onPositionChange={(x, y) => setBuildingPosition('existing', x, y)}
+                        offsetGroupX={-offset}
                     />
                 )}
             </group>
@@ -343,11 +405,13 @@ const SceneContent = () => {
                         width={proposed.buildingWidth}
                         depth={proposed.buildingDepth}
                         height={proposed.buildingHeight}
-                        x={(proposed.setbackSideLeft + (proposed.lotWidth - proposed.setbackSideRight)) / 2}
-                        y={(proposed.setbackFront + (proposed.lotDepth - proposed.setbackRear)) / 2}
+                        x={proposed.buildingX}
+                        y={proposed.buildingY}
                         styles={{ faces: proposedStyles.buildingFaces, edges: proposedStyles.buildingEdges }}
                         renderSettings={renderSettings}
                         scaleFactor={scaleFactor}
+                        onPositionChange={(x, y) => setBuildingPosition('proposed', x, y)}
+                        offsetGroupX={offset}
                     />
                 )}
             </group>

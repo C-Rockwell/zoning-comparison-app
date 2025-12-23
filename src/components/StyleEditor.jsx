@@ -1,6 +1,9 @@
 import React, { useState } from 'react'
+import { useStore as useZustandStore } from 'zustand'
 import { useStore } from '../store/useStore'
-import { ChevronDown, ChevronUp, Palette } from 'lucide-react'
+import { ChevronDown, ChevronUp, Palette, Undo } from 'lucide-react'
+
+
 
 const Section = ({ title, children, isOpen, onToggle }) => (
     <div className="border-b border-gray-700 last:border-0">
@@ -34,17 +37,53 @@ const ColorPicker = ({ value, onChange }) => (
     </div>
 )
 
-const Slider = ({ value, onChange, min = 0, max = 1, step = 0.1, className = "w-14" }) => (
-    <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        className={`h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500 ${className}`}
-    />
-)
+
+
+const SliderInput = ({ value, onChange, min = 0, max = 1, step = 0.1, className = "w-10" }) => {
+    const updateValue = (newValue) => {
+        const clamped = Math.min(Math.max(newValue, min), max)
+        onChange(Number(clamped.toFixed(2)))
+    }
+
+    return (
+        <div className="flex items-center gap-1">
+            <input
+                type="range"
+                min={min}
+                max={max}
+                step={step}
+                value={value}
+                onChange={(e) => onChange(parseFloat(e.target.value))}
+                className={`h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500 ${className}`}
+            />
+            <div className="flex items-center bg-gray-800 border border-gray-600 rounded overflow-hidden">
+                <input
+                    type="number"
+                    min={min}
+                    max={max}
+                    step={step}
+                    value={value}
+                    onChange={(e) => onChange(parseFloat(e.target.value))}
+                    className="w-8 pl-1 py-0.5 text-[9px] text-white bg-transparent text-center focus:outline-none no-spinner"
+                />
+                <div className="flex flex-col border-l border-gray-600">
+                    <button
+                        onClick={() => updateValue(value + step)}
+                        className="px-0.5 hover:bg-gray-700 text-gray-400 hover:text-white flex items-center justify-center h-2.5 border-b border-gray-600"
+                    >
+                        <ChevronUp size={8} />
+                    </button>
+                    <button
+                        onClick={() => updateValue(value - step)}
+                        className="px-0.5 hover:bg-gray-700 text-gray-400 hover:text-white flex items-center justify-center h-2.5"
+                    >
+                        <ChevronDown size={8} />
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
 
 const LineStyleSelector = ({ dashed, dashSize, gapSize, onChange, onDashChange, onGapChange }) => (
     <div className="space-y-1">
@@ -146,7 +185,7 @@ const ModelStyleControls = ({ model, styles, setStyle, setStyleOverride, openSec
                                         />
                                     </ControlRow>
                                     <ControlRow label="Width">
-                                        <Slider
+                                        <SliderInput
                                             value={override.width || currentStyle.width}
                                             onChange={(v) => setStyleOverride(model, category, side, 'width', v)}
                                             min={1}
@@ -193,21 +232,19 @@ const ModelStyleControls = ({ model, styles, setStyle, setStyleOverride, openSec
                     />
                 </ControlRow>
                 <ControlRow label="Width">
-                    <Slider
+                    <SliderInput
                         value={styles.lotLines.width}
                         onChange={(v) => setStyle(model, 'lotLines', 'width', v)}
                         min={1}
                         max={10}
                         step={0.5}
                     />
-                    <span className="text-[9px] text-gray-400 w-4 font-mono">{styles.lotLines.width}</span>
                 </ControlRow>
                 <ControlRow label="Opacity">
-                    <Slider
+                    <SliderInput
                         value={styles.lotLines.opacity}
                         onChange={(v) => setStyle(model, 'lotLines', 'opacity', v)}
                     />
-                    <span className="text-[9px] text-gray-400 w-4 font-mono">{styles.lotLines.opacity.toFixed(1)}</span>
                 </ControlRow>
                 <div className="pt-1">
                     <LineStyleSelector
@@ -246,14 +283,13 @@ const ModelStyleControls = ({ model, styles, setStyle, setStyleOverride, openSec
                     />
                 </ControlRow>
                 <ControlRow label="Opacity">
-                    <Slider
+                    <SliderInput
                         value={styles.lotFill.opacity}
                         onChange={(v) => setStyle(model, 'lotFill', 'opacity', v)}
                         min={0}
                         max={1}
                         step={0.1}
                     />
-                    <span className="text-[9px] text-gray-400 w-4 font-mono">{styles.lotFill.opacity.toFixed(1)}</span>
                 </ControlRow>
             </Section>
 
@@ -270,21 +306,19 @@ const ModelStyleControls = ({ model, styles, setStyle, setStyleOverride, openSec
                     />
                 </ControlRow>
                 <ControlRow label="Width">
-                    <Slider
+                    <SliderInput
                         value={styles.setbacks.width}
                         onChange={(v) => setStyle(model, 'setbacks', 'width', v)}
                         min={1}
                         max={10}
                         step={0.5}
                     />
-                    <span className="text-[9px] text-gray-400 w-4 font-mono">{styles.setbacks.width}</span>
                 </ControlRow>
                 <ControlRow label="Opacity">
-                    <Slider
+                    <SliderInput
                         value={styles.setbacks.opacity}
                         onChange={(v) => setStyle(model, 'setbacks', 'opacity', v)}
                     />
-                    <span className="text-[9px] text-gray-400 w-4 font-mono">{styles.setbacks.opacity.toFixed(1)}</span>
                 </ControlRow>
                 <div className="pt-1">
                     <LineStyleSelector
@@ -323,21 +357,19 @@ const ModelStyleControls = ({ model, styles, setStyle, setStyleOverride, openSec
                     />
                 </ControlRow>
                 <ControlRow label="Width">
-                    <Slider
+                    <SliderInput
                         value={styles.buildingEdges.width}
                         onChange={(v) => setStyle(model, 'buildingEdges', 'width', v)}
                         min={0.5}
                         max={5}
                         step={0.5}
                     />
-                    <span className="text-[9px] text-gray-400 w-4 font-mono">{styles.buildingEdges.width}</span>
                 </ControlRow>
                 <ControlRow label="Opacity">
-                    <Slider
+                    <SliderInput
                         value={styles.buildingEdges.opacity}
                         onChange={(v) => setStyle(model, 'buildingEdges', 'opacity', v)}
                     />
-                    <span className="text-[9px] text-gray-400 w-4 font-mono">{styles.buildingEdges.opacity.toFixed(1)}</span>
                 </ControlRow>
             </Section>
 
@@ -354,11 +386,10 @@ const ModelStyleControls = ({ model, styles, setStyle, setStyleOverride, openSec
                     />
                 </ControlRow>
                 <ControlRow label="Opacity">
-                    <Slider
+                    <SliderInput
                         value={styles.buildingFaces.opacity}
                         onChange={(v) => setStyle(model, 'buildingFaces', 'opacity', v)}
                     />
-                    <span className="text-[9px] text-gray-400 w-4 font-mono">{styles.buildingFaces.opacity.toFixed(1)}</span>
                 </ControlRow>
             </Section>
         </div>
@@ -418,6 +449,8 @@ const colorPresets = {
 }
 
 const StyleEditor = () => {
+    const { undo } = useStore.temporal.getState()
+    const pastStates = useZustandStore(useStore.temporal, (state) => state.pastStates)
     const styleSettings = useStore((state) => state.viewSettings.styleSettings)
     const lighting = useStore((state) => state.viewSettings.lighting)
     const layoutSettings = useStore((state) => state.layoutSettings)
@@ -453,6 +486,20 @@ const StyleEditor = () => {
 
     return (
         <>
+            {/* Undo Button */}
+            <button
+                onClick={() => undo()}
+                disabled={pastStates.length === 0}
+                className={`absolute top-20 right-14 z-20 flex items-center gap-1 px-3 py-2 rounded-lg shadow-lg border border-red-700 transition-colors 
+                    ${pastStates.length > 0
+                        ? 'bg-red-600 hover:bg-red-700 text-white cursor-pointer'
+                        : 'bg-red-900/50 text-red-400/50 cursor-not-allowed border-red-900/50'
+                    }`}
+                title="Undo last change"
+            >
+                <Undo size={16} strokeWidth={2.5} />
+                <span className="text-[10px] font-black tracking-wider">SH$T!</span>
+            </button>
             {/* Toggle Button */}
             <button
                 onClick={() => setIsPanelOpen(!isPanelOpen)}
@@ -528,16 +575,13 @@ const StyleEditor = () => {
                             onToggle={() => toggleSection('layout')}
                         >
                             <ControlRow label="Spacing">
-                                <Slider
+                                <SliderInput
                                     value={layoutSettings?.lotSpacing ?? 10}
                                     onChange={(v) => setLayoutSetting('lotSpacing', v)}
                                     min={0}
                                     max={100}
                                     step={1}
                                 />
-                                <span className="text-[9px] text-gray-400 w-8 font-mono text-right whitespace-nowrap">
-                                    {(layoutSettings?.lotSpacing ?? 10)}'
-                                </span>
                             </ControlRow>
                         </Section>
                     </div>
@@ -562,24 +606,22 @@ const StyleEditor = () => {
                                 />
                             </ControlRow>
                             <ControlRow label="Width">
-                                <Slider
+                                <SliderInput
                                     value={styleSettings.dimensionSettings?.lineWidth ?? 1}
                                     onChange={(v) => setDimensionSetting('lineWidth', v)}
                                     min={0.5}
                                     max={5}
                                     step={0.5}
                                 />
-                                <span className="text-[9px] text-gray-400 w-4 font-mono">{styleSettings.dimensionSettings?.lineWidth ?? 1}</span>
                             </ControlRow>
                             <ControlRow label="Font Size">
-                                <Slider
+                                <SliderInput
                                     value={styleSettings.dimensionSettings?.fontSize ?? 2}
                                     onChange={(v) => setDimensionSetting('fontSize', v)}
                                     min={1}
                                     max={10}
                                     step={0.5}
                                 />
-                                <span className="text-[9px] text-gray-400 w-4 font-mono">{styleSettings.dimensionSettings?.fontSize ?? 2}</span>
                             </ControlRow>
                             <ControlRow label="Marker">
                                 <div className="flex gap-1 text-[9px]">
@@ -597,33 +639,32 @@ const StyleEditor = () => {
                                     ))}
                                 </div>
                             </ControlRow>
-                        </Section>
-                    </div>
-
-                    {/* Dimension Text Customization - New Section */}
-                    <div className="border-t border-gray-700">
-                        <Section
-                            title="Text Style"
-                            isOpen={openSections.textSettings}
-                            onToggle={() => toggleSection('textSettings')}
-                        >
-                            <ControlRow label="Outline Clr">
-                                <ColorPicker
-                                    value={styleSettings.dimensionSettings?.outlineColor ?? '#ffffff'}
-                                    onChange={(c) => setDimensionSetting('outlineColor', c)}
+                            <ControlRow label="Ext. Width">
+                                <SliderInput
+                                    value={styleSettings.dimensionSettings?.extensionWidth ?? 0.5}
+                                    onChange={(v) => setDimensionSetting('extensionWidth', v)}
+                                    min={0.1}
+                                    max={2}
+                                    step={0.1}
                                 />
                             </ControlRow>
-                            <ControlRow label="Outline Wid">
-                                <Slider
-                                    value={styleSettings.dimensionSettings?.outlineWidth ?? 0.1}
-                                    onChange={(v) => setDimensionSetting('outlineWidth', v)}
-                                    min={0}
-                                    max={0.5}
-                                    step={0.05}
-                                />
-                                <span className="text-[9px] text-gray-400 w-4 font-mono">{(styleSettings.dimensionSettings?.outlineWidth ?? 0.1).toFixed(2)}</span>
-                            </ControlRow>
-
+                            <div className="border-t border-gray-800 my-1 pt-1">
+                                <ControlRow label="Outline Clr">
+                                    <ColorPicker
+                                        value={styleSettings.dimensionSettings?.outlineColor ?? '#ffffff'}
+                                        onChange={(c) => setDimensionSetting('outlineColor', c)}
+                                    />
+                                </ControlRow>
+                                <ControlRow label="Outline Wid">
+                                    <SliderInput
+                                        value={styleSettings.dimensionSettings?.outlineWidth ?? 0.1}
+                                        onChange={(v) => setDimensionSetting('outlineWidth', v)}
+                                        min={0}
+                                        max={0.5}
+                                        step={0.05}
+                                    />
+                                </ControlRow>
+                            </div>
                         </Section>
                     </div>
 
@@ -652,11 +693,10 @@ const StyleEditor = () => {
                                 />
                             </ControlRow>
                             <ControlRow label="Opacity">
-                                <Slider
+                                <SliderInput
                                     value={styleSettings.ground.opacity}
                                     onChange={(v) => setStyle('ground', 'opacity', v)}
                                 />
-                                <span className="text-[9px] text-gray-400 w-4 font-mono">{styleSettings.ground.opacity.toFixed(1)}</span>
                             </ControlRow>
                         </Section>
                     </div>
@@ -680,28 +720,22 @@ const StyleEditor = () => {
                                 </button>
                             </ControlRow>
                             <ControlRow label="Direction">
-                                <Slider
+                                <SliderInput
                                     value={(lighting.azimuth || 0) * (180 / Math.PI)}
                                     onChange={(degrees) => setLighting('azimuth', degrees * (Math.PI / 180))}
                                     min={0}
                                     max={360}
                                     step={15}
                                 />
-                                <span className="text-[9px] text-gray-400 w-8 font-mono text-right whitespace-nowrap">
-                                    {Math.round((lighting.azimuth || 0) * (180 / Math.PI))}°
-                                </span>
                             </ControlRow>
                             <ControlRow label="Intensity">
-                                <Slider
+                                <SliderInput
                                     value={lighting.intensity || 1.5}
                                     onChange={(v) => setLighting('intensity', v)}
                                     min={0}
                                     max={3}
                                     step={0.1}
                                 />
-                                <span className="text-[9px] text-gray-400 w-8 font-mono text-right whitespace-nowrap">
-                                    {(lighting.intensity || 1.5).toFixed(1)}
-                                </span>
                             </ControlRow>
                         </Section>
                     </div>

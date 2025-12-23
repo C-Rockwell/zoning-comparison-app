@@ -67,7 +67,7 @@ const Dimension = ({ start, end, label, offset = 0, color = "black", visible = t
 
     // Marker styling constants
     const arrowLength = 1 * scale
-    const arrowWidth = 0.2 * scale
+    const arrowWidth = 0.4 * scale
     const dotSize = 0.3 * scale
 
     return (
@@ -98,7 +98,7 @@ const Dimension = ({ start, end, label, offset = 0, color = "black", visible = t
                 <>
                     {/* Start Arrow - pointing towards start */}
                     <group position={s} rotation={[0, 0, angle + Math.PI]}>
-                        <mesh position={[arrowLength / 2, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
+                        <mesh position={[-arrowLength / 2, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
                             <coneGeometry args={[arrowWidth, arrowLength, 8]} />
                             <meshBasicMaterial color={lineColor} />
                         </mesh>
@@ -116,8 +116,8 @@ const Dimension = ({ start, end, label, offset = 0, color = "black", visible = t
             {/* Extension Lines */}
             {showExtensions && (
                 <>
-                    <Line points={[[start[0], start[1], start[2]], [s[0], s[1], s[2]]]} color={lineColor} lineWidth={lineWidth * 0.5} dashed dashScale={2} />
-                    <Line points={[[end[0], end[1], end[2]], [e[0], e[1], e[2]]]} color={lineColor} lineWidth={lineWidth * 0.5} dashed dashScale={2} />
+                    <Line points={[[start[0], start[1], start[2]], [s[0], s[1], s[2]]]} color={lineColor} lineWidth={lineWidth * (settings.extensionWidth ?? 0.5)} dashed dashScale={2} />
+                    <Line points={[[end[0], end[1], end[2]], [e[0], e[1], e[2]]]} color={lineColor} lineWidth={lineWidth * (settings.extensionWidth ?? 0.5)} dashed dashScale={2} />
                 </>
             )}
 

@@ -22,6 +22,7 @@
     "tailwind-merge": "^3.4.0",
     "three": "^0.182.0",
     "three-stdlib": "^2.36.1",
+    "zundo": "^2.3.0",
     "zustand": "^5.0.9"
   },
   "devDependencies": {
