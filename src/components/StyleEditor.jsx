@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useStore as useZustandStore } from 'zustand'
 import { useStore } from '../store/useStore'
-import { ChevronDown, ChevronUp, Palette, Undo } from 'lucide-react'
+import { ChevronDown, ChevronUp, Palette, Undo, Save } from 'lucide-react'
 
 
 
@@ -459,6 +459,9 @@ const StyleEditor = () => {
     const setStyle = useStore((state) => state.setStyle)
     const setStyleOverride = useStore((state) => state.setStyleOverride)
     const setDimensionSetting = useStore((state) => state.setDimensionSetting)
+    const userDefaults = useStore((state) => state.userDefaults)
+    const saveAsDefault = useStore((state) => state.saveAsDefault)
+    const loadUserDefaults = useStore((state) => state.loadUserDefaults)
     const [openSections, setOpenSections] = useState({})
     const [isPanelOpen, setIsPanelOpen] = useState(false)
 
@@ -520,7 +523,7 @@ const StyleEditor = () => {
                     {/* Color Presets */}
                     <div className="p-2 border-b border-gray-700">
                         <label className="text-[9px] text-gray-500 uppercase tracking-wider mb-1 block">Quick Presets</label>
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex flex-wrap gap-1 mb-2">
                             {Object.entries(colorPresets).map(([key, preset]) => (
                                 <button
                                     key={key}
@@ -530,6 +533,24 @@ const StyleEditor = () => {
                                     {preset.name}
                                 </button>
                             ))}
+                            <div className="w-px h-6 bg-gray-700 mx-1" />
+                            {/* User Defaults Controls */}
+                            <button
+                                onClick={saveAsDefault}
+                                className="px-2 py-1 text-[9px] bg-gray-800 hover:bg-blue-900 border border-gray-600 hover:border-blue-500 rounded text-gray-300 hover:text-white transition-colors flex items-center gap-1"
+                                title="Save current styles as your default"
+                            >
+                                <Save size={10} />
+                                Save as Default
+                            </button>
+                            {userDefaults && (
+                                <button
+                                    onClick={loadUserDefaults}
+                                    className="px-2 py-1 text-[9px] bg-blue-900/50 hover:bg-blue-800 border border-blue-700/50 hover:border-blue-500 rounded text-blue-200 transition-colors font-semibold"
+                                >
+                                    My Defaults
+                                </button>
+                            )}
                         </div>
                     </div>
 

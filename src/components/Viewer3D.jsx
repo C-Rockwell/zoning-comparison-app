@@ -158,7 +158,7 @@ const Viewer3D = () => {
     // Background colors for light/dark modes
     const bgColors = {
         dark: { container: 'bg-gray-950', scene: '#0a0a0f', grid: { section: '#4a5568', cell: '#2d3748' } },
-        light: { container: 'bg-gray-200', scene: '#e5e7eb', grid: { section: '#9ca3af', cell: '#d1d5db' } }
+        light: { container: 'bg-white', scene: '#ffffff', grid: { section: '#e5e7eb', cell: '#f3f4f6' } }
     }
     const bg = bgColors[backgroundMode] || bgColors.dark
 

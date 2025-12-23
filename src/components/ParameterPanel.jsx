@@ -59,6 +59,65 @@ const ParameterPanel = () => {
                     </div>
                 ))}
             </div>
+            <h2 className="text-xl font-bold mb-4 border-t border-gray-700 pt-6 mt-6">Stats</h2>
+            <div className="grid grid-cols-3 gap-2 mb-2 font-semibold text-sm">
+                <div className="col-span-1">Metric</div>
+                <div className="col-span-1 text-center">Existing</div>
+                <div className="col-span-1 text-center">Proposed</div>
+            </div>
+            <div className="space-y-2">
+                {/* Lot Size */}
+                <div className="grid grid-cols-3 gap-2 items-center">
+                    <label className="text-xs text-gray-400 capitalize break-words pr-2">
+                        Lot Size
+                    </label>
+                    <div className="bg-gray-700 p-1 rounded text-right text-sm w-full text-gray-200">
+                        {(existing.lotWidth * existing.lotDepth).toLocaleString()} <span className="text-[10px] text-gray-500">sq ft</span>
+                    </div>
+                    <div className="bg-gray-700 p-1 rounded text-right text-sm w-full text-gray-200">
+                        {(proposed.lotWidth * proposed.lotDepth).toLocaleString()} <span className="text-[10px] text-gray-500">sq ft</span>
+                    </div>
+                </div>
+
+                {/* Building Coverage */}
+                <div className="grid grid-cols-3 gap-2 items-center">
+                    <label className="text-xs text-gray-400 capitalize break-words pr-2">
+                        Coverage
+                    </label>
+                    <div className="bg-gray-700 p-1 rounded text-right text-sm w-full text-gray-200">
+                        {((existing.buildingWidth * existing.buildingDepth) / (existing.lotWidth * existing.lotDepth) * 100).toFixed(1)}%
+                    </div>
+                    <div className="bg-gray-700 p-1 rounded text-right text-sm w-full text-gray-200">
+                        {((proposed.buildingWidth * proposed.buildingDepth) / (proposed.lotWidth * proposed.lotDepth) * 100).toFixed(1)}%
+                    </div>
+                </div>
+
+                {/* Total Floor Area */}
+                <div className="grid grid-cols-3 gap-2 items-center">
+                    <label className="text-xs text-gray-400 capitalize break-words pr-2">
+                        Floor Area
+                    </label>
+                    <div className="bg-gray-700 p-1 rounded text-right text-sm w-full text-gray-200">
+                        {(existing.buildingWidth * existing.buildingDepth).toLocaleString()} <span className="text-[10px] text-gray-500">sq ft</span>
+                    </div>
+                    <div className="bg-gray-700 p-1 rounded text-right text-sm w-full text-gray-200">
+                        {(proposed.buildingWidth * proposed.buildingDepth).toLocaleString()} <span className="text-[10px] text-gray-500">sq ft</span>
+                    </div>
+                </div>
+
+                {/* Floor Area Ratio (FAR) */}
+                <div className="grid grid-cols-3 gap-2 items-center">
+                    <label className="text-xs text-gray-400 capitalize break-words pr-2">
+                        FAR
+                    </label>
+                    <div className="bg-gray-700 p-1 rounded text-right text-sm w-full text-gray-200">
+                        {((existing.buildingWidth * existing.buildingDepth) / (existing.lotWidth * existing.lotDepth)).toFixed(2)}
+                    </div>
+                    <div className="bg-gray-700 p-1 rounded text-right text-sm w-full text-gray-200">
+                        {((proposed.buildingWidth * proposed.buildingDepth) / (proposed.lotWidth * proposed.lotDepth)).toFixed(2)}
+                    </div>
+                </div>
+            </div>
         </div>
     )
 }

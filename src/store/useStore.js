@@ -75,6 +75,7 @@ export const useStore = create(
                         dimensionsLotWidth: true, // Renamed from dimensionsLot
                         dimensionsLotDepth: true, // Renamed from dimensionsLot
                         dimensionsSetbacks: true,
+                        dimensionsHeight: true,
                         grid: true,
                         axes: false, // Default axes off
                         gimbal: true,
@@ -91,8 +92,8 @@ export const useStore = create(
                                 color: '#000000',
                                 width: 1.5,
                                 dashed: false,
-                                dashSize: 1,
-                                gapSize: 0.5,
+                                dashSize: 0.5,
+                                gapSize: 0.2, // Reduced gaps
                                 opacity: 1.0,
                                 overrides: {
                                     front: { enabled: false, color: '#000000', width: 1.5, dashed: false },
@@ -105,9 +106,9 @@ export const useStore = create(
                                 color: '#000000',
                                 width: 1,
                                 dashed: true,
-                                dashSize: 20,
-                                gapSize: 10,
-                                dashScale: 5,
+                                dashSize: 1, // Smaller checks
+                                gapSize: 0.5,
+                                dashScale: 1,
                                 opacity: 1.0,
                                 overrides: {
                                     front: { enabled: false, color: '#000000', width: 1, dashed: true },
@@ -117,7 +118,7 @@ export const useStore = create(
                                 }
                             },
                             lotFill: {
-                                color: '#D4EAAA',
+                                color: '#E5E5E5', // Gray for existing
                                 opacity: 1.0,
                                 visible: true
                             },
@@ -139,8 +140,8 @@ export const useStore = create(
                                 color: '#000000',
                                 width: 1.5,
                                 dashed: false,
-                                dashSize: 1,
-                                gapSize: 0.5,
+                                dashSize: 0.5,
+                                gapSize: 0.2,
                                 opacity: 1.0,
                                 overrides: {
                                     front: { enabled: false, color: '#000000', width: 1.5, dashed: false },
@@ -153,9 +154,9 @@ export const useStore = create(
                                 color: '#000000',
                                 width: 1,
                                 dashed: true,
-                                dashSize: 20,
-                                gapSize: 10,
-                                dashScale: 5,
+                                dashSize: 1,
+                                gapSize: 0.5,
+                                dashScale: 1,
                                 opacity: 1.0,
                                 overrides: {
                                     front: { enabled: false, color: '#000000', width: 1, dashed: true },
@@ -165,7 +166,7 @@ export const useStore = create(
                                 }
                             },
                             lotFill: {
-                                color: '#bbd77f',
+                                color: '#FFFACD', // Light yellow for proposed
                                 opacity: 1.0,
                                 visible: true
                             },
@@ -177,8 +178,8 @@ export const useStore = create(
                                 opacity: 1.0
                             },
                             buildingFaces: {
-                                color: '#d7bcff',
-                                opacity: 0.7,
+                                color: '#FFFFFF',
+                                opacity: 0.9,
                                 transparent: true
                             },
                         },
@@ -376,46 +377,50 @@ export const useStore = create(
                         lighting: { ...state.viewSettings.lighting, [key]: value }
                     }
                 })),
+
+                // User Defaults
+                userDefaults: null, // Stores user's preferred style settings
+                saveAsDefault: () => set((state) => ({
+                    userDefaults: {
+                        styleSettings: state.viewSettings.styleSettings,
+                        lighting: state.viewSettings.lighting,
+                        ground: state.viewSettings.styleSettings.ground // Ensure ground is captured if not in styleSettings
+                    }
+                })),
+                loadUserDefaults: () => set((state) => {
+                    if (!state.userDefaults) return state;
+                    return {
+                        viewSettings: {
+                            ...state.viewSettings,
+                            styleSettings: state.userDefaults.styleSettings,
+                            lighting: state.userDefaults.lighting || state.viewSettings.lighting
+                        }
+                    };
+                }),
             }),
             {
                 name: 'zoning-app-storage',
-                version: 5,
+                version: 7, // Updated to 7 to force migration
                 migrate: (persistedState, version) => {
-                    let state = persistedState;
-                    const viewSettings = state.viewSettings || {};
-                    const layers = viewSettings.layers || {};
-
-                    if (version === 0) {
-                        // Migration 0->1
-                        if (layers.dimensions !== undefined) {
-                            layers.dimensionsLot = layers.dimensions;
-                            layers.dimensionsSetbacks = layers.dimensions;
-                            delete layers.dimensions;
-                        } else {
-                            layers.dimensionsLot = true;
-                            layers.dimensionsSetbacks = true;
+                    // Split dimensionsLot into dimensionsLotWidth and dimensionsLotDepth
+                    if (persistedState.viewSettings && persistedState.viewSettings.layers && persistedState.viewSettings.layers.dimensionsLot !== undefined) {
+                        persistedState.viewSettings.layers.dimensionsLotWidth = persistedState.viewSettings.layers.dimensionsLot;
+                        persistedState.viewSettings.layers.dimensionsLotDepth = persistedState.viewSettings.layers.dimensionsLot;
+                        delete persistedState.viewSettings.layers.dimensionsLot;
+                    } else if (persistedState.viewSettings && persistedState.viewSettings.layers) {
+                        // Ensure these exist if missing
+                        if (persistedState.viewSettings.layers.dimensionsLotWidth === undefined) {
+                            persistedState.viewSettings.layers.dimensionsLotWidth = true;
                         }
-                        version = 1;
+                        if (persistedState.viewSettings.layers.dimensionsLotDepth === undefined) {
+                            persistedState.viewSettings.layers.dimensionsLotDepth = true;
+                        }
                     }
 
-                    if (version === 1) {
-                        // Migration 1->2
-                        // Split dimensionsLot into dimensionsLotWidth and dimensionsLotDepth
-                        if (layers.dimensionsLot !== undefined) {
-                            layers.dimensionsLotWidth = layers.dimensionsLot;
-                            layers.dimensionsLotDepth = layers.dimensionsLot;
-                            delete layers.dimensionsLot;
-                        } else {
-                            layers.dimensionsLotWidth = true;
-                            layers.dimensionsLotDepth = true;
-                        }
-                        version = 2;
-                    }
-
-                    if (version === 2) {
-                        // Migration 2->3
+                    if (version < 3) {
+                        // Migration to 3
                         // Ensure dimensionSettings has text styling defaults
-                        const styleSettings = viewSettings.styleSettings || {};
+                        const styleSettings = persistedState.viewSettings.styleSettings || {};
                         const dimSettings = styleSettings.dimensionSettings || {};
                         styleSettings.dimensionSettings = {
                             ...dimSettings,
@@ -423,48 +428,55 @@ export const useStore = create(
                             outlineWidth: dimSettings.outlineWidth !== undefined ? dimSettings.outlineWidth : 0.1,
                             font: dimSettings.font || 'https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hjp-Ek-_EeA.woff'
                         };
-                        viewSettings.styleSettings = styleSettings;
-                        version = 3;
+                        persistedState.viewSettings.styleSettings = styleSettings;
                     }
 
-                    if (version === 3) {
-                        // Migration 3->4
+                    if (version < 4) {
+                        // Migration to 4
                         // Initialize buildingX/Y with calculated centered defaults
-                        if (state.existing && state.existing.buildingX === undefined) {
-                            const { lotWidth, lotDepth, setbackFront, setbackRear, setbackSideLeft, setbackSideRight } = state.existing;
-                            state.existing.buildingX = ((-lotWidth + setbackSideLeft) - setbackSideRight) / 2;
-                            state.existing.buildingY = (setbackFront + (lotDepth - setbackRear)) / 2;
+                        if (persistedState.existing && persistedState.existing.buildingX === undefined) {
+                            const { lotWidth, lotDepth, setbackFront, setbackRear, setbackSideLeft, setbackSideRight } = persistedState.existing;
+                            persistedState.existing.buildingX = ((-lotWidth + setbackSideLeft) - setbackSideRight) / 2;
+                            persistedState.existing.buildingY = (setbackFront + (lotDepth - setbackRear)) / 2;
                         }
-                        if (state.proposed && state.proposed.buildingX === undefined) {
-                            const { lotWidth, lotDepth, setbackFront, setbackRear, setbackSideLeft, setbackSideRight } = state.proposed;
-                            state.proposed.buildingX = (setbackSideLeft + (lotWidth - setbackSideRight)) / 2; // Proposed is flipped? No, logic in Scene was slightly different
-                            // Let's match the Scene logic for proposed:
-                            // x={(proposed.setbackSideLeft + (proposed.lotWidth - proposed.setbackSideRight)) / 2}
-                            state.proposed.buildingX = (setbackSideLeft + (lotWidth - setbackSideRight)) / 2;
-                            state.proposed.buildingY = (setbackFront + (lotDepth - setbackRear)) / 2;
+                        if (persistedState.proposed && persistedState.proposed.buildingX === undefined) {
+                            const { lotWidth, lotDepth, setbackFront, setbackRear, setbackSideLeft, setbackSideRight } = persistedState.proposed;
+                            persistedState.proposed.buildingX = (setbackSideLeft + (lotWidth - setbackSideRight)) / 2;
+                            persistedState.proposed.buildingY = (setbackFront + (lotDepth - setbackRear)) / 2;
                         }
-                        version = 4;
                     }
 
-                    if (version === 4) {
-                        // Migration 4->5
+                    if (version < 5) {
+                        // Migration to 5
                         // Add extensionWidth to dimensionSettings
-                        const styleSettings = viewSettings.styleSettings || {};
+                        const styleSettings = persistedState.viewSettings.styleSettings || {};
                         const dimSettings = styleSettings.dimensionSettings || {};
                         styleSettings.dimensionSettings = {
                             ...dimSettings,
                             extensionWidth: dimSettings.extensionWidth !== undefined ? dimSettings.extensionWidth : 0.5
                         };
-                        viewSettings.styleSettings = styleSettings;
-                        version = 5;
+                        persistedState.viewSettings.styleSettings = styleSettings;
+                    }
+
+                    if (version < 6) {
+                        // Migration to 6
+                        // Add dimensionsHeight to layers
+                        if (persistedState.viewSettings && persistedState.viewSettings.layers) {
+                            persistedState.viewSettings.layers.dimensionsHeight = true;
+                        }
+                    }
+
+                    if (version < 7) {
+                        // Migration to 7
+                        // Add ground to layers
+                        if (persistedState.viewSettings && persistedState.viewSettings.layers) {
+                            persistedState.viewSettings.layers.ground = true;
+                        }
                     }
 
                     return {
-                        ...state,
-                        viewSettings: {
-                            ...viewSettings,
-                            layers: layers
-                        }
+                        ...persistedState,
+                        version: 7 // Update verified version
                     };
                 },
                 partialize: (state) => ({
@@ -474,12 +486,14 @@ export const useStore = create(
                     sunSettings: state.sunSettings,
                     renderSettings: state.renderSettings,
                     layoutSettings: state.layoutSettings,
-                    savedViews: state.savedViews
+
+                    savedViews: state.savedViews,
+                    userDefaults: state.userDefaults
                 }),
             }
         ),
         {
-            limit: 50, // Limit history depth
+            limit: 50,
             partialize: (state) => {
                 const { existing, proposed, viewSettings, layoutSettings, sunSettings, renderSettings } = state
                 // Exclude export triggers from undo history
@@ -487,4 +501,5 @@ export const useStore = create(
                 return { existing, proposed, viewSettings: trackedViewSettings, layoutSettings, sunSettings, renderSettings }
             }
         }
-    ))
+    )
+);

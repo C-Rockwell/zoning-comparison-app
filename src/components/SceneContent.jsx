@@ -6,7 +6,7 @@ import { Select } from '@react-three/postprocessing'
 import * as THREE from 'three'
 import Dimension from './Dimension'
 
-const Building = ({ width, depth, height, x, y, styles, renderSettings, scaleFactor = 1, onPositionChange, offsetGroupX = 0 }) => {
+const Building = ({ width, depth, height, x, y, styles, renderSettings, scaleFactor = 1, onPositionChange, offsetGroupX = 0, showHeightDimensions = false, dimensionSettings = {} }) => {
     const { faces, edges } = styles
     const [hovered, setHovered] = useState(false)
     const [dragging, setDragging] = useState(false)
@@ -51,6 +51,10 @@ const Building = ({ width, depth, height, x, y, styles, renderSettings, scaleFac
         }
     }
 
+    // Dimension Points
+    const dimStart = [x + width / 2, y + depth / 2, 0]
+    const dimEnd = [x + width / 2, y + depth / 2, height]
+
     return (
         <group>
             <Select enabled={hovered}>
@@ -85,6 +89,18 @@ const Building = ({ width, depth, height, x, y, styles, renderSettings, scaleFac
                     )}
                 </mesh>
             </Select>
+
+            {/* Height Dimension */}
+            <Dimension
+                start={dimStart}
+                end={dimEnd}
+                label={`${height}'`}
+                offset={10}
+                color="black"
+                visible={showHeightDimensions}
+                settings={dimensionSettings}
+            />
+
             {/* Capture Plane for smooth dragging outside the box */}
             {dragging && (
                 <mesh
@@ -266,8 +282,8 @@ const SetbackLayer = ({ lotWidth, lotDepth, setbacks, x, y, style, scaleFactor =
 }
 
 // Ground plane that receives shadows
-const GroundPlane = ({ style }) => {
-    if (!style.visible) return null
+const GroundPlane = ({ style, visible }) => {
+    if (!visible || !style.visible) return null
 
     return (
         <mesh position={[0, 50, -0.1]} receiveShadow>
@@ -306,7 +322,7 @@ const SceneContent = () => {
 
     return (
         <group>
-            <GroundPlane style={styleSettings.ground} />
+            <GroundPlane style={styleSettings.ground} visible={layers.ground} />
 
             {layers.origin && (
                 <mesh position={[0, 0, 0.5]}>

@@ -1,41 +1,43 @@
 # Project Briefing: Zoning Comparison App (Handover)
 
 **Date:** December 23, 2025
-**Status:** Stable / Paused for System Update
+**Status:** Stable / Active Development
 
 ## Project Overview
 A 3D visualization tool for comparing "Existing" vs. "Proposed" zoning envelopes, featuring split-screen views, real-time styling, and dimension analysis.
 
 ## Recent Accomplishments
 
-### 1. Precise Style Controls
-**Goal:** Allow fine-grained control over visual parameters.
--   **Implementation:** Replaced standard HTML range inputs with a custom `SliderInput` component.
--   **Features:**
-    -   Combined Slider + Numeric Input.
-    -   Custom "Up/Down" chevron buttons to eliminate browser spinner overlap.
-    -   Input clamping and validation.
--   **Scope:** Applied universally to Lot Lines, Setbacks, Building Edges, Dimensions, Environment, and Layout settings.
+### 1. Extended Zoning Statistics
+**Goal:** Provide real-time zoning compliance metrics.
+-   **Implementation:** Added a "Stats" section to `ParameterPanel.jsx`.
+-   **Metrics:**
+    -   **Lot Size:** Dynamic calculation.
+    -   **Building Coverage:** `(Footprint / Lot Area) * 100`.
+    -   **Floor Area Ratio (FAR):** `Footprint / Lot Area`.
+-   **Logic:** Zoning calculations currently treat all buildings as **1-story** regardless of the visual `Building Height`, per user requirement for simplified analysis.
 
-### 2. Global Undo Functionality ("SH$T!" Button)
-**Goal:** Provide a quick way to revert accidental style changes.
--   **Implementation:** Integrated `zundo` middleware with Zustand store.
--   **UI:** Added a prominent, red **"SH$T!"** button in the Style Editor (top-right).
--   **Behavior:** Tracks state capability for `viewSettings`, `layoutSettings`, etc. Button is disabled when history is empty.
--   **Fix:** Resolved a critical "White Screen" crash by refactoring how `useStore.temporal` was accessed in `StyleEditor.jsx` (switched to `useZustandStore` bridge).
+### 2. User Defaults & Styles
+**Goal:** Allow users to save their preferred aesthetic as a baseline.
+-   **Implementation:** Added `userDefaults` to persistent store and "Save as Default" / "My Defaults" controls in `StyleEditor.jsx`.
+-   **Fix:** Restored "Ground Plane" and "Dimension Height" layers which were previously missing.
+
+### 3. UI Refinements
+-   **Background:** Set Light Mode background to pure white.
+-   **Fix:** Resolved syntax errors in `useStore.js` causing build failures.
 
 ## Current State
 -   **Branch:** Main (or current working branch).
--   **Stability:** The application loads correctly without errors. The "White Screen" crash on refresh has been fixed.
--   **Known Issues:** None at this time.
+-   **Stability:** Application is stable. All verify steps passed.
+-   **Calculations:** FAR logic is simplified ("Height" is ignored for density calcs).
 
 ## Immediate Next Steps
 Upon resuming:
-1.  **Verification:** comprehensive testing of the Undo feature to ensure it covers all desired actions (e.g., verifying if camera moves or deep building edits are tracked as expected).
-2.  **Refinement:** any further styling tweaks to the `Undo` button or sliders based on user feedback.
-3.  **Roadmap:** Resume previously planned tasks (e.g., "Vertical Navigation Sidebar" or "Custom View Presets" from prior context, if still relevant).
+1.  **Multi-Story Logic:** User hinted at future task to specifying specific floor heights/counts.
+2.  **Refinement:** Continue enhancing UI/UX based on feedback.
 
 ## Technical Context
+-   **Stats Logic:** `src/components/ParameterPanel.jsx`.
 -   **Store:** `src/store/useStore.js` (State management + Zundo middleware).
 -   **Styles:** `src/components/StyleEditor.jsx` (Main UI for styles + Undo button).
--   **Styling:** Tailwind CSS + `no-spinner` utility in `index.css`.
+
