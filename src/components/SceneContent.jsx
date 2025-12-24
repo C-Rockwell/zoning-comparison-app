@@ -1,12 +1,12 @@
 import { useStore } from '../store/useStore'
 import { useMemo, useState } from 'react'
-import { Line, Edges } from '@react-three/drei'
+import { Line, Edges, Text } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { Select } from '@react-three/postprocessing'
 import * as THREE from 'three'
 import Dimension from './Dimension'
 
-const Building = ({ width, depth, height, x, y, styles, renderSettings, scaleFactor = 1, onPositionChange, offsetGroupX = 0, showHeightDimensions = false, dimensionSettings = {} }) => {
+const Building = ({ width, depth, height, floorCount = 1, x, y, styles, renderSettings, scaleFactor = 1, onPositionChange, offsetGroupX = 0, showHeightDimensions = false, dimensionSettings = {} }) => {
     const { faces, edges } = styles
     const [hovered, setHovered] = useState(false)
     const [dragging, setDragging] = useState(false)
@@ -55,46 +55,55 @@ const Building = ({ width, depth, height, x, y, styles, renderSettings, scaleFac
     const dimStart = [x + width / 2, y + depth / 2, 0]
     const dimEnd = [x + width / 2, y + depth / 2, height]
 
+    const floorHeight = height / Math.max(1, floorCount);
+
     return (
         <group>
             <Select enabled={hovered}>
-                <mesh
-                    position={[x, y, height / 2]}
-                    castShadow
-                    receiveShadow
+                <group
                     onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
                     onPointerOut={() => setHovered(false)}
-                    onPointerDown={handlePointerDown}
-                    onPointerUp={handlePointerUp}
-                    onPointerMove={handlePointerMove}
                 >
-                    <boxGeometry args={[width, depth, height]} />
-                    <meshStandardMaterial
-                        color={dragging ? '#ffff00' : faces.color} // Highlight when dragging
-                        transparent={true}
-                        opacity={dragging ? 0.8 : faces.opacity}
-                        side={THREE.DoubleSide}
-                        depthWrite={faces.opacity >= 0.95}
-                        roughness={0.7}
-                        metalness={0.1}
-                    />
-                    {edges.visible && (
-                        <Edges
-                            linewidth={edges.width * scaleFactor}
-                            threshold={15}
-                            color={edges.color}
-                            transparent
-                            opacity={edges.opacity}
-                        />
-                    )}
-                </mesh>
+                    {Array.from({ length: Math.max(1, floorCount) }).map((_, index) => (
+                        <mesh
+                            key={index}
+                            position={[x, y, (floorHeight * index) + (floorHeight / 2)]}
+                            castShadow
+                            receiveShadow
+                            onPointerDown={handlePointerDown}
+                            onPointerUp={handlePointerUp}
+                            onPointerMove={handlePointerMove}
+                        >
+                            {/* Slightly reduce dimensions to show seam between floors if > 1 */}
+                            <boxGeometry args={[width, depth, floorHeight - (floorCount > 1 ? 0.05 : 0)]} />
+                            <meshStandardMaterial
+                                color={dragging ? '#ffff00' : faces.color} // Highlight when dragging
+                                transparent={true}
+                                opacity={dragging ? 0.8 : faces.opacity}
+                                side={THREE.DoubleSide}
+                                depthWrite={faces.opacity >= 0.95}
+                                roughness={0.7}
+                                metalness={0.1}
+                            />
+                            {edges.visible && (
+                                <Edges
+                                    linewidth={edges.width * scaleFactor}
+                                    threshold={15}
+                                    color={edges.color}
+                                    transparent
+                                    opacity={edges.opacity}
+                                />
+                            )}
+                        </mesh>
+                    ))}
+                </group>
             </Select>
 
             {/* Height Dimension */}
             <Dimension
                 start={dimStart}
                 end={dimEnd}
-                label={`${height}'`}
+                label={`${height}' ${floorCount > 1 ? `(${floorCount} fl)` : ''}`}
                 offset={10}
                 color="black"
                 visible={showHeightDimensions}
@@ -309,6 +318,7 @@ const SceneContent = () => {
     const renderSettings = useStore((state) => state.renderSettings)
     const layoutSettings = useStore((state) => state.layoutSettings)
     const setBuildingPosition = useStore((state) => state.setBuildingPosition)
+    const labels = useStore((state) => state.viewSettings.labels)
 
     const scaleFactor = 1
     const spacing = layoutSettings?.lotSpacing ?? 0
@@ -371,6 +381,7 @@ const SceneContent = () => {
                         width={existing.buildingWidth}
                         depth={existing.buildingDepth}
                         height={existing.buildingHeight}
+                        floorCount={existing.floorCount}
                         x={existing.buildingX}
                         y={existing.buildingY}
                         styles={{ faces: existingStyles.buildingFaces, edges: existingStyles.buildingEdges }}
@@ -378,7 +389,23 @@ const SceneContent = () => {
                         scaleFactor={scaleFactor}
                         onPositionChange={(x, y) => setBuildingPosition('existing', x, y)}
                         offsetGroupX={-offset}
+                        showHeightDimensions={layers.dimensionsHeight}
+                        dimensionSettings={styleSettings.dimensionSettings}
                     />
+                )}
+                {/* Existing District Label */}
+                {labels && labels.existingDistrict && (
+                    <Text
+                        position={[0, -existing.lotDepth / 2 - 30, 0]} // Position relative to the lot's center (0,0) in this group
+                        rotation={[-Math.PI / 2, 0, 0]} // Flat on ground
+                        fontSize={4}
+                        color="black"
+                        anchorX="center"
+                        anchorY="middle"
+                        font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hjp-Ek-_EeA.woff"
+                    >
+                        EXISTING DISTRICT
+                    </Text>
                 )}
             </group>
 
@@ -421,6 +448,7 @@ const SceneContent = () => {
                         width={proposed.buildingWidth}
                         depth={proposed.buildingDepth}
                         height={proposed.buildingHeight}
+                        floorCount={proposed.floorCount}
                         x={proposed.buildingX}
                         y={proposed.buildingY}
                         styles={{ faces: proposedStyles.buildingFaces, edges: proposedStyles.buildingEdges }}
@@ -428,7 +456,23 @@ const SceneContent = () => {
                         scaleFactor={scaleFactor}
                         onPositionChange={(x, y) => setBuildingPosition('proposed', x, y)}
                         offsetGroupX={offset}
+                        showHeightDimensions={layers.dimensionsHeight}
+                        dimensionSettings={styleSettings.dimensionSettings}
                     />
+                )}
+                {/* Proposed District Label */}
+                {labels && labels.proposedDistrict && (
+                    <Text
+                        position={[0, -proposed.lotDepth / 2 - 30, 0]} // Position relative to the lot's center (0,0) in this group
+                        rotation={[-Math.PI / 2, 0, 0]} // Flat on ground
+                        fontSize={4}
+                        color="black"
+                        anchorX="center"
+                        anchorY="middle"
+                        font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hjp-Ek-_EeA.woff"
+                    >
+                        PROPOSED DISTRICT
+                    </Text>
                 )}
             </group>
         </group>

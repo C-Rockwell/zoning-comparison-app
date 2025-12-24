@@ -14,6 +14,7 @@ export const useStore = create(
                     setbackSideLeft: 5,
                     setbackSideRight: 5,
                     buildingHeight: 30,
+                    floorCount: 1, // Added for multi-story support
                     buildingWidth: 30,
                     buildingDepth: 40,
                     buildingX: 0, // Calculated in migration
@@ -27,11 +28,13 @@ export const useStore = create(
                     setbackSideLeft: 5,
                     setbackSideRight: 5,
                     buildingHeight: 45,
+                    floorCount: 1, // Added for multi-story support
                     buildingWidth: 35,
                     buildingDepth: 50,
                     buildingX: 0, // Calculated in migration
                     buildingY: 0, // Calculated in migration
                 },
+                userDefaults: null,
                 // Sun Simulation Settings (optional, for time-of-day shadows)
                 sunSettings: {
                     enabled: false,
@@ -64,7 +67,7 @@ export const useStore = create(
                     cameraView: 'top', // 'iso' | 'top' | 'front' | 'side' | 'left' | 'right'
                     viewVersion: 0, // Increment to force camera updates even if view name is same
                     projection: 'orthographic', // 'perspective' | 'orthographic'
-                    backgroundMode: 'dark', // 'dark' | 'light'
+                    backgroundMode: 'light', // Enforced light mode
                     layers: {
                         lotLines: true,
                         setbackLines: true,
@@ -275,8 +278,10 @@ export const useStore = create(
                     }
                 }),
                 toggleProjection: () => set((state) => ({ viewSettings: { ...state.viewSettings, projection: state.viewSettings.projection === 'perspective' ? 'orthographic' : 'perspective' } })),
-                toggleBackgroundMode: () => set((state) => ({ viewSettings: { ...state.viewSettings, backgroundMode: state.viewSettings.backgroundMode === 'dark' ? 'light' : 'dark' } })),
+                // Removed toggleBackgroundMode, strictly light mode now
+                toggleBackgroundMode: () => { }, // No-op to prevent breakages if still called
                 toggleLayer: (layer) => set((state) => ({ viewSettings: { ...state.viewSettings, layers: { ...state.viewSettings.layers, [layer]: !state.viewSettings.layers[layer] } } })),
+                toggleLabel: (label) => set((state) => ({ viewSettings: { ...state.viewSettings, labels: { ...state.viewSettings.labels, [label]: !state.viewSettings.labels[label] } } })),
                 setExportFormat: (format) => set((state) => ({ viewSettings: { ...state.viewSettings, exportFormat: format } })),
                 setExportSettings: (settings) => set((state) => ({ viewSettings: { ...state.viewSettings, exportSettings: settings } })),
                 setExportView: (view) => set((state) => ({ viewSettings: { ...state.viewSettings, exportView: view } })),
@@ -400,7 +405,7 @@ export const useStore = create(
             }),
             {
                 name: 'zoning-app-storage',
-                version: 7, // Updated to 7 to force migration
+                version: 10, // Updated to 10
                 migrate: (persistedState, version) => {
                     // Split dimensionsLot into dimensionsLotWidth and dimensionsLotDepth
                     if (persistedState.viewSettings && persistedState.viewSettings.layers && persistedState.viewSettings.layers.dimensionsLot !== undefined) {
@@ -474,9 +479,39 @@ export const useStore = create(
                         }
                     }
 
+                    if (version < 8) {
+                        // Migration to 8
+                        // Add labels to viewSettings
+                        if (persistedState.viewSettings) {
+                            persistedState.viewSettings.labels = {
+                                existingDistrict: true,
+                                proposedDistrict: true
+                            };
+                        }
+                    }
+
+                    if (version < 9) {
+                        // Migration to 9
+                        // Ensure floorCount exists
+                        if (persistedState.existing && persistedState.existing.floorCount === undefined) {
+                            persistedState.existing.floorCount = 1;
+                        }
+                        if (persistedState.proposed && persistedState.proposed.floorCount === undefined) {
+                            persistedState.proposed.floorCount = 1;
+                        }
+                    }
+
+                    if (version < 10) {
+                        // Migration to 10
+                        // Remove dark mode support
+                        if (persistedState.viewSettings) {
+                            persistedState.viewSettings.backgroundMode = 'light';
+                        }
+                    }
+
                     return {
                         ...persistedState,
-                        version: 7 // Update verified version
+                        version: 10 // Update verified version
                     };
                 },
                 partialize: (state) => ({

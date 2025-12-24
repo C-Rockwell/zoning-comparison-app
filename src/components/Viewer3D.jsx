@@ -12,8 +12,8 @@ import StyleEditor from './StyleEditor'
 import { Sun, Moon } from 'lucide-react'
 
 // High-quality lighting setup
-const StudioLighting = ({ backgroundMode }) => {
-    const isLight = backgroundMode === 'light'
+const StudioLighting = () => {
+    const isLight = true // Enforce light mode lighting
     const lighting = useStore(state => state.viewSettings.lighting)
 
     // Default values if store is not yet ready or missing
@@ -156,11 +156,7 @@ const Viewer3D = () => {
     const views = ['iso', 'top', 'front', 'left', 'right']
 
     // Background colors for light/dark modes
-    const bgColors = {
-        dark: { container: 'bg-gray-950', scene: '#0a0a0f', grid: { section: '#4a5568', cell: '#2d3748' } },
-        light: { container: 'bg-white', scene: '#ffffff', grid: { section: '#e5e7eb', cell: '#f3f4f6' } }
-    }
-    const bg = bgColors[backgroundMode] || bgColors.dark
+    const bg = { container: 'bg-white', scene: '#ffffff', grid: { section: '#e5e7eb', cell: '#f3f4f6' } }
 
     return (
         <div className={`flex-1 ${bg.container} relative overflow-hidden`}>
@@ -240,14 +236,7 @@ const Viewer3D = () => {
                         {projection === 'orthographic' ? '2D (Para)' : '3D (Persp)'}
                     </button>
 
-                    {/* Background Mode Toggle */}
-                    <button
-                        className={`p-1.5 rounded text-sm font-semibold transition-colors ${backgroundMode === 'light' ? 'bg-yellow-500 text-gray-900' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-                        onClick={() => toggleBackgroundMode()}
-                        title={`Switch to ${backgroundMode === 'dark' ? 'Light' : 'Dark'} Background`}
-                    >
-                        {backgroundMode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-                    </button>
+                    {/* Background Mode Toggle Removed */}
 
                     <div className="w-[1px] h-6 bg-gray-600 mx-1"></div>
 
@@ -327,7 +316,7 @@ const Viewer3D = () => {
                 {/* <SoftShadows size={25} samples={16} focus={0.5} /> */}
 
                 {/* Studio Lighting for realistic shading */}
-                <StudioLighting backgroundMode={backgroundMode} />
+                <StudioLighting />
 
                 {/* Contact shadows for ground-level detail */}
                 {renderSettings.contactShadows && (
