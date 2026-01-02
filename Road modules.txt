@@ -1,0 +1,48 @@
+*okay now we are going to implement corresponding "road modules" for both the existing model and the proposed model. 
+
+**The basic rules for these modules are as follows and are illustrated in Image 1.jpg:
+
+1- the existing road module and proposed road module will always have the same "road model depth" and the same layer geometries and corresponding dimensions EXCEPT the existing road module's width will always equal the existing model's lot width and conversely the proposed road module's width will always equal the proposed model's lot width. There can be one set of user inputs to configure both road modules as long as the modules respond to the existing and proposed model's widths independently
+
+2- the origin of the existing road module = origin of the existing model and the origin of the proposed road module = proposed model's origin
+
+3- both road module's will always share an edge along the x-axis that corresponds to the existing and proposed models
+
+
+**Rules for measurement and establishment of geometries:
+
+1- the "Right-of-Way" layer, which should be the first user input, sets the road modules' depths (widths correspond to existing and proposed lot widths)
+	- this layer will be 2 polylines that parallel the front lot lines of the existing and proposed models
+	- the first line will be located on the x-axis and match the lot width line segment
+	- the second line of the right-of-way will be parallel but equalling the "Right-of-Way" the user inputs, and then located in a negative direction along the y-axis (see black dashed lines in Image 2.jpg)
+
+2- the right-of-way parameter controls all other geometries within the road modules and all other layer geometries in the road models must fit within the right-of-way parameter
+
+3- the next layer and user input will be "Road Width" and user will input a distance like "20" which equals 20' in Depth in relationship to the road module depth. 
+
+NOTE: the term "width" may be used as labeled inputs for the user but are always actually related to the road module DEPTH. 
+
+4- the placement of all subsequent layer geometries starts with an invisible baseline or "centerline" which is established by (right of way depth/2). For example, if the user inputs "50" for the right-of-way depth the "centerline" is "25" and would be established as parallel lines to the lot widths located on a negative value along the y-axis
+
+5- the placement of the "road width" polygon is established by ("road width" value/2) which would be located on the invisible "centerline" and the polygon would extend in equal measurements in both a positive and negative direction along the y-axis to = the total user's input for "road width" and then extended along the x-axis to match the correspond lot width values
+
+6- the right of way and road width values set the maximum values for all subsequent parameters
+
+7- all the subsequent layer parameters will have potential options for both a "Left" and "Right" side and the parameters may or may not equal the parameter values or inclusion of the parameters for each side. every "Left" parameter would be located in a direction outside of the "road width" polygon in a negative y direction and every "Right" parameter would be located in a direction outside of the "road width" polygon in a positive y direction. this would correspond to the left and right sides of the street in real life. 
+
+** Road Module Parameters
+
+- "Right-of-Way"
+- "Road Width"
+
+Note: all the following parameters are optional and may or may not be used. if a user leaves and input blank, then that means that parameter is not included and should not be modeled. ALTERNATE scenario: the user could check a box to include and then an input box would appear for user's input
+
+- "Left Parking" | "Right Parking"
+- "Left Verge" | "Right Verge"
+- "Left Sidewalk" | "Right Sidewalk"
+- "Left Transition Zone" | "Right Transition Zone"
+
+
+These parameters are listed in the proper order and would be located following this order. For example, if the Left side parking parameter was included then it would be immediately adjacent to the left edge of the road width but if the parking parameter was omitted then the next parameter "included" would be adjacent to the road width edge and extending towards the left right of way line. 
+
+Just make all of these parameters editable polygons including (line color, width, line type, opacity, fill color, fill opacity, etc. (except for right-of-way parameter which would be two polylines)

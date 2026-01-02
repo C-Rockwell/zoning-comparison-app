@@ -392,6 +392,52 @@ const ModelStyleControls = ({ model, styles, setStyle, setStyleOverride, openSec
                     />
                 </ControlRow>
             </Section>
+
+            {/* Max Height Plane */}
+            <Section
+                title="Max Height Plane"
+                isOpen={openSections[`${prefix}_maxHeight`]}
+                onToggle={() => toggleSection(`${prefix}_maxHeight`)}
+            >
+                <ControlRow label="Fill Color">
+                    <ColorPicker
+                        value={styles.maxHeightPlane?.color ?? '#FF6B6B'}
+                        onChange={(c) => setStyle(model, 'maxHeightPlane', 'color', c)}
+                    />
+                </ControlRow>
+                <ControlRow label="Fill Opacity">
+                    <SliderInput
+                        value={styles.maxHeightPlane?.opacity ?? 0.3}
+                        onChange={(v) => setStyle(model, 'maxHeightPlane', 'opacity', v)}
+                    />
+                </ControlRow>
+                <ControlRow label="Line Color">
+                    <ColorPicker
+                        value={styles.maxHeightPlane?.lineColor ?? '#FF0000'}
+                        onChange={(c) => setStyle(model, 'maxHeightPlane', 'lineColor', c)}
+                    />
+                </ControlRow>
+                <ControlRow label="Line Width">
+                    <SliderInput
+                        value={styles.maxHeightPlane?.lineWidth ?? 2}
+                        onChange={(v) => setStyle(model, 'maxHeightPlane', 'lineWidth', v)}
+                        min={0.5}
+                        max={5}
+                        step={0.5}
+                    />
+                </ControlRow>
+                <ControlRow label="Line Dashed">
+                    <button
+                        onClick={() => setStyle(model, 'maxHeightPlane', 'lineDashed', !styles.maxHeightPlane?.lineDashed)}
+                        className={`px-2 py-0.5 rounded text-[9px] font-bold ${styles.maxHeightPlane?.lineDashed
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-700 text-gray-400'
+                            }`}
+                    >
+                        {styles.maxHeightPlane?.lineDashed ? 'ON' : 'OFF'}
+                    </button>
+                </ControlRow>
+            </Section>
         </div>
     )
 }
@@ -462,6 +508,8 @@ const StyleEditor = () => {
     const userDefaults = useStore((state) => state.userDefaults)
     const saveAsDefault = useStore((state) => state.saveAsDefault)
     const loadUserDefaults = useStore((state) => state.loadUserDefaults)
+    const roadModuleStyles = useStore((state) => state.roadModuleStyles)
+    const setRoadModuleStyle = useStore((state) => state.setRoadModuleStyle)
     const [openSections, setOpenSections] = useState({})
     const [isPanelOpen, setIsPanelOpen] = useState(false)
 
@@ -760,6 +808,220 @@ const StyleEditor = () => {
                             </ControlRow>
                         </Section>
                     </div>
+
+                    {/* Grid - Shared */}
+                    <div className="border-t border-gray-700">
+                        <Section
+                            title="Grid"
+                            isOpen={openSections.grid}
+                            onToggle={() => toggleSection('grid')}
+                        >
+                            <ControlRow label="Primary Color">
+                                <ColorPicker
+                                    value={styleSettings.grid?.sectionColor ?? '#9ca3af'}
+                                    onChange={(c) => setStyle('grid', 'sectionColor', c)}
+                                />
+                            </ControlRow>
+                            <ControlRow label="Primary Width">
+                                <SliderInput
+                                    value={styleSettings.grid?.sectionThickness ?? 1.5}
+                                    onChange={(v) => setStyle('grid', 'sectionThickness', v)}
+                                    min={0.5}
+                                    max={5}
+                                    step={0.5}
+                                />
+                            </ControlRow>
+                            <ControlRow label="Secondary Color">
+                                <ColorPicker
+                                    value={styleSettings.grid?.cellColor ?? '#d1d5db'}
+                                    onChange={(c) => setStyle('grid', 'cellColor', c)}
+                                />
+                            </ControlRow>
+                            <ControlRow label="Secondary Width">
+                                <SliderInput
+                                    value={styleSettings.grid?.cellThickness ?? 1}
+                                    onChange={(v) => setStyle('grid', 'cellThickness', v)}
+                                    min={0.5}
+                                    max={3}
+                                    step={0.5}
+                                />
+                            </ControlRow>
+                            <ControlRow label="Fade Distance">
+                                <SliderInput
+                                    value={styleSettings.grid?.fadeDistance ?? 400}
+                                    onChange={(v) => setStyle('grid', 'fadeDistance', v)}
+                                    min={100}
+                                    max={1000}
+                                    step={50}
+                                />
+                            </ControlRow>
+                        </Section>
+                    </div>
+
+                    {/* Road Module Styles */}
+                    {roadModuleStyles && (
+                        <div className="border-t border-gray-700">
+                            <Section
+                                title="Road Module"
+                                isOpen={openSections.roadModule}
+                                onToggle={() => toggleSection('roadModule')}
+                            >
+                                {/* Right-of-Way Lines */}
+                                <div className="mb-3">
+                                    <span className="text-[9px] text-gray-500 uppercase tracking-wider block mb-1">Right-of-Way Lines</span>
+                                    <ControlRow label="Color">
+                                        <ColorPicker
+                                            value={roadModuleStyles.rightOfWay?.color ?? '#000000'}
+                                            onChange={(c) => setRoadModuleStyle('rightOfWay', 'color', c)}
+                                        />
+                                    </ControlRow>
+                                    <ControlRow label="Width">
+                                        <SliderInput
+                                            value={roadModuleStyles.rightOfWay?.width ?? 1}
+                                            onChange={(v) => setRoadModuleStyle('rightOfWay', 'width', v)}
+                                            min={0.5}
+                                            max={5}
+                                            step={0.5}
+                                        />
+                                    </ControlRow>
+                                    <ControlRow label="Opacity">
+                                        <SliderInput
+                                            value={roadModuleStyles.rightOfWay?.opacity ?? 1}
+                                            onChange={(v) => setRoadModuleStyle('rightOfWay', 'opacity', v)}
+                                        />
+                                    </ControlRow>
+                                    <div className="pt-1">
+                                        <LineStyleSelector
+                                            dashed={roadModuleStyles.rightOfWay?.dashed ?? true}
+                                            dashSize={roadModuleStyles.rightOfWay?.dashSize ?? 2}
+                                            gapSize={roadModuleStyles.rightOfWay?.gapSize ?? 1}
+                                            onChange={(v) => setRoadModuleStyle('rightOfWay', 'dashed', v)}
+                                            onDashChange={(v) => setRoadModuleStyle('rightOfWay', 'dashSize', v)}
+                                            onGapChange={(v) => setRoadModuleStyle('rightOfWay', 'gapSize', v)}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Road Width */}
+                                <div className="border-t border-gray-800 pt-2 mb-3">
+                                    <span className="text-[9px] text-gray-500 uppercase tracking-wider block mb-1">Road Surface</span>
+                                    <ControlRow label="Line Color">
+                                        <ColorPicker
+                                            value={roadModuleStyles.roadWidth?.lineColor ?? '#000000'}
+                                            onChange={(c) => setRoadModuleStyle('roadWidth', 'lineColor', c)}
+                                        />
+                                    </ControlRow>
+                                    <ControlRow label="Line Width">
+                                        <SliderInput
+                                            value={roadModuleStyles.roadWidth?.lineWidth ?? 1}
+                                            onChange={(v) => setRoadModuleStyle('roadWidth', 'lineWidth', v)}
+                                            min={0.5}
+                                            max={5}
+                                            step={0.5}
+                                        />
+                                    </ControlRow>
+                                    <ControlRow label="Fill Color">
+                                        <ColorPicker
+                                            value={roadModuleStyles.roadWidth?.fillColor ?? '#666666'}
+                                            onChange={(c) => setRoadModuleStyle('roadWidth', 'fillColor', c)}
+                                        />
+                                    </ControlRow>
+                                    <ControlRow label="Fill Opacity">
+                                        <SliderInput
+                                            value={roadModuleStyles.roadWidth?.fillOpacity ?? 0.8}
+                                            onChange={(v) => setRoadModuleStyle('roadWidth', 'fillOpacity', v)}
+                                        />
+                                    </ControlRow>
+                                </div>
+
+                                {/* Left Side Elements */}
+                                <div className="border-t border-gray-800 pt-2 mb-3">
+                                    <span className="text-[9px] text-blue-400 uppercase tracking-wider block mb-2 font-bold">Left Side (toward outer ROW)</span>
+
+                                    {[
+                                        { key: 'leftParking', label: 'Parking', defaultFill: '#888888' },
+                                        { key: 'leftVerge', label: 'Verge', defaultFill: '#c4a77d' },
+                                        { key: 'leftSidewalk', label: 'Sidewalk', defaultFill: '#90EE90' },
+                                        { key: 'leftTransitionZone', label: 'Transition Zone', defaultFill: '#98D8AA' },
+                                    ].map(({ key, label, defaultFill }) => (
+                                        <div key={key} className="mb-3 pl-2 border-l-2 border-gray-700">
+                                            <span className="text-[9px] text-gray-500 uppercase tracking-wider block mb-1">{label}</span>
+                                            <ControlRow label="Line Color">
+                                                <ColorPicker
+                                                    value={roadModuleStyles[key]?.lineColor ?? '#000000'}
+                                                    onChange={(c) => setRoadModuleStyle(key, 'lineColor', c)}
+                                                />
+                                            </ControlRow>
+                                            <ControlRow label="Line Width">
+                                                <SliderInput
+                                                    value={roadModuleStyles[key]?.lineWidth ?? 1}
+                                                    onChange={(v) => setRoadModuleStyle(key, 'lineWidth', v)}
+                                                    min={0.5}
+                                                    max={5}
+                                                    step={0.5}
+                                                />
+                                            </ControlRow>
+                                            <ControlRow label="Fill Color">
+                                                <ColorPicker
+                                                    value={roadModuleStyles[key]?.fillColor ?? defaultFill}
+                                                    onChange={(c) => setRoadModuleStyle(key, 'fillColor', c)}
+                                                />
+                                            </ControlRow>
+                                            <ControlRow label="Fill Opacity">
+                                                <SliderInput
+                                                    value={roadModuleStyles[key]?.fillOpacity ?? 0.7}
+                                                    onChange={(v) => setRoadModuleStyle(key, 'fillOpacity', v)}
+                                                />
+                                            </ControlRow>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Right Side Elements */}
+                                <div className="border-t border-gray-800 pt-2">
+                                    <span className="text-[9px] text-green-400 uppercase tracking-wider block mb-2 font-bold">Right Side (toward lot)</span>
+
+                                    {[
+                                        { key: 'rightParking', label: 'Parking', defaultFill: '#888888' },
+                                        { key: 'rightVerge', label: 'Verge', defaultFill: '#c4a77d' },
+                                        { key: 'rightSidewalk', label: 'Sidewalk', defaultFill: '#90EE90' },
+                                        { key: 'rightTransitionZone', label: 'Transition Zone', defaultFill: '#98D8AA' },
+                                    ].map(({ key, label, defaultFill }) => (
+                                        <div key={key} className="mb-3 pl-2 border-l-2 border-gray-700">
+                                            <span className="text-[9px] text-gray-500 uppercase tracking-wider block mb-1">{label}</span>
+                                            <ControlRow label="Line Color">
+                                                <ColorPicker
+                                                    value={roadModuleStyles[key]?.lineColor ?? '#000000'}
+                                                    onChange={(c) => setRoadModuleStyle(key, 'lineColor', c)}
+                                                />
+                                            </ControlRow>
+                                            <ControlRow label="Line Width">
+                                                <SliderInput
+                                                    value={roadModuleStyles[key]?.lineWidth ?? 1}
+                                                    onChange={(v) => setRoadModuleStyle(key, 'lineWidth', v)}
+                                                    min={0.5}
+                                                    max={5}
+                                                    step={0.5}
+                                                />
+                                            </ControlRow>
+                                            <ControlRow label="Fill Color">
+                                                <ColorPicker
+                                                    value={roadModuleStyles[key]?.fillColor ?? defaultFill}
+                                                    onChange={(c) => setRoadModuleStyle(key, 'fillColor', c)}
+                                                />
+                                            </ControlRow>
+                                            <ControlRow label="Fill Opacity">
+                                                <SliderInput
+                                                    value={roadModuleStyles[key]?.fillOpacity ?? 0.7}
+                                                    onChange={(v) => setRoadModuleStyle(key, 'fillOpacity', v)}
+                                                />
+                                            </ControlRow>
+                                        </div>
+                                    ))}
+                                </div>
+                            </Section>
+                        </div>
+                    )}
                 </div>
             )}
         </>

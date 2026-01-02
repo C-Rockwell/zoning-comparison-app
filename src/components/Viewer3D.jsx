@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react'
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { GizmoHelper, GizmoViewport, CameraControls, Grid, PerspectiveCamera, OrthographicCamera, SoftShadows, ContactShadows } from '@react-three/drei'
 import { EffectComposer, N8AO, ToneMapping, SMAA, Outline, Selection } from '@react-three/postprocessing'
 import { ToneMappingMode } from 'postprocessing'
@@ -9,11 +9,9 @@ import { useStore } from '../store/useStore'
 import CameraHandler from './CameraHandler'
 import Exporter from './Exporter'
 import StyleEditor from './StyleEditor'
-import { Sun, Moon } from 'lucide-react'
 
-// High-quality lighting setup
-const StudioLighting = ({ backgroundMode }) => {
-    const isLight = backgroundMode === 'light'
+// High-quality lighting setup (light mode only)
+const StudioLighting = () => {
     const lighting = useStore(state => state.viewSettings.lighting)
 
     // Default values if store is not yet ready or missing
@@ -38,7 +36,7 @@ const StudioLighting = ({ backgroundMode }) => {
             {/* Main key light - soft directional */}
             <directionalLight
                 position={[x, y, z]}
-                intensity={isLight ? intensityRaw : intensityRaw * 1.2}
+                intensity={intensityRaw}
                 castShadow={shadowsEnabled}
                 shadow-mapSize-width={4096}
                 shadow-mapSize-height={4096}
@@ -54,7 +52,7 @@ const StudioLighting = ({ backgroundMode }) => {
             {/* Fill light from opposite side */}
             <directionalLight
                 position={[fillX, fillY, fillZ]}
-                intensity={isLight ? 0.4 : 0.6}
+                intensity={0.4}
                 color="#b4d7ff"
             />
 
@@ -66,12 +64,12 @@ const StudioLighting = ({ backgroundMode }) => {
             />
 
             {/* Ambient fill */}
-            <ambientLight intensity={isLight ? 0.3 : 0.4} />
+            <ambientLight intensity={0.3} />
 
             {/* Hemisphere for natural sky/ground bounce */}
             <hemisphereLight
-                skyColor={isLight ? '#ffffff' : '#c9d9f0'}
-                groundColor={isLight ? '#d4d4d4' : '#3d3d4a'}
+                skyColor="#ffffff"
+                groundColor="#d4d4d4"
                 intensity={0.5}
             />
         </>
@@ -106,6 +104,74 @@ const PostProcessing = ({ renderSettings }) => {
     )
 }
 
+// Adaptive Grid that scales based on camera zoom
+const AdaptiveGrid = ({ gridSettings }) => {
+    const { camera } = useThree()
+    const [gridScale, setGridScale] = useState({ cellSize: 10, sectionSize: 50 })
+
+    useFrame(() => {
+        // Get effective zoom level
+        let effectiveZoom
+        if (camera.isOrthographicCamera) {
+            effectiveZoom = camera.zoom
+        } else {
+            // For perspective, use distance from target (approximate)
+            effectiveZoom = 100 / camera.position.length()
+        }
+
+        // Calculate grid scale based on zoom
+        // As zoom increases, we want smaller grid cells
+        let cellSize, sectionSize
+
+        if (effectiveZoom > 8) {
+            // Very zoomed in - 1ft cells, 5ft sections
+            cellSize = 1
+            sectionSize = 5
+        } else if (effectiveZoom > 4) {
+            // Zoomed in - 2ft cells, 10ft sections
+            cellSize = 2
+            sectionSize = 10
+        } else if (effectiveZoom > 2) {
+            // Medium zoom - 5ft cells, 25ft sections
+            cellSize = 5
+            sectionSize = 25
+        } else if (effectiveZoom > 1) {
+            // Normal zoom - 10ft cells, 50ft sections
+            cellSize = 10
+            sectionSize = 50
+        } else {
+            // Zoomed out - 20ft cells, 100ft sections
+            cellSize = 20
+            sectionSize = 100
+        }
+
+        // Only update if changed
+        if (cellSize !== gridScale.cellSize || sectionSize !== gridScale.sectionSize) {
+            setGridScale({ cellSize, sectionSize })
+        }
+    })
+
+    // Get color values from settings
+    const sectionColorHex = gridSettings?.sectionColor ?? '#9ca3af'
+    const cellColorHex = gridSettings?.cellColor ?? '#d1d5db'
+
+    return (
+        <Grid
+            position={[0, 0, 0.05]}
+            rotation={[Math.PI / 2, 0, 0]}
+            args={[500, 500]}
+            cellSize={gridScale.cellSize}
+            sectionSize={gridScale.sectionSize}
+            fadeDistance={gridSettings?.fadeDistance ?? 400}
+            fadeStrength={gridSettings?.fadeStrength ?? 1}
+            sectionColor={sectionColorHex}
+            cellColor={cellColorHex}
+            sectionThickness={gridSettings?.sectionThickness ?? 1.5}
+            cellThickness={gridSettings?.cellThickness ?? 1}
+        />
+    )
+}
+
 const Viewer3D = () => {
     const cameraControlsRef = useRef()
     const contentRef = useRef()
@@ -124,8 +190,7 @@ const Viewer3D = () => {
     const toggleProjection = useStore(state => state.toggleProjection)
     const gimbalLayer = useStore(state => state.viewSettings.layers.gimbal)
     const gridLayer = useStore(state => state.viewSettings.layers.grid)
-    const backgroundMode = useStore(state => state.viewSettings.backgroundMode)
-    const toggleBackgroundMode = useStore(state => state.toggleBackgroundMode)
+    const gridSettings = useStore(state => state.viewSettings.styleSettings?.grid)
     const renderSettings = useStore(state => state.renderSettings)
 
     const handlePresetClick = (index) => {
@@ -155,15 +220,11 @@ const Viewer3D = () => {
 
     const views = ['iso', 'top', 'front', 'left', 'right']
 
-    // Background colors for light/dark modes
-    const bgColors = {
-        dark: { container: 'bg-gray-950', scene: '#0a0a0f', grid: { section: '#4a5568', cell: '#2d3748' } },
-        light: { container: 'bg-white', scene: '#ffffff', grid: { section: '#e5e7eb', cell: '#f3f4f6' } }
-    }
-    const bg = bgColors[backgroundMode] || bgColors.dark
+    // Light mode background
+    const sceneBackground = '#ffffff'
 
     return (
-        <div className={`flex-1 ${bg.container} relative overflow-hidden`}>
+        <div className="flex-1 bg-white relative overflow-hidden">
             {/* View Controls Overlay (Left) */}
             <div className="absolute top-4 left-4 flex flex-col gap-2 z-10 max-w-md">
                 {/* Standard Views */}
@@ -240,15 +301,6 @@ const Viewer3D = () => {
                         {projection === 'orthographic' ? '2D (Para)' : '3D (Persp)'}
                     </button>
 
-                    {/* Background Mode Toggle */}
-                    <button
-                        className={`p-1.5 rounded text-sm font-semibold transition-colors ${backgroundMode === 'light' ? 'bg-yellow-500 text-gray-900' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-                        onClick={() => toggleBackgroundMode()}
-                        title={`Switch to ${backgroundMode === 'dark' ? 'Light' : 'Dark'} Background`}
-                    >
-                        {backgroundMode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-                    </button>
-
                     <div className="w-[1px] h-6 bg-gray-600 mx-1"></div>
 
                     {/* Export Controls */}
@@ -261,6 +313,7 @@ const Viewer3D = () => {
                         <option value="glb">GLB (Modern)</option>
                         <option value="dae">DAE (SketchUp)</option>
                         <option value="dxf">DXF (AutoCAD)</option>
+                        <option value="ifc">IFC (BIM)</option>
                         <option disabled>──────────</option>
                         <option value="png">PNG (Image)</option>
                         <option value="jpg">JPG (Image)</option>
@@ -319,15 +372,15 @@ const Viewer3D = () => {
                     toneMappingExposure: 1.0,
                     alpha: true,
                 }}
-                style={{ background: bg.scene }}
+                style={{ background: sceneBackground }}
             >
-                <color attach="background" args={[bg.scene]} />
+                <color attach="background" args={[sceneBackground]} />
 
                 {/* Soft shadows removed due to shader incompatibility with Three r182 */}
                 {/* <SoftShadows size={25} samples={16} focus={0.5} /> */}
 
                 {/* Studio Lighting for realistic shading */}
-                <StudioLighting backgroundMode={backgroundMode} />
+                <StudioLighting />
 
                 {/* Contact shadows for ground-level detail */}
                 {renderSettings.contactShadows && (
@@ -373,16 +426,7 @@ const Viewer3D = () => {
                 </Selection>
 
                 {gridLayer && (
-                    <Grid
-                        position={[0, 0, -0.1]}
-                        rotation={[Math.PI / 2, 0, 0]}
-                        args={[200, 200]}
-                        cellSize={10}
-                        sectionSize={50}
-                        fadeDistance={200}
-                        sectionColor={bg.grid.section}
-                        cellColor={bg.grid.cell}
-                    />
+                    <AdaptiveGrid gridSettings={gridSettings} />
                 )}
 
                 {gimbalLayer && (

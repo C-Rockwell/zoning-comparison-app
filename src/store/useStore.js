@@ -2,6 +2,108 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { temporal } from 'zundo'
 
+// ============================================
+// Polygon Geometry Utility Functions
+// ============================================
+
+// Generate unique vertex ID
+let vertexIdCounter = 0;
+const generateVertexId = () => `v${Date.now()}_${vertexIdCounter++}`;
+
+// Convert rectangle parameters to vertex array (counter-clockwise from bottom-left)
+export const rectToVertices = (width, depth, centerX = 0, centerY = 0) => {
+    const w2 = width / 2;
+    const d2 = depth / 2;
+    return [
+        { id: generateVertexId(), x: centerX - w2, y: centerY - d2 }, // Bottom-left
+        { id: generateVertexId(), x: centerX + w2, y: centerY - d2 }, // Bottom-right
+        { id: generateVertexId(), x: centerX + w2, y: centerY + d2 }, // Top-right
+        { id: generateVertexId(), x: centerX - w2, y: centerY + d2 }, // Top-left
+    ];
+};
+
+// Convert polygon vertices to bounding rectangle
+export const verticesToBoundingRect = (vertices) => {
+    if (!vertices || vertices.length === 0) return { width: 0, depth: 0, centerX: 0, centerY: 0 };
+    const xs = vertices.map(v => v.x);
+    const ys = vertices.map(v => v.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    return {
+        width: maxX - minX,
+        depth: maxY - minY,
+        centerX: (minX + maxX) / 2,
+        centerY: (minY + maxY) / 2,
+    };
+};
+
+// Calculate polygon area using Shoelace formula
+export const calculatePolygonArea = (vertices) => {
+    if (!vertices || vertices.length < 3) return 0;
+    let area = 0;
+    for (let i = 0; i < vertices.length; i++) {
+        const j = (i + 1) % vertices.length;
+        area += vertices[i].x * vertices[j].y;
+        area -= vertices[j].x * vertices[i].y;
+    }
+    return Math.abs(area / 2);
+};
+
+// Snap value to grid
+const snapToGrid = (value, gridSize = 1) => Math.round(value / gridSize) * gridSize;
+
+// Determine if edge between two vertices is vertical (same X) or horizontal (same Y)
+const isEdgeVertical = (v1, v2) => Math.abs(v1.x - v2.x) < 0.01;
+
+// Apply perpendicular constraint when moving a vertex
+// Adjusts adjacent vertices to maintain 90-degree angles
+const applyPerpendicularConstraint = (vertices, movedIndex, newX, newY) => {
+    const n = vertices.length;
+    const prevIndex = (movedIndex - 1 + n) % n;
+    const nextIndex = (movedIndex + 1) % n;
+
+    const prevVertex = vertices[prevIndex];
+    const currentVertex = vertices[movedIndex];
+    const nextVertex = vertices[nextIndex];
+
+    // Clone vertices
+    const newVertices = vertices.map(v => ({ ...v }));
+
+    // Determine edge orientations
+    const prevEdgeVertical = isEdgeVertical(currentVertex, prevVertex);
+    const nextEdgeVertical = isEdgeVertical(currentVertex, nextVertex);
+
+    // Apply constraints to adjacent vertices
+    if (prevEdgeVertical) {
+        newVertices[prevIndex] = { ...prevVertex, x: newX };
+    } else {
+        newVertices[prevIndex] = { ...prevVertex, y: newY };
+    }
+
+    if (nextEdgeVertical) {
+        newVertices[nextIndex] = { ...nextVertex, x: newX };
+    } else {
+        newVertices[nextIndex] = { ...nextVertex, y: newY };
+    }
+
+    // Update moved vertex
+    newVertices[movedIndex] = { ...currentVertex, x: newX, y: newY };
+
+    return newVertices;
+};
+
+// Calculate perpendicular direction for an edge (outward normal)
+const getEdgePerpendicular = (v1, v2) => {
+    const dx = v2.x - v1.x;
+    const dy = v2.y - v1.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len === 0) return { x: 0, y: 1 };
+    // Rotate 90 degrees counter-clockwise for outward normal
+    return { x: -dy / len, y: dx / len };
+};
+
 export const useStore = create(
     temporal(
         persist(
@@ -13,11 +115,20 @@ export const useStore = create(
                     setbackRear: 10,
                     setbackSideLeft: 5,
                     setbackSideRight: 5,
-                    buildingHeight: 30,
+                    maxHeight: 30, // Max height plane (was buildingHeight)
                     buildingWidth: 30,
                     buildingDepth: 40,
+                    buildingStories: 2, // Number of stories
+                    firstFloorHeight: 12, // Height of first floor
+                    upperFloorHeight: 10, // Height of upper floors
                     buildingX: 0, // Calculated in migration
                     buildingY: 0, // Calculated in migration
+                    // Polygon editing state
+                    lotGeometry: {
+                        mode: 'rectangle', // 'rectangle' | 'polygon'
+                        editing: false,    // Whether handles are visible
+                        vertices: null,    // Array of {id, x, y} when in polygon mode
+                    },
                 },
                 proposed: {
                     lotWidth: 72,
@@ -26,11 +137,20 @@ export const useStore = create(
                     setbackRear: 10,
                     setbackSideLeft: 5,
                     setbackSideRight: 5,
-                    buildingHeight: 45,
+                    maxHeight: 45, // Max height plane (was buildingHeight)
                     buildingWidth: 35,
                     buildingDepth: 50,
+                    buildingStories: 3, // Number of stories
+                    firstFloorHeight: 14, // Height of first floor
+                    upperFloorHeight: 10, // Height of upper floors
                     buildingX: 0, // Calculated in migration
                     buildingY: 0, // Calculated in migration
+                    // Polygon editing state
+                    lotGeometry: {
+                        mode: 'rectangle', // 'rectangle' | 'polygon'
+                        editing: false,    // Whether handles are visible
+                        vertices: null,    // Array of {id, x, y} when in polygon mode
+                    },
                 },
                 // Sun Simulation Settings (optional, for time-of-day shadows)
                 sunSettings: {
@@ -80,6 +200,8 @@ export const useStore = create(
                         axes: false, // Default axes off
                         gimbal: true,
                         origin: true,
+                        roadModule: true, // Road module layer
+                        maxHeightPlane: true, // Max height plane layer
                     },
                     exportRequested: false,
                     exportFormat: 'obj', // 'obj' | 'glb' | 'dae' | 'dxf' | 'png' | 'jpg' | 'svg'
@@ -134,6 +256,13 @@ export const useStore = create(
                                 opacity: 1.0,
                                 transparent: true
                             },
+                            maxHeightPlane: {
+                                color: '#FF6B6B',
+                                opacity: 0.3,
+                                lineColor: '#FF0000',
+                                lineWidth: 2,
+                                lineDashed: true,
+                            },
                         },
                         proposed: {
                             lotLines: {
@@ -182,12 +311,27 @@ export const useStore = create(
                                 opacity: 0.9,
                                 transparent: true
                             },
+                            maxHeightPlane: {
+                                color: '#FF6B6B',
+                                opacity: 0.3,
+                                lineColor: '#FF0000',
+                                lineWidth: 2,
+                                lineDashed: true,
+                            },
                         },
                         // Shared settings
                         ground: {
                             color: '#1a1a2e',
                             opacity: 0.8,
                             visible: false
+                        },
+                        grid: {
+                            sectionColor: '#9ca3af',  // Primary grid lines (gray-400)
+                            cellColor: '#d1d5db',     // Secondary grid lines (gray-300)
+                            sectionThickness: 1.5,
+                            cellThickness: 1,
+                            fadeDistance: 400,
+                            fadeStrength: 1,
                         },
                         dimensionSettings: {
                             textColor: '#000000',
@@ -215,6 +359,246 @@ export const useStore = create(
                 setBuildingPosition: (model, x, y) => set((state) => ({
                     [model]: { ...state[model], buildingX: x, buildingY: y }
                 })),
+
+                // ============================================
+                // Polygon Editing Actions
+                // ============================================
+
+                // Enable polygon editing mode - converts rectangle to vertices
+                // Preserves the anchor point: existing lot anchors at (0,0) = bottom-right
+                // Proposed lot anchors at (0,0) = bottom-left
+                enablePolygonMode: (model) => set((state) => {
+                    const params = state[model];
+                    const w = params.lotWidth;
+                    const d = params.lotDepth;
+
+                    let vertices;
+                    if (model === 'existing') {
+                        // Existing: anchor at bottom-right (0,0)
+                        // Lot extends to negative X
+                        vertices = [
+                            { id: generateVertexId(), x: -w, y: 0 },  // Bottom-left
+                            { id: generateVertexId(), x: 0, y: 0 },   // Bottom-right (anchor)
+                            { id: generateVertexId(), x: 0, y: d },   // Top-right
+                            { id: generateVertexId(), x: -w, y: d },  // Top-left
+                        ];
+                    } else {
+                        // Proposed: anchor at bottom-left (0,0)
+                        // Lot extends to positive X
+                        vertices = [
+                            { id: generateVertexId(), x: 0, y: 0 },   // Bottom-left (anchor)
+                            { id: generateVertexId(), x: w, y: 0 },   // Bottom-right
+                            { id: generateVertexId(), x: w, y: d },   // Top-right
+                            { id: generateVertexId(), x: 0, y: d },   // Top-left
+                        ];
+                    }
+
+                    return {
+                        [model]: {
+                            ...state[model],
+                            lotGeometry: {
+                                mode: 'polygon',
+                                editing: true,
+                                vertices: vertices,
+                            }
+                        }
+                    };
+                }),
+
+                // Toggle editing mode (show/hide handles) without changing shape
+                setPolygonEditing: (model, editing) => set((state) => {
+                    const geometry = state[model].lotGeometry;
+                    if (!geometry || geometry.mode !== 'polygon') return state;
+                    return {
+                        [model]: {
+                            ...state[model],
+                            lotGeometry: {
+                                ...geometry,
+                                editing: editing,
+                            }
+                        }
+                    };
+                }),
+
+                // Exit polygon mode and commit changes - updates lot dimensions from vertices
+                commitPolygonChanges: (model) => set((state) => {
+                    const geometry = state[model].lotGeometry;
+                    if (!geometry || geometry.mode !== 'polygon' || !geometry.vertices) {
+                        return state;
+                    }
+                    const bounds = verticesToBoundingRect(geometry.vertices);
+                    return {
+                        [model]: {
+                            ...state[model],
+                            lotWidth: bounds.width,
+                            lotDepth: bounds.depth,
+                            lotGeometry: {
+                                ...geometry,
+                                editing: false,
+                            }
+                        }
+                    };
+                }),
+
+                // Reset to rectangle mode - discards polygon and uses current dimensions
+                resetToRectangle: (model) => set((state) => {
+                    const geometry = state[model].lotGeometry;
+                    if (!geometry || geometry.mode !== 'polygon' || !geometry.vertices) {
+                        return state;
+                    }
+                    const bounds = verticesToBoundingRect(geometry.vertices);
+                    return {
+                        [model]: {
+                            ...state[model],
+                            lotWidth: bounds.width,
+                            lotDepth: bounds.depth,
+                            lotGeometry: { mode: 'rectangle', editing: false, vertices: null }
+                        }
+                    };
+                }),
+
+                // Update a vertex position with perpendicular constraints
+                updateVertex: (model, vertexIndex, newX, newY) => set((state) => {
+                    const geometry = state[model].lotGeometry;
+                    if (!geometry || !geometry.vertices) return state;
+
+                    // Snap to grid
+                    const snappedX = snapToGrid(newX);
+                    const snappedY = snapToGrid(newY);
+
+                    // Apply perpendicular constraint
+                    const newVertices = applyPerpendicularConstraint(
+                        geometry.vertices,
+                        vertexIndex,
+                        snappedX,
+                        snappedY
+                    );
+
+                    // Update bounding dimensions for slider sync
+                    const bounds = verticesToBoundingRect(newVertices);
+
+                    return {
+                        [model]: {
+                            ...state[model],
+                            lotWidth: bounds.width,
+                            lotDepth: bounds.depth,
+                            lotGeometry: {
+                                ...geometry,
+                                vertices: newVertices,
+                            }
+                        }
+                    };
+                }),
+
+                // Split an edge by adding a new vertex at the midpoint
+                splitEdge: (model, edgeIndex) => set((state) => {
+                    const geometry = state[model].lotGeometry;
+                    if (!geometry || !geometry.vertices) return state;
+
+                    const vertices = geometry.vertices;
+                    const n = vertices.length;
+                    const v1 = vertices[edgeIndex];
+                    const v2 = vertices[(edgeIndex + 1) % n];
+
+                    // Calculate midpoint
+                    const midX = (v1.x + v2.x) / 2;
+                    const midY = (v1.y + v2.y) / 2;
+
+                    // Create new vertex at midpoint
+                    const newVertex = {
+                        id: generateVertexId(),
+                        x: snapToGrid(midX),
+                        y: snapToGrid(midY),
+                    };
+
+                    // Insert new vertex after v1
+                    const newVertices = [
+                        ...vertices.slice(0, edgeIndex + 1),
+                        newVertex,
+                        ...vertices.slice(edgeIndex + 1)
+                    ];
+
+                    return {
+                        [model]: {
+                            ...state[model],
+                            lotGeometry: {
+                                ...geometry,
+                                vertices: newVertices,
+                            }
+                        }
+                    };
+                }),
+
+                // Extrude an edge perpendicular to itself (push/pull)
+                extrudeEdge: (model, edgeIndex, distance) => set((state) => {
+                    const geometry = state[model].lotGeometry;
+                    if (!geometry || !geometry.vertices) return state;
+
+                    const vertices = geometry.vertices;
+                    const n = vertices.length;
+                    const v1Index = edgeIndex;
+                    const v2Index = (edgeIndex + 1) % n;
+                    const v1 = vertices[v1Index];
+                    const v2 = vertices[v2Index];
+
+                    // Calculate perpendicular direction
+                    const perp = getEdgePerpendicular(v1, v2);
+
+                    // Snap distance to grid
+                    const snappedDistance = snapToGrid(distance);
+                    if (Math.abs(snappedDistance) < 0.5) return state;
+
+                    // Move both vertices of the edge
+                    const newVertices = vertices.map((v, i) => {
+                        if (i === v1Index || i === v2Index) {
+                            return {
+                                ...v,
+                                x: snapToGrid(v.x + perp.x * snappedDistance),
+                                y: snapToGrid(v.y + perp.y * snappedDistance),
+                            };
+                        }
+                        return v;
+                    });
+
+                    // Update bounding dimensions
+                    const bounds = verticesToBoundingRect(newVertices);
+
+                    return {
+                        [model]: {
+                            ...state[model],
+                            lotWidth: bounds.width,
+                            lotDepth: bounds.depth,
+                            lotGeometry: {
+                                ...geometry,
+                                vertices: newVertices,
+                            }
+                        }
+                    };
+                }),
+
+                // Delete a vertex (minimum 4 vertices required)
+                deleteVertex: (model, vertexIndex) => set((state) => {
+                    const geometry = state[model].lotGeometry;
+                    if (!geometry || !geometry.vertices || geometry.vertices.length <= 4) {
+                        return state; // Minimum 4 vertices for a valid polygon
+                    }
+
+                    const newVertices = geometry.vertices.filter((_, i) => i !== vertexIndex);
+                    const bounds = verticesToBoundingRect(newVertices);
+
+                    return {
+                        [model]: {
+                            ...state[model],
+                            lotWidth: bounds.width,
+                            lotDepth: bounds.depth,
+                            lotGeometry: {
+                                ...geometry,
+                                vertices: newVertices,
+                            }
+                        }
+                    };
+                }),
+
                 toggleViewMode: () => set((state) => ({ viewSettings: { ...state.viewSettings, mode: state.viewSettings.mode === 'split' ? 'overlay' : 'split' } })),
                 setCameraView: (view) => set((state) => ({
                     viewSettings: {
@@ -333,8 +717,121 @@ export const useStore = create(
                 layoutSettings: {
                     lotSpacing: 10,
                 },
+                // Road Module Settings (shared parameters, applied to both existing and proposed)
+                roadModule: {
+                    enabled: true,
+                    rightOfWay: 50, // Total depth of road module
+                    roadWidth: 24, // Width of the road surface
+                    // Optional elements - null means not included
+                    leftParking: null,      // e.g., 8 for 8' parking lane
+                    rightParking: null,
+                    leftVerge: null,        // e.g., 6 for 6' verge/planting strip
+                    rightVerge: null,
+                    leftSidewalk: null,     // e.g., 5 for 5' sidewalk
+                    rightSidewalk: null,
+                    leftTransitionZone: null, // e.g., 4 for 4' transition zone
+                    rightTransitionZone: null,
+                },
+                // Road Module Styles
+                roadModuleStyles: {
+                    rightOfWay: {
+                        color: '#000000',
+                        width: 1,
+                        dashed: true,
+                        dashSize: 2,
+                        gapSize: 1,
+                        opacity: 1.0,
+                    },
+                    roadWidth: {
+                        lineColor: '#000000',
+                        lineWidth: 1,
+                        lineDashed: false,
+                        lineOpacity: 1.0,
+                        fillColor: '#666666',
+                        fillOpacity: 0.8,
+                    },
+                    // Left side styles
+                    leftParking: {
+                        lineColor: '#000000',
+                        lineWidth: 1,
+                        lineDashed: false,
+                        lineOpacity: 1.0,
+                        fillColor: '#888888',
+                        fillOpacity: 0.6,
+                    },
+                    leftVerge: {
+                        lineColor: '#000000',
+                        lineWidth: 1,
+                        lineDashed: false,
+                        lineOpacity: 1.0,
+                        fillColor: '#c4a77d',
+                        fillOpacity: 0.7,
+                    },
+                    leftSidewalk: {
+                        lineColor: '#000000',
+                        lineWidth: 1,
+                        lineDashed: false,
+                        lineOpacity: 1.0,
+                        fillColor: '#90EE90',
+                        fillOpacity: 0.7,
+                    },
+                    leftTransitionZone: {
+                        lineColor: '#000000',
+                        lineWidth: 1,
+                        lineDashed: false,
+                        lineOpacity: 1.0,
+                        fillColor: '#98D8AA',
+                        fillOpacity: 0.6,
+                    },
+                    // Right side styles
+                    rightParking: {
+                        lineColor: '#000000',
+                        lineWidth: 1,
+                        lineDashed: false,
+                        lineOpacity: 1.0,
+                        fillColor: '#888888',
+                        fillOpacity: 0.6,
+                    },
+                    rightVerge: {
+                        lineColor: '#000000',
+                        lineWidth: 1,
+                        lineDashed: false,
+                        lineOpacity: 1.0,
+                        fillColor: '#c4a77d',
+                        fillOpacity: 0.7,
+                    },
+                    rightSidewalk: {
+                        lineColor: '#000000',
+                        lineWidth: 1,
+                        lineDashed: false,
+                        lineOpacity: 1.0,
+                        fillColor: '#90EE90',
+                        fillOpacity: 0.7,
+                    },
+                    rightTransitionZone: {
+                        lineColor: '#000000',
+                        lineWidth: 1,
+                        lineDashed: false,
+                        lineOpacity: 1.0,
+                        fillColor: '#98D8AA',
+                        fillOpacity: 0.6,
+                    },
+                },
                 setLayoutSetting: (key, value) => set((state) => ({
                     layoutSettings: { ...state.layoutSettings, [key]: value }
+                })),
+                // Road Module Actions
+                setRoadModuleSetting: (key, value) => set((state) => ({
+                    roadModule: { ...state.roadModule, [key]: value }
+                })),
+                setRoadModuleStyle: (layerType, property, value) => set((state) => ({
+                    roadModuleStyles: {
+                        ...state.roadModuleStyles,
+                        [layerType]: {
+                            ...state.roadModuleStyles[layerType],
+                            [property]: value
+                        }
+                    }
                 })),
                 setStyleOverride: (model, category, side, key, value) => set((state) => {
                     const currentStyle = state.viewSettings.styleSettings[model][category];
@@ -400,7 +897,7 @@ export const useStore = create(
             }),
             {
                 name: 'zoning-app-storage',
-                version: 7, // Updated to 7 to force migration
+                version: 12, // Updated to 12 for building stories and max height
                 migrate: (persistedState, version) => {
                     // Split dimensionsLot into dimensionsLotWidth and dimensionsLotDepth
                     if (persistedState.viewSettings && persistedState.viewSettings.layers && persistedState.viewSettings.layers.dimensionsLot !== undefined) {
@@ -474,9 +971,151 @@ export const useStore = create(
                         }
                     }
 
+                    if (version < 8) {
+                        // Migration to 8
+                        // Add lotGeometry to existing and proposed
+                        const defaultLotGeometry = {
+                            mode: 'rectangle',
+                            vertices: null,
+                        };
+                        if (persistedState.existing && !persistedState.existing.lotGeometry) {
+                            persistedState.existing.lotGeometry = defaultLotGeometry;
+                        }
+                        if (persistedState.proposed && !persistedState.proposed.lotGeometry) {
+                            persistedState.proposed.lotGeometry = defaultLotGeometry;
+                        }
+                    }
+
+                    if (version < 9) {
+                        // Migration to 9
+                        // Add editing flag and reset any cached polygon vertices to fix positioning
+                        const fixLotGeometry = (lotGeometry) => {
+                            if (!lotGeometry) {
+                                return { mode: 'rectangle', editing: false, vertices: null };
+                            }
+                            // Reset to rectangle to fix any incorrectly positioned polygons
+                            return {
+                                mode: 'rectangle',
+                                editing: false,
+                                vertices: null,
+                            };
+                        };
+                        if (persistedState.existing) {
+                            persistedState.existing.lotGeometry = fixLotGeometry(persistedState.existing.lotGeometry);
+                        }
+                        if (persistedState.proposed) {
+                            persistedState.proposed.lotGeometry = fixLotGeometry(persistedState.proposed.lotGeometry);
+                        }
+                    }
+
+                    if (version < 10) {
+                        // Migration to 10
+                        // Add roadModule layer toggle and initialize roadModule/roadModuleStyles
+                        if (persistedState.viewSettings?.layers && persistedState.viewSettings.layers.roadModule === undefined) {
+                            persistedState.viewSettings.layers.roadModule = true;
+                        }
+                        if (!persistedState.roadModule) {
+                            persistedState.roadModule = {
+                                enabled: true,
+                                rightOfWay: 50,
+                                roadWidth: 24,
+                                leftParking: null,
+                                rightParking: null,
+                                leftVerge: null,
+                                rightVerge: null,
+                                leftSidewalk: null,
+                                rightSidewalk: null,
+                                leftTransitionZone: null,
+                                rightTransitionZone: null,
+                            };
+                        }
+                    }
+
+                    if (version < 11) {
+                        // Migration to 11
+                        // Update roadModuleStyles to have separate left/right styles
+                        const defaultStyle = (fillColor) => ({
+                            lineColor: '#000000',
+                            lineWidth: 1,
+                            lineDashed: false,
+                            lineOpacity: 1.0,
+                            fillColor,
+                            fillOpacity: 0.7,
+                        });
+
+                        persistedState.roadModuleStyles = {
+                            rightOfWay: persistedState.roadModuleStyles?.rightOfWay || {
+                                color: '#000000',
+                                width: 1,
+                                dashed: true,
+                                dashSize: 2,
+                                gapSize: 1,
+                                opacity: 1.0,
+                            },
+                            roadWidth: persistedState.roadModuleStyles?.roadWidth || {
+                                lineColor: '#000000',
+                                lineWidth: 1,
+                                lineDashed: false,
+                                lineOpacity: 1.0,
+                                fillColor: '#666666',
+                                fillOpacity: 0.8,
+                            },
+                            // Left side
+                            leftParking: persistedState.roadModuleStyles?.leftParking || persistedState.roadModuleStyles?.parking || defaultStyle('#888888'),
+                            leftVerge: persistedState.roadModuleStyles?.leftVerge || persistedState.roadModuleStyles?.verge || defaultStyle('#c4a77d'),
+                            leftSidewalk: persistedState.roadModuleStyles?.leftSidewalk || persistedState.roadModuleStyles?.sidewalk || defaultStyle('#90EE90'),
+                            leftTransitionZone: persistedState.roadModuleStyles?.leftTransitionZone || persistedState.roadModuleStyles?.transitionZone || defaultStyle('#98D8AA'),
+                            // Right side
+                            rightParking: persistedState.roadModuleStyles?.rightParking || persistedState.roadModuleStyles?.parking || defaultStyle('#888888'),
+                            rightVerge: persistedState.roadModuleStyles?.rightVerge || persistedState.roadModuleStyles?.verge || defaultStyle('#c4a77d'),
+                            rightSidewalk: persistedState.roadModuleStyles?.rightSidewalk || persistedState.roadModuleStyles?.sidewalk || defaultStyle('#90EE90'),
+                            rightTransitionZone: persistedState.roadModuleStyles?.rightTransitionZone || persistedState.roadModuleStyles?.transitionZone || defaultStyle('#98D8AA'),
+                        };
+                    }
+
+                    if (version < 12) {
+                        // Migration to 12
+                        // Add building stories, floor heights, and rename buildingHeight to maxHeight
+                        const migrateModel = (model) => {
+                            if (model) {
+                                // Rename buildingHeight to maxHeight
+                                if (model.buildingHeight !== undefined && model.maxHeight === undefined) {
+                                    model.maxHeight = model.buildingHeight;
+                                    delete model.buildingHeight;
+                                }
+                                // Add new building parameters with defaults
+                                if (model.buildingStories === undefined) model.buildingStories = 2;
+                                if (model.firstFloorHeight === undefined) model.firstFloorHeight = 12;
+                                if (model.upperFloorHeight === undefined) model.upperFloorHeight = 10;
+                            }
+                        };
+                        migrateModel(persistedState.existing);
+                        migrateModel(persistedState.proposed);
+
+                        // Add maxHeightPlane layer toggle
+                        if (persistedState.viewSettings?.layers && persistedState.viewSettings.layers.maxHeightPlane === undefined) {
+                            persistedState.viewSettings.layers.maxHeightPlane = true;
+                        }
+
+                        // Add maxHeightPlane styles
+                        const defaultMaxHeightStyle = {
+                            color: '#FF6B6B',
+                            opacity: 0.3,
+                            lineColor: '#FF0000',
+                            lineWidth: 2,
+                            lineDashed: true,
+                        };
+                        if (persistedState.viewSettings?.styleSettings?.existing && !persistedState.viewSettings.styleSettings.existing.maxHeightPlane) {
+                            persistedState.viewSettings.styleSettings.existing.maxHeightPlane = defaultMaxHeightStyle;
+                        }
+                        if (persistedState.viewSettings?.styleSettings?.proposed && !persistedState.viewSettings.styleSettings.proposed.maxHeightPlane) {
+                            persistedState.viewSettings.styleSettings.proposed.maxHeightPlane = defaultMaxHeightStyle;
+                        }
+                    }
+
                     return {
                         ...persistedState,
-                        version: 7 // Update verified version
+                        version: 12 // Update verified version
                     };
                 },
                 partialize: (state) => ({
@@ -486,7 +1125,8 @@ export const useStore = create(
                     sunSettings: state.sunSettings,
                     renderSettings: state.renderSettings,
                     layoutSettings: state.layoutSettings,
-
+                    roadModule: state.roadModule,
+                    roadModuleStyles: state.roadModuleStyles,
                     savedViews: state.savedViews,
                     userDefaults: state.userDefaults
                 }),
@@ -495,10 +1135,10 @@ export const useStore = create(
         {
             limit: 50,
             partialize: (state) => {
-                const { existing, proposed, viewSettings, layoutSettings, sunSettings, renderSettings } = state
+                const { existing, proposed, viewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles } = state
                 // Exclude export triggers from undo history
                 const { exportRequested, ...trackedViewSettings } = viewSettings
-                return { existing, proposed, viewSettings: trackedViewSettings, layoutSettings, sunSettings, renderSettings }
+                return { existing, proposed, viewSettings: trackedViewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles }
             }
         }
     )

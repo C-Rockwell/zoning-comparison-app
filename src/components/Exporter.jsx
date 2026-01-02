@@ -3,6 +3,7 @@ import { useThree } from '@react-three/fiber'
 import { useStore } from '../store/useStore'
 import { OBJExporter, GLTFExporter, ColladaExporter } from 'three-stdlib'
 import * as THREE from 'three'
+import { generateIFC } from '../utils/ifcGenerator'
 
 const Exporter = ({ target }) => {
     const exportRequested = useStore(state => state.viewSettings.exportRequested)
@@ -174,6 +175,15 @@ const Exporter = ({ target }) => {
                     } else if (exportFormat === 'dxf') {
                         const dxfString = generateDXF(tempGroup)
                         downloadFile(dxfString, 'zoning-model.dxf', 'application/dxf')
+
+                    } else if (exportFormat === 'ifc') {
+                        // IFC export reads directly from store, not from Three.js scene
+                        const state = useStore.getState()
+                        const ifcString = generateIFC(state.existing, state.proposed, {
+                            filename: 'zoning-model.ifc',
+                            lotSpacing: state.layoutSettings?.lotSpacing || 10
+                        })
+                        downloadFile(ifcString, 'zoning-model.ifc', 'application/x-step')
 
                     } else if (exportFormat === 'png') {
                         const url = gl.domElement.toDataURL('image/png')
