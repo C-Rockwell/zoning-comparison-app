@@ -3,7 +3,7 @@ import { Line } from '@react-three/drei'
 import * as THREE from 'three'
 
 // Renders a polygon lot using vertices from the store
-const PolygonLot = ({ vertices, style, fillStyle, showDimensions = false, dimensionSettings = {} }) => {
+const PolygonLot = ({ vertices, style, fillStyle, showDimensions = false, dimensionSettings = {}, lineScale = 1 }) => {
     // Create THREE.Shape from vertices for filled polygon
     const shape = useMemo(() => {
         if (!vertices || vertices.length < 3) return null
@@ -56,6 +56,7 @@ const PolygonLot = ({ vertices, style, fillStyle, showDimensions = false, dimens
                     end={edge.end}
                     style={style}
                     side={edge.side}
+                    lineScale={lineScale}
                 />
             ))}
         </group>
@@ -76,7 +77,7 @@ const getEdgeSide = (v1, v2) => {
 }
 
 // Single line component (same as in SceneContent)
-const SingleLine = ({ start, end, style, side }) => {
+const SingleLine = ({ start, end, style, side, lineScale = 1 }) => {
     const override = style.overrides?.[side]
     const useOverride = override?.enabled
 
@@ -91,7 +92,7 @@ const SingleLine = ({ start, end, style, side }) => {
         <Line
             points={[start, end]}
             color={color}
-            lineWidth={width}
+            lineWidth={width * lineScale}
             dashed={dashed}
             dashScale={dashed ? dashScale : 1}
             dashSize={dashSize}

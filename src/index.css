@@ -2,6 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Standard Theme (default - current dark gray) */
+:root, [data-theme="standard"] {
+  --ui-bg-primary: #1f2937;      /* gray-800 - main panel bg */
+  --ui-bg-secondary: #374151;    /* gray-700 - inputs, hover */
+  --ui-bg-tertiary: #111827;     /* gray-900 - app bg */
+  --ui-border: #4b5563;          /* gray-600 */
+  --ui-text-primary: #f9fafb;    /* gray-50 */
+  --ui-text-secondary: #9ca3af;  /* gray-400 */
+  --ui-text-muted: #6b7280;      /* gray-500 */
+  --ui-accent: #3b82f6;          /* blue-500 */
+  --ui-accent-hover: #2563eb;    /* blue-600 */
+  --ui-success: #10b981;         /* green-500 */
+  --ui-error: #ef4444;           /* red-500 */
+  --ui-border-glow: none;
+}
+
+/* Modern Theme (black + cyan neon) */
+[data-theme="modern"] {
+  --ui-bg-primary: #0d0d0d;      /* near black */
+  --ui-bg-secondary: #1a1a1a;    /* dark gray */
+  --ui-bg-tertiary: #000000;     /* pure black */
+  --ui-border: #00d4aa;          /* cyan/teal */
+  --ui-text-primary: #ffffff;
+  --ui-text-secondary: #a0a0a0;
+  --ui-text-muted: #666666;
+  --ui-accent: #00ffcc;          /* bright cyan */
+  --ui-accent-hover: #00d4aa;    /* slightly darker cyan */
+  --ui-success: #00ff88;         /* neon green */
+  --ui-error: #ff4466;           /* neon red */
+  --ui-border-glow: 0 0 10px rgba(0, 255, 204, 0.3);
+}
+
 html,
 body,
 #root {
@@ -21,5 +53,20 @@ body,
 
   .no-spinner {
     -moz-appearance: textfield;
+  }
+
+  .animate-slide-in {
+    animation: slideIn 0.3s ease-out;
+  }
+
+  @keyframes slideIn {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
   }
 }

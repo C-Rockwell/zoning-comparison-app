@@ -1,5 +1,6 @@
 import { useStore, calculatePolygonArea } from '../store/useStore'
 import { useState } from 'react'
+import StateManager from './StateManager'
 
 const ParameterPanel = () => {
     const existing = useStore((state) => state.existing)
@@ -105,6 +106,9 @@ const ParameterPanel = () => {
                     ))}
                 </div>
             </div>
+
+            {/* State Manager - Snapshots & Layer States */}
+            <StateManager />
 
             {/* Polygon Editing Section */}
             <div className="mb-6 bg-gray-700/50 p-3 rounded">

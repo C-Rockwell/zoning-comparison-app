@@ -4,6 +4,7 @@ import { useStore } from '../store/useStore'
 import { OBJExporter, GLTFExporter, ColladaExporter } from 'three-stdlib'
 import * as THREE from 'three'
 import { generateIFC } from '../utils/ifcGenerator'
+import * as api from '../services/api'
 
 const Exporter = ({ target }) => {
     const exportRequested = useStore(state => state.viewSettings.exportRequested)
@@ -11,6 +12,9 @@ const Exporter = ({ target }) => {
     const exportSettings = useStore(state => state.viewSettings.exportSettings)
     const exportView = useStore(state => state.viewSettings.exportView)
     const resetExport = useStore(state => state.resetExport)
+    const setExportLineScale = useStore(state => state.setExportLineScale)
+    const currentProject = useStore(state => state.currentProject)
+    const showToast = useStore(state => state.showToast)
     const { scene, gl, camera } = useThree()
 
     useEffect(() => {
@@ -19,235 +23,243 @@ const Exporter = ({ target }) => {
             const objectToExport = target?.current || scene
 
             if (objectToExport) {
-                try {
-                    // 1. SAVE STATE
-                    const originalSize = new THREE.Vector2()
-                    gl.getSize(originalSize)
+                // 1. SAVE STATE
+                const originalSize = new THREE.Vector2()
+                gl.getSize(originalSize)
 
-                    const originalPosition = camera.position.clone()
-                    const originalQuaternion = camera.quaternion.clone()
-                    const originalUp = camera.up.clone()
-                    const originalZoom = camera.zoom
+                const originalPosition = camera.position.clone()
+                const originalQuaternion = camera.quaternion.clone()
+                const originalUp = camera.up.clone()
+                const originalZoom = camera.zoom
 
-                    // Save orthographic or perspective specific properties
-                    const originalOrtho = camera.isOrthographicCamera ? {
-                        left: camera.left,
-                        right: camera.right,
-                        top: camera.top,
-                        bottom: camera.bottom
-                    } : null
-                    const originalAspect = camera.aspect
+                // Save orthographic or perspective specific properties
+                const originalOrtho = camera.isOrthographicCamera ? {
+                    left: camera.left,
+                    right: camera.right,
+                    top: camera.top,
+                    bottom: camera.bottom
+                } : null
+                const originalAspect = camera.aspect
 
-                    // 2. CONFIGURE FOR EXPORT
-                    const { width, height } = exportSettings
-                    const exportAspect = width / height
+                // 2. CONFIGURE FOR EXPORT
+                const { width, height } = exportSettings
+                const exportAspect = width / height
 
-                    // Save original pixel ratio
-                    const originalPixelRatio = gl.getPixelRatio()
+                // Save original pixel ratio
+                const originalPixelRatio = gl.getPixelRatio()
 
-                    // Set pixel ratio to 1 for consistent export sizing
-                    gl.setPixelRatio(1)
+                // Calculate line scale factor for WYSIWYG export
+                // Scale line widths proportionally to the export resolution
+                const viewportWidth = originalSize.x
+                const lineScaleFactor = width / viewportWidth
 
-                    // Resize the renderer - use true to update CSS size as well
-                    gl.setSize(width, height, true)
+                // Set line scale for WYSIWYG rendering (lines scale with resolution)
+                setExportLineScale(lineScaleFactor)
 
-                    if (camera.isOrthographicCamera) {
-                        // For orthographic: scale the frustum to match export aspect ratio
-                        // while keeping the same visible area (vertically)
-                        const currentFrustumHeight = (camera.top - camera.bottom)
+                // Set pixel ratio to 1 for consistent export sizing
+                gl.setPixelRatio(1)
 
-                        // Calculate new frustum maintaining vertical extent
-                        const halfHeight = currentFrustumHeight / 2
-                        const halfWidth = halfHeight * exportAspect
+                // Resize the renderer - use true to update CSS size as well
+                gl.setSize(width, height, true)
 
-                        camera.left = -halfWidth
-                        camera.right = halfWidth
-                        camera.top = halfHeight
-                        camera.bottom = -halfHeight
-                    } else {
-                        // Perspective
-                        camera.aspect = exportAspect
-                    }
+                if (camera.isOrthographicCamera) {
+                    // For orthographic: scale the frustum to match export aspect ratio
+                    // while keeping the same visible area (vertically)
+                    const currentFrustumHeight = (camera.top - camera.bottom)
 
-                    camera.updateProjectionMatrix()
+                    // Calculate new frustum maintaining vertical extent
+                    const halfHeight = currentFrustumHeight / 2
+                    const halfWidth = halfHeight * exportAspect
 
-                    // B. Viewpoint Override
-                    if (exportView !== 'current') {
-                        // Standard Views (Centered at Y=50, Z-Up)
-                        if (exportView === 'iso') {
-                            camera.position.set(200, -150, 200)
-                            camera.up.set(0, 0, 1)
-                            camera.lookAt(0, 50, 0)
-                            if (camera.isOrthographicCamera) camera.zoom = 6
-                        } else if (exportView === 'front') {
-                            // Looking from South to North, center Y=50
-                            camera.position.set(0, -50, 20)
-                            camera.up.set(0, 0, 1)
-                            camera.lookAt(0, 50, 20)
-                            if (camera.isOrthographicCamera) camera.zoom = 6
-                        } else if (exportView === 'side' || exportView === 'right') {
-                            // From East
-                            camera.position.set(150, 50, 20)
-                            camera.up.set(0, 0, 1)
-                            camera.lookAt(0, 50, 20)
-                            if (camera.isOrthographicCamera) camera.zoom = 6
-                        } else if (exportView === 'left') {
-                            // From West
-                            camera.position.set(-150, 50, 20)
-                            camera.up.set(0, 0, 1)
-                            camera.lookAt(0, 50, 20)
-                            if (camera.isOrthographicCamera) camera.zoom = 6
-                        } else if (exportView === 'top') {
-                            // Top view offset logic for Z-Up
-                            camera.position.set(0, 49.99, 150)
-                            camera.up.set(0, 0, 1)
-                            camera.lookAt(0, 50, 0)
-                            if (camera.isOrthographicCamera) camera.zoom = 6
-                        }
-                    }
-
-                    camera.updateProjectionMatrix()
-
-                    // For PNG export, use transparent background
-                    const isImageExport = exportFormat === 'png' || exportFormat === 'jpg'
-                    let originalBackground = null
-                    let originalClearColor = new THREE.Color()
-                    let originalClearAlpha = gl.getClearAlpha()
-
-                    if (isImageExport && exportFormat === 'png') {
-                        // Save original background
-                        originalBackground = scene.background
-                        gl.getClearColor(originalClearColor)
-
-                        // Set transparent background for PNG
-                        scene.background = null
-                        gl.setClearColor(0x000000, 0)
-                    }
-
-                    // Force a render frame to update buffers with new camera/size
-                    gl.render(scene, camera)
-
-                    // 3. EXPORT LOGIC
-                    const tempGroup = new THREE.Group()
-                    objectToExport.updateMatrixWorld(true)
-
-                    objectToExport.traverse((child) => {
-                        // Whitelist: Only BoxGeometry and PlaneGeometry Meshes
-                        if (child.isMesh) {
-                            const type = child.geometry?.type
-                            if (type === 'BoxGeometry' || type === 'PlaneGeometry') {
-                                const clone = child.clone(false)
-                                clone.matrix.copy(child.matrixWorld)
-                                clone.matrix.decompose(clone.position, clone.quaternion, clone.scale)
-                                tempGroup.add(clone)
-                            }
-                        }
-                    })
-
-                    // ... (rest of logic) ...
-
-                    if (tempGroup.children.length === 0 && exportFormat !== 'png' && exportFormat !== 'jpg' && exportFormat !== 'svg') {
-                        // Only warn for 3D exports. 2D exports capture the view even if no "Mesh" whitelist hit (e.g. lines)
-                        // Actually, SVG uses tempGroup too.
-                    }
-
-                    if (exportFormat === 'obj') {
-                        const exporter = new OBJExporter()
-                        const result = exporter.parse(tempGroup)
-                        downloadFile(result, 'zoning-model.obj', 'text/plain')
-
-                    } else if (exportFormat === 'glb') {
-                        const exporter = new GLTFExporter()
-                        exporter.parse(
-                            tempGroup,
-                            (result) => {
-                                downloadFile(result, 'zoning-model.glb', 'application/octet-stream')
-                            },
-                            (error) => console.error(error),
-                            { binary: true }
-                        )
-
-                    } else if (exportFormat === 'dae') {
-                        const exporter = new ColladaExporter()
-                        const result = exporter.parse(tempGroup)
-                        downloadFile(result.data, 'zoning-model.dae', 'application/xml')
-
-                    } else if (exportFormat === 'dxf') {
-                        const dxfString = generateDXF(tempGroup)
-                        downloadFile(dxfString, 'zoning-model.dxf', 'application/dxf')
-
-                    } else if (exportFormat === 'ifc') {
-                        // IFC export reads directly from store, not from Three.js scene
-                        const state = useStore.getState()
-                        const ifcString = generateIFC(state.existing, state.proposed, {
-                            filename: 'zoning-model.ifc',
-                            lotSpacing: state.layoutSettings?.lotSpacing || 10
-                        })
-                        downloadFile(ifcString, 'zoning-model.ifc', 'application/x-step')
-
-                    } else if (exportFormat === 'png') {
-                        const url = gl.domElement.toDataURL('image/png')
-                        downloadFile(url, 'zoning-model.png', 'image/png', true)
-
-                        // Restore background after PNG capture
-                        if (originalBackground !== null) {
-                            scene.background = originalBackground
-                        }
-                        gl.setClearColor(originalClearColor, originalClearAlpha)
-
-                    } else if (exportFormat === 'jpg') {
-                        const url = gl.domElement.toDataURL('image/jpeg', 0.9)
-                        downloadFile(url, 'zoning-model.jpg', 'image/jpeg', true)
-
-                    } else if (exportFormat === 'svg') {
-                        // Use the configured width/height
-                        const svgString = generateSVG(tempGroup, camera, width, height)
-                        downloadFile(svgString, 'zoning-model.svg', 'image/svg+xml')
-                    }
-
-                    tempGroup.clear()
-
-                    // 4. RESTORE STATE (Immediately after capture)
-                    // Restore background if it was changed (safety restore)
-                    if (originalBackground !== null && scene.background === null) {
-                        scene.background = originalBackground
-                        gl.setClearColor(originalClearColor, originalClearAlpha)
-                    }
-
-                    // Restore pixel ratio first
-                    gl.setPixelRatio(originalPixelRatio)
-                    gl.setSize(originalSize.x, originalSize.y, true)
-
-                    // Restore camera properties
-                    if (originalOrtho) {
-                        camera.left = originalOrtho.left
-                        camera.right = originalOrtho.right
-                        camera.top = originalOrtho.top
-                        camera.bottom = originalOrtho.bottom
-                    } else {
-                        camera.aspect = originalAspect
-                    }
-                    camera.zoom = originalZoom
-
-                    // Restore Camera Pose
-                    camera.position.copy(originalPosition)
-                    camera.quaternion.copy(originalQuaternion)
-                    camera.up.copy(originalUp)
-
-                    camera.updateProjectionMatrix()
-
-                    // Render one frame to restore view immediately
-                    gl.render(scene, camera) 
-
-                } catch (error) {
-                    console.error("Export failed:", error)
-                    alert("Export failed: " + error.message)
+                    camera.left = -halfWidth
+                    camera.right = halfWidth
+                    camera.top = halfHeight
+                    camera.bottom = -halfHeight
+                } else {
+                    // Perspective
+                    camera.aspect = exportAspect
                 }
-            }
 
-            resetExport()
+                camera.updateProjectionMatrix()
+
+                // B. Viewpoint Override
+                if (exportView !== 'current') {
+                    // Standard Views (Centered at Y=50, Z-Up)
+                    if (exportView === 'iso') {
+                        camera.position.set(200, -150, 200)
+                        camera.up.set(0, 0, 1)
+                        camera.lookAt(0, 50, 0)
+                        if (camera.isOrthographicCamera) camera.zoom = 6
+                    } else if (exportView === 'front') {
+                        // Looking from South to North, center Y=50
+                        camera.position.set(0, -50, 20)
+                        camera.up.set(0, 0, 1)
+                        camera.lookAt(0, 50, 20)
+                        if (camera.isOrthographicCamera) camera.zoom = 6
+                    } else if (exportView === 'side' || exportView === 'right') {
+                        // From East
+                        camera.position.set(150, 50, 20)
+                        camera.up.set(0, 0, 1)
+                        camera.lookAt(0, 50, 20)
+                        if (camera.isOrthographicCamera) camera.zoom = 6
+                    } else if (exportView === 'left') {
+                        // From West
+                        camera.position.set(-150, 50, 20)
+                        camera.up.set(0, 0, 1)
+                        camera.lookAt(0, 50, 20)
+                        if (camera.isOrthographicCamera) camera.zoom = 6
+                    } else if (exportView === 'top') {
+                        // Top view offset logic for Z-Up
+                        camera.position.set(0, 49.99, 150)
+                        camera.up.set(0, 0, 1)
+                        camera.lookAt(0, 50, 0)
+                        if (camera.isOrthographicCamera) camera.zoom = 6
+                    }
+                }
+
+                camera.updateProjectionMatrix()
+
+                // For PNG export, use transparent background
+                const isImageExport = exportFormat === 'png' || exportFormat === 'jpg'
+                let originalBackground = null
+                let originalClearColor = new THREE.Color()
+                let originalClearAlpha = gl.getClearAlpha()
+
+                if (isImageExport && exportFormat === 'png') {
+                    // Save original background
+                    originalBackground = scene.background
+                    gl.getClearColor(originalClearColor)
+
+                    // Set transparent background for PNG
+                    scene.background = null
+                    gl.setClearColor(0x000000, 0)
+                }
+
+                // Use requestAnimationFrame to wait for React to process line scale update
+                // This ensures line widths are updated before capturing
+                requestAnimationFrame(() => {
+                    try {
+                        // Force a render frame to update buffers with new camera/size and line scales
+                        gl.render(scene, camera)
+
+                        // 3. EXPORT LOGIC
+                        const tempGroup = new THREE.Group()
+                        objectToExport.updateMatrixWorld(true)
+
+                        objectToExport.traverse((child) => {
+                            // Whitelist: Only BoxGeometry and PlaneGeometry Meshes
+                            if (child.isMesh) {
+                                const type = child.geometry?.type
+                                if (type === 'BoxGeometry' || type === 'PlaneGeometry') {
+                                    const clone = child.clone(false)
+                                    clone.matrix.copy(child.matrixWorld)
+                                    clone.matrix.decompose(clone.position, clone.quaternion, clone.scale)
+                                    tempGroup.add(clone)
+                                }
+                            }
+                        })
+
+                        const projectId = currentProject?.id
+
+                        if (exportFormat === 'obj') {
+                            const exporter = new OBJExporter()
+                            const result = exporter.parse(tempGroup)
+                            saveOrDownload(result, 'zoning-model.obj', 'text/plain', false, projectId, showToast)
+
+                        } else if (exportFormat === 'glb') {
+                            const exporter = new GLTFExporter()
+                            exporter.parse(
+                                tempGroup,
+                                (result) => {
+                                    saveOrDownload(result, 'zoning-model.glb', 'application/octet-stream', false, projectId, showToast)
+                                },
+                                (error) => console.error(error),
+                                { binary: true }
+                            )
+
+                        } else if (exportFormat === 'dae') {
+                            const exporter = new ColladaExporter()
+                            const result = exporter.parse(tempGroup)
+                            saveOrDownload(result.data, 'zoning-model.dae', 'application/xml', false, projectId, showToast)
+
+                        } else if (exportFormat === 'dxf') {
+                            const dxfString = generateDXF(tempGroup)
+                            saveOrDownload(dxfString, 'zoning-model.dxf', 'application/dxf', false, projectId, showToast)
+
+                        } else if (exportFormat === 'ifc') {
+                            // IFC export reads directly from store, not from Three.js scene
+                            const state = useStore.getState()
+                            const ifcString = generateIFC(state.existing, state.proposed, {
+                                filename: 'zoning-model.ifc',
+                                lotSpacing: state.layoutSettings?.lotSpacing || 10
+                            })
+                            saveOrDownload(ifcString, 'zoning-model.ifc', 'application/x-step', false, projectId, showToast)
+
+                        } else if (exportFormat === 'png') {
+                            const url = gl.domElement.toDataURL('image/png')
+                            saveOrDownload(url, 'zoning-model.png', 'image/png', true, projectId, showToast)
+
+                            // Restore background after PNG capture
+                            if (originalBackground !== null) {
+                                scene.background = originalBackground
+                            }
+                            gl.setClearColor(originalClearColor, originalClearAlpha)
+
+                        } else if (exportFormat === 'jpg') {
+                            const url = gl.domElement.toDataURL('image/jpeg', 0.9)
+                            saveOrDownload(url, 'zoning-model.jpg', 'image/jpeg', true, projectId, showToast)
+
+                        } else if (exportFormat === 'svg') {
+                            // Use the configured width/height
+                            const svgString = generateSVG(tempGroup, camera, width, height)
+                            saveOrDownload(svgString, 'zoning-model.svg', 'image/svg+xml', false, projectId, showToast)
+                        }
+
+                        tempGroup.clear()
+
+                        // 4. RESTORE STATE (Immediately after capture)
+                        // Restore background if it was changed (safety restore)
+                        if (originalBackground !== null && scene.background === null) {
+                            scene.background = originalBackground
+                            gl.setClearColor(originalClearColor, originalClearAlpha)
+                        }
+
+                        // Restore pixel ratio first
+                        gl.setPixelRatio(originalPixelRatio)
+                        gl.setSize(originalSize.x, originalSize.y, true)
+
+                        // Restore camera properties
+                        if (originalOrtho) {
+                            camera.left = originalOrtho.left
+                            camera.right = originalOrtho.right
+                            camera.top = originalOrtho.top
+                            camera.bottom = originalOrtho.bottom
+                        } else {
+                            camera.aspect = originalAspect
+                        }
+                        camera.zoom = originalZoom
+
+                        // Restore Camera Pose
+                        camera.position.copy(originalPosition)
+                        camera.quaternion.copy(originalQuaternion)
+                        camera.up.copy(originalUp)
+
+                        camera.updateProjectionMatrix()
+
+                        // Render one frame to restore view immediately
+                        gl.render(scene, camera)
+
+                    } catch (error) {
+                        console.error("Export failed:", error)
+                        alert("Export failed: " + error.message)
+                    }
+
+                    // Reset export state after completion (inside requestAnimationFrame callback)
+                    resetExport()
+                })
+            }
         }
-    }, [exportRequested, exportFormat, scene, gl, camera, resetExport, target, exportSettings, exportView])
+    }, [exportRequested, exportFormat, scene, gl, camera, resetExport, setExportLineScale, target, exportSettings, exportView, currentProject, showToast])
 
     return null
 }
@@ -360,7 +372,50 @@ const generateSVG = (group, camera, width, height) => {
 }
 
 
-const downloadFile = (data, filename, mimeType, isBase64 = false) => {
+// Helper to generate timestamp filename
+const generateFilename = (baseName, extension) => {
+    const now = new Date()
+    const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    return `${baseName}-${timestamp}.${extension}`
+}
+
+// Save to project if active, otherwise download
+const saveOrDownload = async (data, filename, mimeType, isBase64, projectId, showToast) => {
+    if (projectId) {
+        try {
+            // Generate timestamped filename
+            const ext = filename.split('.').pop()
+            const baseName = filename.replace(`.${ext}`, '')
+            const timestampedFilename = generateFilename(baseName, ext)
+
+            if (isBase64) {
+                // Convert base64 data URL to base64 string
+                const base64Data = data.split(',')[1]
+                await api.saveExport(projectId, timestampedFilename, base64Data, 'base64')
+            } else if (data instanceof ArrayBuffer) {
+                // Binary data (GLB)
+                const blob = new Blob([data], { type: mimeType })
+                await api.saveExportBinary(projectId, timestampedFilename, blob)
+            } else {
+                // Text data (OBJ, DAE, DXF, IFC, SVG)
+                await api.saveExport(projectId, timestampedFilename, data, 'text')
+            }
+            console.log(`Saved to project: ${timestampedFilename}`)
+            // Show toast notification
+            const folder = ext.match(/^(png|jpg|jpeg|svg)$/i) ? 'images' : 'models'
+            showToast?.(`Saved to ${folder}/${timestampedFilename}`, 'success')
+        } catch (err) {
+            console.error('Failed to save to project:', err)
+            showToast?.(`Export failed: ${err.message}`, 'error')
+            // Fallback to download
+            downloadFile(data, filename, mimeType, isBase64, showToast)
+        }
+    } else {
+        downloadFile(data, filename, mimeType, isBase64, showToast)
+    }
+}
+
+const downloadFile = (data, filename, mimeType, isBase64 = false, showToast) => {
     const link = document.createElement('a')
     link.download = filename
 
@@ -374,6 +429,7 @@ const downloadFile = (data, filename, mimeType, isBase64 = false) => {
     }
 
     link.click()
+    showToast?.(`Downloaded ${filename}`, 'success')
 }
 
 export default Exporter

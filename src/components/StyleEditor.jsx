@@ -85,6 +85,40 @@ const SliderInput = ({ value, onChange, min = 0, max = 1, step = 0.1, className 
     )
 }
 
+// Custom label row for dimension labels
+const CustomLabelRow = ({ label, dimensionKey, customLabels, setCustomLabel }) => {
+    const config = customLabels?.[dimensionKey] || { mode: 'value', text: '' }
+    const isCustom = config.mode === 'custom'
+
+    return (
+        <div className="flex items-center gap-1 mb-1">
+            <span className="text-[9px] text-gray-400 w-16 truncate">{label}</span>
+            <div className="flex items-center gap-1 flex-1">
+                <button
+                    onClick={() => setCustomLabel(dimensionKey, isCustom ? 'value' : 'custom', config.text)}
+                    className={`px-1.5 py-0.5 rounded text-[8px] font-medium border transition-colors ${
+                        isCustom
+                            ? 'bg-blue-600 border-blue-500 text-white'
+                            : 'bg-gray-800 border-gray-600 text-gray-400 hover:bg-gray-700'
+                    }`}
+                    title={isCustom ? 'Using custom label' : 'Using numeric value'}
+                >
+                    {isCustom ? 'Custom' : 'Value'}
+                </button>
+                {isCustom && (
+                    <input
+                        type="text"
+                        value={config.text}
+                        onChange={(e) => setCustomLabel(dimensionKey, 'custom', e.target.value)}
+                        placeholder="A, B, etc."
+                        className="flex-1 px-1 py-0.5 text-[9px] bg-gray-800 border border-gray-600 rounded text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                    />
+                )}
+            </div>
+        </div>
+    )
+}
+
 const LineStyleSelector = ({ dashed, dashSize, gapSize, onChange, onDashChange, onGapChange }) => (
     <div className="space-y-1">
         <div className="flex gap-1">
@@ -505,11 +539,14 @@ const StyleEditor = () => {
     const setStyle = useStore((state) => state.setStyle)
     const setStyleOverride = useStore((state) => state.setStyleOverride)
     const setDimensionSetting = useStore((state) => state.setDimensionSetting)
+    const setCustomLabel = useStore((state) => state.setCustomLabel)
     const userDefaults = useStore((state) => state.userDefaults)
     const saveAsDefault = useStore((state) => state.saveAsDefault)
     const loadUserDefaults = useStore((state) => state.loadUserDefaults)
     const roadModuleStyles = useStore((state) => state.roadModuleStyles)
     const setRoadModuleStyle = useStore((state) => state.setRoadModuleStyle)
+    const uiTheme = useStore((state) => state.uiTheme)
+    const setUiTheme = useStore((state) => state.setUiTheme)
     const [openSections, setOpenSections] = useState({})
     const [isPanelOpen, setIsPanelOpen] = useState(false)
 
@@ -734,6 +771,60 @@ const StyleEditor = () => {
                                     />
                                 </ControlRow>
                             </div>
+                        </Section>
+                    </div>
+
+                    {/* Custom Dimension Labels */}
+                    <div className="border-t border-gray-700">
+                        <Section
+                            title="Custom Dimension Labels"
+                            isOpen={openSections.customLabels}
+                            onToggle={() => toggleSection('customLabels')}
+                        >
+                            <p className="text-[9px] text-gray-500 mb-2">Set custom text labels for dimensions instead of numeric values. Applies to both models.</p>
+
+                            <CustomLabelRow
+                                label="Lot Width"
+                                dimensionKey="lotWidth"
+                                customLabels={styleSettings.dimensionSettings?.customLabels}
+                                setCustomLabel={setCustomLabel}
+                            />
+                            <CustomLabelRow
+                                label="Lot Depth"
+                                dimensionKey="lotDepth"
+                                customLabels={styleSettings.dimensionSettings?.customLabels}
+                                setCustomLabel={setCustomLabel}
+                            />
+                            <CustomLabelRow
+                                label="Setback Front"
+                                dimensionKey="setbackFront"
+                                customLabels={styleSettings.dimensionSettings?.customLabels}
+                                setCustomLabel={setCustomLabel}
+                            />
+                            <CustomLabelRow
+                                label="Setback Rear"
+                                dimensionKey="setbackRear"
+                                customLabels={styleSettings.dimensionSettings?.customLabels}
+                                setCustomLabel={setCustomLabel}
+                            />
+                            <CustomLabelRow
+                                label="Setback Left"
+                                dimensionKey="setbackLeft"
+                                customLabels={styleSettings.dimensionSettings?.customLabels}
+                                setCustomLabel={setCustomLabel}
+                            />
+                            <CustomLabelRow
+                                label="Setback Right"
+                                dimensionKey="setbackRight"
+                                customLabels={styleSettings.dimensionSettings?.customLabels}
+                                setCustomLabel={setCustomLabel}
+                            />
+                            <CustomLabelRow
+                                label="Bldg Height"
+                                dimensionKey="buildingHeight"
+                                customLabels={styleSettings.dimensionSettings?.customLabels}
+                                setCustomLabel={setCustomLabel}
+                            />
                         </Section>
                     </div>
 

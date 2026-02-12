@@ -108,6 +108,7 @@ const PostProcessing = ({ renderSettings }) => {
 const AdaptiveGrid = ({ gridSettings }) => {
     const { camera } = useThree()
     const [gridScale, setGridScale] = useState({ cellSize: 10, sectionSize: 50 })
+    const lastScaleRef = useRef({ cellSize: 10, sectionSize: 50 })
 
     useFrame(() => {
         // Get effective zoom level
@@ -145,8 +146,9 @@ const AdaptiveGrid = ({ gridSettings }) => {
             sectionSize = 100
         }
 
-        // Only update if changed
-        if (cellSize !== gridScale.cellSize || sectionSize !== gridScale.sectionSize) {
+        // Only update if changed (use ref to avoid stale closure issues)
+        if (cellSize !== lastScaleRef.current.cellSize || sectionSize !== lastScaleRef.current.sectionSize) {
+            lastScaleRef.current = { cellSize, sectionSize }
             setGridScale({ cellSize, sectionSize })
         }
     })

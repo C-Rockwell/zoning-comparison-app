@@ -1,13 +1,19 @@
 import { Text, Line } from '@react-three/drei'
 import * as THREE from 'three'
 
-const Dimension = ({ start, end, label, offset = 0, color = "black", visible = true, flipText = false, settings = {} }) => {
+const Dimension = ({ start, end, label, offset = 0, color = "black", visible = true, flipText = false, settings = {}, lineScale = 1 }) => {
     if (!visible) return null
+
+    // Use dampened scale for dimensions - pow(0.15) for closer WYSIWYG match
+    // (e.g., 4x export resolution = ~1.23x dimension scale)
+    // Tested: 0.25 (still too large), 0.35 (too large), 0.45 (too large), 0.5 (too large), 0.55 (too large), 0.65 (too large), 0.85 (too thick)
+    const dampenedScale = Math.pow(lineScale, 0.15)
 
     // Defaults from settings or fallback
     const lineColor = settings.lineColor || color
     const textColor = settings.textColor || lineColor
-    const lineWidth = settings.lineWidth || 1
+    const baseLineWidth = settings.lineWidth || 1
+    const lineWidth = baseLineWidth * dampenedScale
     const fontSize = settings.fontSize || 2
     const endMarker = settings.endMarker || 'tick' // 'tick', 'arrow', 'dot'
 
@@ -45,9 +51,9 @@ const Dimension = ({ start, end, label, offset = 0, color = "black", visible = t
     const mz = (s[2] + e[2]) / 2
 
     // Tick mark size (perpendicular local to line)
-    // Scale tick size with lineWidth for meaningful visibility
-    const scale = Math.max(1.5, lineWidth * 0.8)
-    const tickSize = 1 * scale
+    // Scale tick size with base lineWidth and dampened scale for export WYSIWYG
+    const markerScale = Math.max(1.5, baseLineWidth * 0.8) * dampenedScale
+    const tickSize = 1 * markerScale
     const tx = px * tickSize
     const ty = py * tickSize
 
@@ -66,9 +72,9 @@ const Dimension = ({ start, end, label, offset = 0, color = "black", visible = t
     const textAngle = (angle > Math.PI / 2 || angle <= -Math.PI / 2) ? angle + Math.PI : angle
 
     // Marker styling constants
-    const arrowLength = 1 * scale
-    const arrowWidth = 0.4 * scale
-    const dotSize = 0.3 * scale
+    const arrowLength = 1 * markerScale
+    const arrowWidth = 0.4 * markerScale
+    const dotSize = 0.3 * markerScale
 
     return (
         <group>
@@ -121,19 +127,21 @@ const Dimension = ({ start, end, label, offset = 0, color = "black", visible = t
                 </>
             )}
 
-            <Text
-                position={[mx, my, mz]}
-                color={textColor}
-                fontSize={fontSize}
-                anchorX="center"
-                anchorY={flipText ? "top" : "bottom"} // Toggle "top" | "bottom"
-                rotation={[0, 0, textAngle]} // Align with line
-                outlineWidth={fontSize * (settings.outlineWidth ?? 0.1)} // Scale outline with font. Default 0.1
-                outlineColor={settings.outlineColor || "white"}
-            // font={settings.font || 'https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hjp-Ek-_EeA.woff'}
-            >
-                {label}
-            </Text>
+            {label && (
+                <Text
+                    position={[mx, my, mz]}
+                    color={textColor}
+                    fontSize={fontSize}
+                    anchorX="center"
+                    anchorY={flipText ? "top" : "bottom"} // Toggle "top" | "bottom"
+                    rotation={[0, 0, textAngle]} // Align with line
+                    outlineWidth={fontSize * (settings.outlineWidth ?? 0.1)} // Scale outline with font. Default 0.1
+                    outlineColor={settings.outlineColor || "white"}
+                // font={settings.font || 'https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hjp-Ek-_EeA.woff'}
+                >
+                    {label}
+                </Text>
+            )}
         </group>
     )
 }

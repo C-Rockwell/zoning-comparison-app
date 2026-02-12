@@ -8,6 +8,17 @@ import Dimension from './Dimension'
 import LotEditor from './LotEditor'
 import RoadModule from './RoadModule'
 
+// Helper function to resolve dimension label based on custom label settings
+const resolveDimensionLabel = (value, dimensionKey, dimensionSettings) => {
+    const customLabels = dimensionSettings?.customLabels || {}
+    const labelConfig = customLabels[dimensionKey]
+    if (labelConfig?.mode === 'custom') {
+        // Return custom text, or empty string if blank (hides label but keeps dimension lines)
+        return labelConfig.text || ''
+    }
+    return `${value}'`
+}
+
 const Building = ({
     width,
     depth,
@@ -20,6 +31,7 @@ const Building = ({
     offsetGroupX = 0,
     showHeightDimensions = false,
     dimensionSettings = {},
+    heightDimensionKey = 'buildingHeight',
     // New props for stories
     stories = 1,
     firstFloorHeight = 12,
@@ -28,6 +40,8 @@ const Building = ({
     maxHeight = 30,
     showMaxHeightPlane = false,
     maxHeightPlaneStyle = {},
+    // Line scale for export WYSIWYG
+    lineScale = 1,
 }) => {
     const { faces, edges } = styles
     const [hovered, setHovered] = useState(false)
@@ -128,7 +142,7 @@ const Building = ({
                         />
                         {edges.visible && (
                             <Edges
-                                linewidth={edges.width * scaleFactor}
+                                linewidth={edges.width * scaleFactor * lineScale}
                                 threshold={15}
                                 color={edges.color}
                                 transparent
@@ -163,7 +177,7 @@ const Building = ({
                             [-width / 2, -depth / 2, 0],
                         ]}
                         color={maxHeightPlaneStyle.lineColor || '#FF0000'}
-                        lineWidth={maxHeightPlaneStyle.lineWidth || 2}
+                        lineWidth={(maxHeightPlaneStyle.lineWidth || 2) * lineScale}
                         dashed={maxHeightPlaneStyle.lineDashed || false}
                         dashSize={1}
                         gapSize={0.5}
@@ -175,11 +189,12 @@ const Building = ({
             <Dimension
                 start={dimStart}
                 end={dimEnd}
-                label={`${totalBuildingHeight}'`}
+                label={resolveDimensionLabel(totalBuildingHeight, heightDimensionKey, dimensionSettings)}
                 offset={10}
                 color="black"
                 visible={showHeightDimensions}
                 settings={dimensionSettings}
+                lineScale={lineScale}
             />
 
             {/* Capture Plane for smooth dragging outside the box */}
@@ -198,7 +213,7 @@ const Building = ({
     )
 }
 
-const SingleLine = ({ start, end, style, side }) => {
+const SingleLine = ({ start, end, style, side, lineScale = 1 }) => {
     // Determine effective style
     const override = style.overrides?.[side]
     const useOverride = override?.enabled
@@ -214,7 +229,7 @@ const SingleLine = ({ start, end, style, side }) => {
         <Line
             points={[start, end]}
             color={color}
-            lineWidth={width}
+            lineWidth={width * lineScale}
             dashed={dashed}
             dashScale={dashed ? dashScale : 1}
             dashSize={dashSize}
@@ -225,7 +240,7 @@ const SingleLine = ({ start, end, style, side }) => {
     )
 }
 
-const Lot = ({ width, depth, x, y, style, fillStyle, scaleFactor = 1, showWidthDimensions = false, showDepthDimensions = false, dimensionSettings = {}, dimensionSide = 'right' }) => {
+const Lot = ({ width, depth, x, y, style, fillStyle, scaleFactor = 1, showWidthDimensions = false, showDepthDimensions = false, dimensionSettings = {}, dimensionSide = 'right', widthDimensionKey = 'lotWidth', depthDimensionKey = 'lotDepth', lineScale = 1 }) => {
     const w2 = width / 2
     const d2 = depth / 2
 
@@ -252,20 +267,21 @@ const Lot = ({ width, depth, x, y, style, fillStyle, scaleFactor = 1, showWidthD
                 </mesh>
             )}
 
-            <SingleLine start={p1} end={p2} style={style} side="front" />
-            <SingleLine start={p2} end={p3} style={style} side="right" />
-            <SingleLine start={p3} end={p4} style={style} side="rear" />
-            <SingleLine start={p4} end={p1} style={style} side="left" />
+            <SingleLine start={p1} end={p2} style={style} side="front" lineScale={lineScale} />
+            <SingleLine start={p2} end={p3} style={style} side="right" lineScale={lineScale} />
+            <SingleLine start={p3} end={p4} style={style} side="rear" lineScale={lineScale} />
+            <SingleLine start={p4} end={p1} style={style} side="left" lineScale={lineScale} />
 
             {/* Dimensions */}
             {/* Front (Bottom) - Offset Negative Y */}
             <Dimension
                 start={p1} end={p2}
-                label={`${width}'`}
+                label={resolveDimensionLabel(width, widthDimensionKey, dimensionSettings)}
                 offset={-15}
                 color="black"
                 visible={showWidthDimensions}
                 settings={dimensionSettings}
+                lineScale={lineScale}
             />
             {/* Depth Check - Left vs Right */}
             {/* Depth Check - Left vs Right */}
@@ -274,30 +290,32 @@ const Lot = ({ width, depth, x, y, style, fillStyle, scaleFactor = 1, showWidthD
                 // Offset Logic: Down vector (0,-1) -> Perp (1,0) Right. Positive offset moves Right (Outside).
                 <Dimension
                     start={p3} end={p2}
-                    label={`${depth}'`}
+                    label={resolveDimensionLabel(depth, depthDimensionKey, dimensionSettings)}
                     offset={15}
                     color="black"
                     visible={showDepthDimensions}
                     settings={dimensionSettings}
                     flipText={true}
+                    lineScale={lineScale}
                 />
             ) : (
                 // Left Side Depth (Negative X) -> Draw Bottom-to-Top so "Bottom" anchor pushes text Left (Outside)
                 // Offset Logic: Up vector (0,1) -> Perp (-1,0) Left. Positive offset moves Left (Outside).
                 <Dimension
                     start={p1} end={p4}
-                    label={`${depth}'`}
+                    label={resolveDimensionLabel(depth, depthDimensionKey, dimensionSettings)}
                     offset={15}
                     color="black"
                     visible={showDepthDimensions}
                     settings={dimensionSettings}
+                    lineScale={lineScale}
                 />
             )}
         </group>
     )
 }
 
-const SetbackLayer = ({ lotWidth, lotDepth, setbacks, x, y, style, scaleFactor = 1, showDimensions = false, dimensionSettings = {} }) => {
+const SetbackLayer = ({ lotWidth, lotDepth, setbacks, x, y, style, scaleFactor = 1, showDimensions = false, dimensionSettings = {}, setbackDimensionKeys = {}, lineScale = 1 }) => {
     const { setbackFront, setbackRear, setbackSideLeft, setbackSideRight } = setbacks
 
     const y1 = -lotDepth / 2 + setbackFront
@@ -312,51 +330,55 @@ const SetbackLayer = ({ lotWidth, lotDepth, setbacks, x, y, style, scaleFactor =
 
     return (
         <group position={[x, y, 0]}>
-            <SingleLine start={p1} end={p2} style={style} side="front" />
-            <SingleLine start={p2} end={p3} style={style} side="right" />
-            <SingleLine start={p3} end={p4} style={style} side="rear" />
-            <SingleLine start={p4} end={p1} style={style} side="left" />
+            <SingleLine start={p1} end={p2} style={style} side="front" lineScale={lineScale} />
+            <SingleLine start={p2} end={p3} style={style} side="right" lineScale={lineScale} />
+            <SingleLine start={p3} end={p4} style={style} side="rear" lineScale={lineScale} />
+            <SingleLine start={p4} end={p1} style={style} side="left" lineScale={lineScale} />
 
             {/* Setback Dimensions - Measuring the gap from Lot Line to Setback Line */}
             {/* Front Setback */}
             <Dimension
                 start={[0, -lotDepth / 2, 0.1]}
                 end={[0, y1, 0.1]}
-                label={`${setbackFront}'`}
+                label={resolveDimensionLabel(setbackFront, setbackDimensionKeys.front || 'setbackFront', dimensionSettings)}
                 offset={5} // Offset to the right
                 color={style.color || "red"}
                 visible={showDimensions}
                 settings={dimensionSettings}
+                lineScale={lineScale}
             />
             {/* Rear Setback */}
             <Dimension
                 start={[0, y2, 0.1]}
                 end={[0, lotDepth / 2, 0.1]}
-                label={`${setbackRear}'`}
+                label={resolveDimensionLabel(setbackRear, setbackDimensionKeys.rear || 'setbackRear', dimensionSettings)}
                 offset={5}
                 color={style.color || "red"}
                 visible={showDimensions}
                 settings={dimensionSettings}
+                lineScale={lineScale}
             />
             {/* Left Setback */}
             <Dimension
                 start={[-lotWidth / 2, 0, 0.1]}
                 end={[x1, 0, 0.1]}
-                label={`${setbackSideLeft}'`}
+                label={resolveDimensionLabel(setbackSideLeft, setbackDimensionKeys.left || 'setbackLeft', dimensionSettings)}
                 offset={5} // Offset "up" in Y
                 color={style.color || "red"}
                 visible={showDimensions}
                 settings={dimensionSettings}
+                lineScale={lineScale}
             />
             {/* Right Setback */}
             <Dimension
                 start={[x2, 0, 0.1]}
                 end={[lotWidth / 2, 0, 0.1]}
-                label={`${setbackSideRight}'`}
+                label={resolveDimensionLabel(setbackSideRight, setbackDimensionKeys.right || 'setbackRight', dimensionSettings)}
                 offset={5}
                 color={style.color || "red"}
                 visible={showDimensions}
                 settings={dimensionSettings}
+                lineScale={lineScale}
             />
         </group>
     )
@@ -392,6 +414,7 @@ const SceneContent = () => {
     const setBuildingPosition = useStore((state) => state.setBuildingPosition)
     const roadModule = useStore((state) => state.roadModule)
     const roadModuleStyles = useStore((state) => state.roadModuleStyles)
+    const exportLineScale = useStore((state) => state.viewSettings.exportLineScale) || 1
 
     // Polygon editing actions
     const updateVertex = useStore((state) => state.updateVertex)
@@ -443,6 +466,7 @@ const SceneContent = () => {
                             updateVertex={updateVertex}
                             splitEdge={splitEdge}
                             extrudeEdge={extrudeEdge}
+                            lineScale={exportLineScale}
                         />
                     ) : (
                         <Lot
@@ -457,6 +481,7 @@ const SceneContent = () => {
                             showDepthDimensions={layers.dimensionsLotDepth}
                             dimensionSettings={styleSettings.dimensionSettings}
                             dimensionSide="left"
+                            lineScale={exportLineScale}
                         />
                     )
                 )}
@@ -476,6 +501,7 @@ const SceneContent = () => {
                         scaleFactor={scaleFactor}
                         showDimensions={layers.dimensionsSetbacks}
                         dimensionSettings={styleSettings.dimensionSettings}
+                        lineScale={exportLineScale}
                     />
                 )}
                 {layers.buildings && (
@@ -497,6 +523,7 @@ const SceneContent = () => {
                         maxHeightPlaneStyle={existingStyles.maxHeightPlane}
                         showHeightDimensions={layers.dimensionsHeight}
                         dimensionSettings={styleSettings.dimensionSettings}
+                        lineScale={exportLineScale}
                     />
                 )}
                 {/* Road Module for Existing */}
@@ -506,6 +533,7 @@ const SceneContent = () => {
                         roadModule={roadModule}
                         styles={roadModuleStyles}
                         model="existing"
+                        lineScale={exportLineScale}
                     />
                 )}
             </group>
@@ -526,6 +554,7 @@ const SceneContent = () => {
                             updateVertex={updateVertex}
                             splitEdge={splitEdge}
                             extrudeEdge={extrudeEdge}
+                            lineScale={exportLineScale}
                         />
                     ) : (
                         <Lot
@@ -539,6 +568,7 @@ const SceneContent = () => {
                             showWidthDimensions={layers.dimensionsLotWidth}
                             showDepthDimensions={layers.dimensionsLotDepth}
                             dimensionSettings={styleSettings.dimensionSettings}
+                            lineScale={exportLineScale}
                         />
                     )
                 )}
@@ -558,6 +588,7 @@ const SceneContent = () => {
                         scaleFactor={scaleFactor}
                         showDimensions={layers.dimensionsSetbacks}
                         dimensionSettings={styleSettings.dimensionSettings}
+                        lineScale={exportLineScale}
                     />
                 )}
                 {layers.buildings && (
@@ -579,6 +610,7 @@ const SceneContent = () => {
                         maxHeightPlaneStyle={proposedStyles.maxHeightPlane}
                         showHeightDimensions={layers.dimensionsHeight}
                         dimensionSettings={styleSettings.dimensionSettings}
+                        lineScale={exportLineScale}
                     />
                 )}
                 {/* Road Module for Proposed */}
@@ -588,6 +620,7 @@ const SceneContent = () => {
                         roadModule={roadModule}
                         styles={roadModuleStyles}
                         model="proposed"
+                        lineScale={exportLineScale}
                     />
                 )}
             </group>

@@ -107,7 +107,11 @@ const getEdgePerpendicular = (v1, v2) => {
 export const useStore = create(
     temporal(
         persist(
-            (set) => ({
+            (set, get) => ({
+                // UI Theme setting
+                uiTheme: 'standard', // 'standard' | 'modern'
+                setUiTheme: (theme) => set({ uiTheme: theme }),
+
                 existing: {
                     lotWidth: 50,
                     lotDepth: 100,
@@ -207,6 +211,7 @@ export const useStore = create(
                     exportFormat: 'obj', // 'obj' | 'glb' | 'dae' | 'dxf' | 'png' | 'jpg' | 'svg'
                     exportSettings: { width: 1920, height: 1080, label: '1080p (1920x1080)' },
                     exportView: 'current', // 'current' | 'iso' | 'front' | 'top' | 'side' | 'left' | 'right'
+                    exportLineScale: 1, // Scale factor for line widths during export (WYSIWYG)
                     // Visual Customization Settings - Split for Existing and Proposed models
                     styleSettings: {
                         existing: {
@@ -343,7 +348,18 @@ export const useStore = create(
                             outlineColor: '#ffffff', // New
                             outlineWidth: 0.1, // New, relative to font size (0.0 - 0.5)
                             extensionWidth: 0.5, // New, relative to main line width
-                            font: 'https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hjp-Ek-_EeA.woff' // Default Inter
+                            font: 'https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hjp-Ek-_EeA.woff', // Default Inter
+                            // Custom label settings - universal (applies to both existing and proposed)
+                            // mode: 'value' (shows calculated value) or 'custom' (shows custom text)
+                            customLabels: {
+                                lotWidth: { mode: 'value', text: 'A' },
+                                lotDepth: { mode: 'value', text: 'B' },
+                                setbackFront: { mode: 'value', text: '' },
+                                setbackRear: { mode: 'value', text: '' },
+                                setbackLeft: { mode: 'value', text: '' },
+                                setbackRight: { mode: 'value', text: '' },
+                                buildingHeight: { mode: 'value', text: '' },
+                            }
                         }
                     },
                     lighting: {
@@ -680,7 +696,10 @@ export const useStore = create(
                     viewSettings: { ...state.viewSettings, exportRequested: true }
                 })),
                 resetExport: () => set((state) => ({
-                    viewSettings: { ...state.viewSettings, exportRequested: false }
+                    viewSettings: { ...state.viewSettings, exportRequested: false, exportLineScale: 1 }
+                })),
+                setExportLineScale: (scale) => set((state) => ({
+                    viewSettings: { ...state.viewSettings, exportLineScale: scale }
                 })),
                 // Sun simulation actions
                 setSunSetting: (key, value) => set((state) => ({
@@ -709,6 +728,22 @@ export const useStore = create(
                             dimensionSettings: {
                                 ...state.viewSettings.styleSettings.dimensionSettings,
                                 [key]: value
+                            }
+                        }
+                    }
+                })),
+                // Update custom label for a specific dimension
+                setCustomLabel: (dimensionKey, mode, text) => set((state) => ({
+                    viewSettings: {
+                        ...state.viewSettings,
+                        styleSettings: {
+                            ...state.viewSettings.styleSettings,
+                            dimensionSettings: {
+                                ...state.viewSettings.styleSettings.dimensionSettings,
+                                customLabels: {
+                                    ...state.viewSettings.styleSettings.dimensionSettings.customLabels,
+                                    [dimensionKey]: { mode, text }
+                                }
                             }
                         }
                     }
@@ -894,10 +929,175 @@ export const useStore = create(
                         }
                     };
                 }),
+
+                // ============================================
+                // Project Management
+                // ============================================
+                projectConfig: {
+                    projectsDirectory: null,
+                    isConfigured: false,
+                },
+                currentProject: null, // { id, name, path, createdAt, modifiedAt }
+                projects: [], // List of available projects
+                snapshots: [], // Snapshots for current project
+                layerStates: [], // Layer states for current project
+                cameraState: null, // Current camera state for snapshots
+
+                // Toast notifications
+                toast: null, // { message, type: 'success' | 'error' | 'info', id }
+                showToast: (message, type = 'success') => {
+                    const id = Date.now()
+                    set({ toast: { message, type, id } })
+                    // Auto-dismiss after 3 seconds
+                    setTimeout(() => {
+                        const currentToast = useStore.getState().toast
+                        if (currentToast?.id === id) {
+                            set({ toast: null })
+                        }
+                    }, 3000)
+                },
+                hideToast: () => set({ toast: null }),
+
+                // Config actions
+                setProjectConfig: (config) => set({
+                    projectConfig: { ...config, isConfigured: !!config.projectsDirectory }
+                }),
+
+                // Project actions
+                setCurrentProject: (project) => set({ currentProject: project }),
+                setProjects: (projects) => set({ projects }),
+                clearCurrentProject: () => set({
+                    currentProject: null,
+                    snapshots: [],
+                    layerStates: []
+                }),
+
+                // Snapshot/Layer state list actions
+                setSnapshots: (snapshots) => set({ snapshots }),
+                setLayerStates: (layerStates) => set({ layerStates }),
+
+                // Camera state for snapshots
+                setCameraState: (cameraState) => set({ cameraState }),
+
+                // Get current state for saving as snapshot (full state + camera)
+                getSnapshotData: () => {
+                    const state = useStore.getState();
+                    return {
+                        existing: state.existing,
+                        proposed: state.proposed,
+                        viewSettings: {
+                            mode: state.viewSettings.mode,
+                            projection: state.viewSettings.projection,
+                            backgroundMode: state.viewSettings.backgroundMode,
+                            layers: state.viewSettings.layers,
+                            styleSettings: state.viewSettings.styleSettings,
+                            lighting: state.viewSettings.lighting,
+                        },
+                        camera: state.cameraState,
+                        roadModule: state.roadModule,
+                        roadModuleStyles: state.roadModuleStyles,
+                        renderSettings: state.renderSettings,
+                        sunSettings: state.sunSettings,
+                        layoutSettings: state.layoutSettings,
+                    };
+                },
+
+                // Get current state for saving as layer state (styles only, no camera)
+                getLayerStateData: () => {
+                    const state = useStore.getState();
+                    return {
+                        viewSettings: {
+                            layers: state.viewSettings.layers,
+                            styleSettings: state.viewSettings.styleSettings,
+                            lighting: state.viewSettings.lighting,
+                        },
+                        renderSettings: state.renderSettings,
+                    };
+                },
+
+                // Apply loaded snapshot (full state + camera)
+                applySnapshot: (snapshotData) => set((state) => {
+                    const newState = {
+                        existing: snapshotData.existing || state.existing,
+                        proposed: snapshotData.proposed || state.proposed,
+                        viewSettings: {
+                            ...state.viewSettings,
+                            mode: snapshotData.viewSettings?.mode || state.viewSettings.mode,
+                            projection: snapshotData.viewSettings?.projection || state.viewSettings.projection,
+                            backgroundMode: snapshotData.viewSettings?.backgroundMode || state.viewSettings.backgroundMode,
+                            layers: snapshotData.viewSettings?.layers || state.viewSettings.layers,
+                            styleSettings: snapshotData.viewSettings?.styleSettings || state.viewSettings.styleSettings,
+                            lighting: snapshotData.viewSettings?.lighting || state.viewSettings.lighting,
+                            // Increment viewVersion to trigger camera update
+                            viewVersion: state.viewSettings.viewVersion + 1,
+                        },
+                        roadModule: snapshotData.roadModule || state.roadModule,
+                        roadModuleStyles: snapshotData.roadModuleStyles || state.roadModuleStyles,
+                        renderSettings: snapshotData.renderSettings || state.renderSettings,
+                        sunSettings: snapshotData.sunSettings || state.sunSettings,
+                        layoutSettings: snapshotData.layoutSettings || state.layoutSettings,
+                    };
+                    // Camera will be restored separately by the CameraHandler
+                    if (snapshotData.camera) {
+                        newState.cameraState = snapshotData.camera;
+                        newState._restoreCamera = true; // Flag to trigger camera restoration
+                    }
+                    return newState;
+                }),
+
+                // Apply loaded layer state (styles only)
+                applyLayerState: (layerStateData) => set((state) => ({
+                    viewSettings: {
+                        ...state.viewSettings,
+                        layers: layerStateData.viewSettings?.layers || state.viewSettings.layers,
+                        styleSettings: layerStateData.viewSettings?.styleSettings || state.viewSettings.styleSettings,
+                        lighting: layerStateData.viewSettings?.lighting || state.viewSettings.lighting,
+                    },
+                    renderSettings: layerStateData.renderSettings || state.renderSettings,
+                })),
+
+                // Get full project state for saving
+                getProjectState: () => {
+                    const state = useStore.getState();
+                    return {
+                        existing: state.existing,
+                        proposed: state.proposed,
+                        viewSettings: state.viewSettings,
+                        roadModule: state.roadModule,
+                        roadModuleStyles: state.roadModuleStyles,
+                        renderSettings: state.renderSettings,
+                        sunSettings: state.sunSettings,
+                        layoutSettings: state.layoutSettings,
+                        savedViews: state.savedViews,
+                        uiTheme: state.uiTheme,
+                    };
+                },
+
+                // Apply loaded project state
+                applyProjectState: (projectState) => set((state) => ({
+                    existing: projectState.existing || state.existing,
+                    proposed: projectState.proposed || state.proposed,
+                    viewSettings: {
+                        ...state.viewSettings,
+                        ...projectState.viewSettings,
+                        viewVersion: state.viewSettings.viewVersion + 1,
+                    },
+                    roadModule: projectState.roadModule || state.roadModule,
+                    roadModuleStyles: projectState.roadModuleStyles || state.roadModuleStyles,
+                    renderSettings: projectState.renderSettings || state.renderSettings,
+                    sunSettings: projectState.sunSettings || state.sunSettings,
+                    layoutSettings: projectState.layoutSettings || state.layoutSettings,
+                    savedViews: projectState.savedViews || state.savedViews,
+                    uiTheme: projectState.uiTheme || state.uiTheme,
+                })),
+
+                // Flag to signal camera restoration needed
+                _restoreCamera: false,
+                clearRestoreCameraFlag: () => set({ _restoreCamera: false }),
             }),
             {
                 name: 'zoning-app-storage',
-                version: 12, // Updated to 12 for building stories and max height
+                version: 13, // Updated to 13 for custom dimension labels
                 migrate: (persistedState, version) => {
                     // Split dimensionsLot into dimensionsLotWidth and dimensionsLotDepth
                     if (persistedState.viewSettings && persistedState.viewSettings.layers && persistedState.viewSettings.layers.dimensionsLot !== undefined) {
@@ -1113,9 +1313,28 @@ export const useStore = create(
                         }
                     }
 
+                    if (version < 13) {
+                        // Migration to 13
+                        // Add universal customLabels to dimensionSettings (applies to both existing and proposed)
+                        const dimSettings = persistedState.viewSettings?.styleSettings?.dimensionSettings || {};
+                        // Reset to universal format (remove any old existing/proposed specific labels)
+                        dimSettings.customLabels = {
+                            lotWidth: { mode: 'value', text: 'A' },
+                            lotDepth: { mode: 'value', text: 'B' },
+                            setbackFront: { mode: 'value', text: '' },
+                            setbackRear: { mode: 'value', text: '' },
+                            setbackLeft: { mode: 'value', text: '' },
+                            setbackRight: { mode: 'value', text: '' },
+                            buildingHeight: { mode: 'value', text: '' },
+                        };
+                        if (persistedState.viewSettings?.styleSettings) {
+                            persistedState.viewSettings.styleSettings.dimensionSettings = dimSettings;
+                        }
+                    }
+
                     return {
                         ...persistedState,
-                        version: 12 // Update verified version
+                        version: 13 // Update verified version
                     };
                 },
                 partialize: (state) => ({
@@ -1128,7 +1347,10 @@ export const useStore = create(
                     roadModule: state.roadModule,
                     roadModuleStyles: state.roadModuleStyles,
                     savedViews: state.savedViews,
-                    userDefaults: state.userDefaults
+                    userDefaults: state.userDefaults,
+                    projectConfig: state.projectConfig,
+                    currentProject: state.currentProject,
+                    uiTheme: state.uiTheme,
                 }),
             }
         ),

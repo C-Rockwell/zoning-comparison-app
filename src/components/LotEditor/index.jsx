@@ -14,6 +14,7 @@ const LotEditor = ({
     showDimensions = false,
     dimensionSettings = {},
     offsetGroupX = 0,
+    lineScale = 1,   // Line scale for export WYSIWYG
     // Store actions
     updateVertex,
     splitEdge,
@@ -56,6 +57,7 @@ const LotEditor = ({
                 fillStyle={fillStyle}
                 showDimensions={showDimensions}
                 dimensionSettings={dimensionSettings}
+                lineScale={lineScale}
             />
 
             {/* Only show handles when editing */}
