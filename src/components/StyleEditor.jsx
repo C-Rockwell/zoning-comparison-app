@@ -427,6 +427,58 @@ const ModelStyleControls = ({ model, styles, setStyle, setStyleOverride, openSec
                 </ControlRow>
             </Section>
 
+            {/* Roof */}
+            <Section
+                title="Roof"
+                isOpen={openSections[`${prefix}_roof`]}
+                onToggle={() => toggleSection(`${prefix}_roof`)}
+            >
+                <ControlRow label="Face Color">
+                    <ColorPicker
+                        value={styles.roofFaces?.color ?? '#B8A088'}
+                        onChange={(c) => setStyle(model, 'roofFaces', 'color', c)}
+                    />
+                </ControlRow>
+                <ControlRow label="Face Opacity">
+                    <SliderInput
+                        value={styles.roofFaces?.opacity ?? 0.85}
+                        onChange={(v) => setStyle(model, 'roofFaces', 'opacity', v)}
+                    />
+                </ControlRow>
+                <ControlRow label="Edge Visible">
+                    <button
+                        onClick={() => setStyle(model, 'roofEdges', 'visible', !(styles.roofEdges?.visible ?? true))}
+                        className={`px-2 py-0.5 rounded text-[9px] font-bold ${(styles.roofEdges?.visible ?? true)
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-700 text-gray-400'
+                            }`}
+                    >
+                        {(styles.roofEdges?.visible ?? true) ? 'ON' : 'OFF'}
+                    </button>
+                </ControlRow>
+                <ControlRow label="Edge Color">
+                    <ColorPicker
+                        value={styles.roofEdges?.color ?? '#000000'}
+                        onChange={(c) => setStyle(model, 'roofEdges', 'color', c)}
+                    />
+                </ControlRow>
+                <ControlRow label="Edge Width">
+                    <SliderInput
+                        value={styles.roofEdges?.width ?? 1.5}
+                        onChange={(v) => setStyle(model, 'roofEdges', 'width', v)}
+                        min={0.5}
+                        max={5}
+                        step={0.5}
+                    />
+                </ControlRow>
+                <ControlRow label="Edge Opacity">
+                    <SliderInput
+                        value={styles.roofEdges?.opacity ?? 1.0}
+                        onChange={(v) => setStyle(model, 'roofEdges', 'opacity', v)}
+                    />
+                </ControlRow>
+            </Section>
+
             {/* Max Height Plane */}
             <Section
                 title="Max Height Plane"

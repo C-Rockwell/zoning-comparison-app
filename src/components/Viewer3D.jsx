@@ -375,6 +375,10 @@ const Viewer3D = () => {
                     alpha: true,
                 }}
                 style={{ background: sceneBackground }}
+                onPointerMissed={() => {
+                    const { deselectAllBuildings } = useStore.getState()
+                    if (deselectAllBuildings) deselectAllBuildings()
+                }}
             >
                 <color attach="background" args={[sceneBackground]} />
 

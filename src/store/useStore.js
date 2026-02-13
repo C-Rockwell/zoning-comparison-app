@@ -133,6 +133,20 @@ export const useStore = create(
                         editing: false,    // Whether handles are visible
                         vertices: null,    // Array of {id, x, y} when in polygon mode
                     },
+                    // Building polygon editing state
+                    buildingGeometry: {
+                        mode: 'rectangle', // 'rectangle' | 'polygon'
+                        vertices: null,    // Array of {id, x, y} when in polygon mode
+                    },
+                    selectedBuilding: false, // Whether building handles are visible
+                    // Roof settings
+                    roof: {
+                        type: 'flat',          // 'flat' | 'shed' | 'gabled' | 'hipped'
+                        overrideHeight: false, // Bypass max height for ridge
+                        ridgeHeight: null,     // Manual ridge height (when overrideHeight true)
+                        ridgeDirection: 'x',   // Ridge axis for gabled/hipped
+                        shedDirection: '+y',   // Slope direction for shed: '+x' | '-x' | '+y' | '-y'
+                    },
                 },
                 proposed: {
                     lotWidth: 72,
@@ -154,6 +168,20 @@ export const useStore = create(
                         mode: 'rectangle', // 'rectangle' | 'polygon'
                         editing: false,    // Whether handles are visible
                         vertices: null,    // Array of {id, x, y} when in polygon mode
+                    },
+                    // Building polygon editing state
+                    buildingGeometry: {
+                        mode: 'rectangle', // 'rectangle' | 'polygon'
+                        vertices: null,    // Array of {id, x, y} when in polygon mode
+                    },
+                    selectedBuilding: false, // Whether building handles are visible
+                    // Roof settings
+                    roof: {
+                        type: 'flat',          // 'flat' | 'shed' | 'gabled' | 'hipped'
+                        overrideHeight: false, // Bypass max height for ridge
+                        ridgeHeight: null,     // Manual ridge height (when overrideHeight true)
+                        ridgeDirection: 'x',   // Ridge axis for gabled/hipped
+                        shedDirection: '+y',   // Slope direction for shed: '+x' | '-x' | '+y' | '-y'
                     },
                 },
                 // Sun Simulation Settings (optional, for time-of-day shadows)
@@ -206,6 +234,7 @@ export const useStore = create(
                         origin: true,
                         roadModule: true, // Road module layer
                         maxHeightPlane: true, // Max height plane layer
+                        roof: true, // Roof layer
                     },
                     exportRequested: false,
                     exportFormat: 'obj', // 'obj' | 'glb' | 'dae' | 'dxf' | 'png' | 'jpg' | 'svg'
@@ -268,6 +297,17 @@ export const useStore = create(
                                 lineWidth: 2,
                                 lineDashed: true,
                             },
+                            roofFaces: {
+                                color: '#B8A088',
+                                opacity: 0.85,
+                                transparent: true,
+                            },
+                            roofEdges: {
+                                color: '#000000',
+                                width: 1.5,
+                                visible: true,
+                                opacity: 1.0,
+                            },
                         },
                         proposed: {
                             lotLines: {
@@ -322,6 +362,17 @@ export const useStore = create(
                                 lineColor: '#FF0000',
                                 lineWidth: 2,
                                 lineDashed: true,
+                            },
+                            roofFaces: {
+                                color: '#C4B8A8',
+                                opacity: 0.85,
+                                transparent: true,
+                            },
+                            roofEdges: {
+                                color: '#000000',
+                                width: 1.5,
+                                visible: true,
+                                opacity: 1.0,
                             },
                         },
                         // Shared settings
@@ -614,6 +665,189 @@ export const useStore = create(
                         }
                     };
                 }),
+
+                // ============================================
+                // Building Polygon Editing Actions
+                // ============================================
+
+                // Select/deselect building (shows/hides handles)
+                selectBuilding: (model, selected) => set((state) => ({
+                    [model]: { ...state[model], selectedBuilding: selected }
+                })),
+
+                // Deselect all buildings (click-outside)
+                deselectAllBuildings: () => set((state) => ({
+                    existing: { ...state.existing, selectedBuilding: false },
+                    proposed: { ...state.proposed, selectedBuilding: false },
+                })),
+
+                // Enable building polygon mode - converts rect to vertices centered on building position
+                enableBuildingPolygonMode: (model) => set((state) => {
+                    const params = state[model];
+                    const bx = params.buildingX;
+                    const by = params.buildingY;
+                    const w2 = params.buildingWidth / 2;
+                    const d2 = params.buildingDepth / 2;
+                    const vertices = [
+                        { id: generateVertexId(), x: bx - w2, y: by - d2 }, // BL
+                        { id: generateVertexId(), x: bx + w2, y: by - d2 }, // BR
+                        { id: generateVertexId(), x: bx + w2, y: by + d2 }, // TR
+                        { id: generateVertexId(), x: bx - w2, y: by + d2 }, // TL
+                    ];
+                    return {
+                        [model]: {
+                            ...state[model],
+                            buildingGeometry: { mode: 'polygon', vertices },
+                        }
+                    };
+                }),
+
+                // Update building vertex with perpendicular constraints + grid snap
+                updateBuildingVertex: (model, vertexIndex, newX, newY) => set((state) => {
+                    const geometry = state[model].buildingGeometry;
+                    if (!geometry || !geometry.vertices) return state;
+                    const snappedX = snapToGrid(newX);
+                    const snappedY = snapToGrid(newY);
+                    const newVertices = applyPerpendicularConstraint(geometry.vertices, vertexIndex, snappedX, snappedY);
+                    const bounds = verticesToBoundingRect(newVertices);
+                    return {
+                        [model]: {
+                            ...state[model],
+                            buildingWidth: bounds.width,
+                            buildingDepth: bounds.depth,
+                            buildingX: bounds.centerX,
+                            buildingY: bounds.centerY,
+                            buildingGeometry: { ...geometry, vertices: newVertices },
+                        }
+                    };
+                }),
+
+                // Split building edge - add vertex at midpoint
+                splitBuildingEdge: (model, edgeIndex) => set((state) => {
+                    const geometry = state[model].buildingGeometry;
+                    if (!geometry || !geometry.vertices) return state;
+                    const vertices = geometry.vertices;
+                    const n = vertices.length;
+                    const v1 = vertices[edgeIndex];
+                    const v2 = vertices[(edgeIndex + 1) % n];
+                    const newVertex = {
+                        id: generateVertexId(),
+                        x: snapToGrid((v1.x + v2.x) / 2),
+                        y: snapToGrid((v1.y + v2.y) / 2),
+                    };
+                    const newVertices = [
+                        ...vertices.slice(0, edgeIndex + 1),
+                        newVertex,
+                        ...vertices.slice(edgeIndex + 1)
+                    ];
+                    return {
+                        [model]: {
+                            ...state[model],
+                            buildingGeometry: { ...geometry, vertices: newVertices },
+                        }
+                    };
+                }),
+
+                // Extrude building edge perpendicular (push/pull)
+                extrudeBuildingEdge: (model, edgeIndex, distance) => set((state) => {
+                    const geometry = state[model].buildingGeometry;
+                    if (!geometry || !geometry.vertices) return state;
+                    const vertices = geometry.vertices;
+                    const n = vertices.length;
+                    const v1Index = edgeIndex;
+                    const v2Index = (edgeIndex + 1) % n;
+                    const v1 = vertices[v1Index];
+                    const v2 = vertices[v2Index];
+                    const perp = getEdgePerpendicular(v1, v2);
+                    const snappedDistance = snapToGrid(distance);
+                    if (Math.abs(snappedDistance) < 0.5) return state;
+                    const newVertices = vertices.map((v, i) => {
+                        if (i === v1Index || i === v2Index) {
+                            return {
+                                ...v,
+                                x: snapToGrid(v.x + perp.x * snappedDistance),
+                                y: snapToGrid(v.y + perp.y * snappedDistance),
+                            };
+                        }
+                        return v;
+                    });
+                    const bounds = verticesToBoundingRect(newVertices);
+                    return {
+                        [model]: {
+                            ...state[model],
+                            buildingWidth: bounds.width,
+                            buildingDepth: bounds.depth,
+                            buildingX: bounds.centerX,
+                            buildingY: bounds.centerY,
+                            buildingGeometry: { ...geometry, vertices: newVertices },
+                        }
+                    };
+                }),
+
+                // Delete building vertex (minimum 4 vertices required)
+                deleteBuildingVertex: (model, vertexIndex) => set((state) => {
+                    const geometry = state[model].buildingGeometry;
+                    if (!geometry || !geometry.vertices || geometry.vertices.length <= 4) return state;
+                    const newVertices = geometry.vertices.filter((_, i) => i !== vertexIndex);
+                    const bounds = verticesToBoundingRect(newVertices);
+                    return {
+                        [model]: {
+                            ...state[model],
+                            buildingWidth: bounds.width,
+                            buildingDepth: bounds.depth,
+                            buildingX: bounds.centerX,
+                            buildingY: bounds.centerY,
+                            buildingGeometry: { ...geometry, vertices: newVertices },
+                        }
+                    };
+                }),
+
+                // Reset building to rectangle mode
+                resetBuildingToRectangle: (model) => set((state) => {
+                    const geometry = state[model].buildingGeometry;
+                    if (!geometry || geometry.mode !== 'polygon') return state;
+                    const bounds = geometry.vertices ? verticesToBoundingRect(geometry.vertices) : {
+                        width: state[model].buildingWidth,
+                        depth: state[model].buildingDepth,
+                        centerX: state[model].buildingX,
+                        centerY: state[model].buildingY,
+                    };
+                    return {
+                        [model]: {
+                            ...state[model],
+                            buildingWidth: bounds.width,
+                            buildingDepth: bounds.depth,
+                            buildingX: bounds.centerX,
+                            buildingY: bounds.centerY,
+                            buildingGeometry: { mode: 'rectangle', vertices: null },
+                        }
+                    };
+                }),
+
+                // Adjust building total height by modifying upperFloorHeight
+                setBuildingTotalHeight: (model, newTotalHeight) => set((state) => {
+                    const params = state[model];
+                    const stories = params.buildingStories || 1;
+                    const firstFloor = params.firstFloorHeight;
+                    if (stories === 1) {
+                        return { [model]: { ...state[model], firstFloorHeight: Math.max(1, newTotalHeight) } };
+                    }
+                    const newUpperFloor = Math.max(1, (newTotalHeight - firstFloor) / (stories - 1));
+                    return {
+                        [model]: { ...state[model], upperFloorHeight: newUpperFloor }
+                    };
+                }),
+
+                // ============================================
+                // Roof Actions
+                // ============================================
+
+                setRoofSetting: (model, key, value) => set((state) => ({
+                    [model]: {
+                        ...state[model],
+                        roof: { ...state[model].roof, [key]: value }
+                    }
+                })),
 
                 toggleViewMode: () => set((state) => ({ viewSettings: { ...state.viewSettings, mode: state.viewSettings.mode === 'split' ? 'overlay' : 'split' } })),
                 setCameraView: (view) => set((state) => ({
@@ -1097,7 +1331,7 @@ export const useStore = create(
             }),
             {
                 name: 'zoning-app-storage',
-                version: 13, // Updated to 13 for custom dimension labels
+                version: 14, // Updated to 14 for building editor + roof layer
                 migrate: (persistedState, version) => {
                     // Split dimensionsLot into dimensionsLotWidth and dimensionsLotDepth
                     if (persistedState.viewSettings && persistedState.viewSettings.layers && persistedState.viewSettings.layers.dimensionsLot !== undefined) {
@@ -1332,9 +1566,51 @@ export const useStore = create(
                         }
                     }
 
+                    if (version < 14) {
+                        // Migration to 14 - Building polygon editing + roof layer
+                        const migrateBuildingAndRoof = (condition) => {
+                            if (condition) {
+                                if (!condition.buildingGeometry) {
+                                    condition.buildingGeometry = { mode: 'rectangle', vertices: null };
+                                }
+                                if (condition.selectedBuilding === undefined) {
+                                    condition.selectedBuilding = false;
+                                }
+                                if (!condition.roof) {
+                                    condition.roof = {
+                                        type: 'flat',
+                                        overrideHeight: false,
+                                        ridgeHeight: null,
+                                        ridgeDirection: 'x',
+                                        shedDirection: '+y',
+                                    };
+                                }
+                            }
+                        };
+                        migrateBuildingAndRoof(persistedState.existing);
+                        migrateBuildingAndRoof(persistedState.proposed);
+
+                        // Add roof layer toggle
+                        if (persistedState.viewSettings?.layers && persistedState.viewSettings.layers.roof === undefined) {
+                            persistedState.viewSettings.layers.roof = true;
+                        }
+
+                        // Add roof style defaults
+                        const defaultRoofFaces = (color) => ({ color, opacity: 0.85, transparent: true });
+                        const defaultRoofEdges = { color: '#000000', width: 1.5, visible: true, opacity: 1.0 };
+                        if (persistedState.viewSettings?.styleSettings?.existing && !persistedState.viewSettings.styleSettings.existing.roofFaces) {
+                            persistedState.viewSettings.styleSettings.existing.roofFaces = defaultRoofFaces('#B8A088');
+                            persistedState.viewSettings.styleSettings.existing.roofEdges = defaultRoofEdges;
+                        }
+                        if (persistedState.viewSettings?.styleSettings?.proposed && !persistedState.viewSettings.styleSettings.proposed.roofFaces) {
+                            persistedState.viewSettings.styleSettings.proposed.roofFaces = defaultRoofFaces('#C4B8A8');
+                            persistedState.viewSettings.styleSettings.proposed.roofEdges = defaultRoofEdges;
+                        }
+                    }
+
                     return {
                         ...persistedState,
-                        version: 13 // Update verified version
+                        version: 14 // Update verified version
                     };
                 },
                 partialize: (state) => ({

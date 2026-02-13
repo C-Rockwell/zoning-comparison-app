@@ -1,12 +1,11 @@
 import { useStore } from '../store/useStore'
-import { useMemo, useState } from 'react'
 import { Line, Edges } from '@react-three/drei'
-import { useThree } from '@react-three/fiber'
 import { Select } from '@react-three/postprocessing'
 import * as THREE from 'three'
 import Dimension from './Dimension'
 import LotEditor from './LotEditor'
 import RoadModule from './RoadModule'
+import BuildingEditor from './BuildingEditor'
 
 // Helper function to resolve dimension label based on custom label settings
 const resolveDimensionLabel = (value, dimensionKey, dimensionSettings) => {
@@ -17,200 +16,6 @@ const resolveDimensionLabel = (value, dimensionKey, dimensionSettings) => {
         return labelConfig.text || ''
     }
     return `${value}'`
-}
-
-const Building = ({
-    width,
-    depth,
-    x,
-    y,
-    styles,
-    renderSettings,
-    scaleFactor = 1,
-    onPositionChange,
-    offsetGroupX = 0,
-    showHeightDimensions = false,
-    dimensionSettings = {},
-    heightDimensionKey = 'buildingHeight',
-    // New props for stories
-    stories = 1,
-    firstFloorHeight = 12,
-    upperFloorHeight = 10,
-    // Max height plane props
-    maxHeight = 30,
-    showMaxHeightPlane = false,
-    maxHeightPlaneStyle = {},
-    // Line scale for export WYSIWYG
-    lineScale = 1,
-}) => {
-    const { faces, edges } = styles
-    const [hovered, setHovered] = useState(false)
-    const [dragging, setDragging] = useState(false)
-    const { camera, gl, controls } = useThree()
-    const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), [])
-    const planeIntersectPoint = new THREE.Vector3()
-
-    // Calculate total building height from stories
-    const totalBuildingHeight = useMemo(() => {
-        if (stories <= 0) return 0
-        if (stories === 1) return firstFloorHeight
-        return firstFloorHeight + (stories - 1) * upperFloorHeight
-    }, [stories, firstFloorHeight, upperFloorHeight])
-
-    // Generate floor data for rendering
-    const floors = useMemo(() => {
-        const floorData = []
-        let currentZ = 0
-        for (let i = 0; i < stories; i++) {
-            const floorHeight = i === 0 ? firstFloorHeight : upperFloorHeight
-            floorData.push({
-                index: i,
-                height: floorHeight,
-                zBottom: currentZ,
-                zCenter: currentZ + floorHeight / 2,
-            })
-            currentZ += floorHeight
-        }
-        return floorData
-    }, [stories, firstFloorHeight, upperFloorHeight])
-
-    const handlePointerDown = (e) => {
-        e.stopPropagation()
-        // Disable orbit controls while dragging
-        if (controls) controls.enabled = false
-        setDragging(true)
-        e.target.setPointerCapture(e.pointerId)
-    }
-
-    const handlePointerUp = (e) => {
-        e.stopPropagation()
-        setDragging(false)
-        if (controls) controls.enabled = true
-        e.target.releasePointerCapture(e.pointerId)
-    }
-
-    const handlePointerMove = (e) => {
-        if (!dragging) return
-        e.stopPropagation()
-
-        // Raycast to Z=0 plane. intersectPlane returns null if no intersection.
-        // We pass the target/result vector as second argument.
-        if (!e.ray.intersectPlane(plane, planeIntersectPoint)) return
-
-        // Convert world to local (subtract group offset)
-        const localX = planeIntersectPoint.x - offsetGroupX
-        const localY = planeIntersectPoint.y
-
-        // Snap to 1x1 grid
-        const snappedX = Math.round(localX)
-        const snappedY = Math.round(localY)
-
-        // Only update if value changed to prevent infinite re-render loops
-        if (onPositionChange && (snappedX !== x || snappedY !== y)) {
-            onPositionChange(snappedX, snappedY)
-        }
-    }
-
-    // Dimension Points (use total building height)
-    const dimStart = [x + width / 2, y + depth / 2, 0]
-    const dimEnd = [x + width / 2, y + depth / 2, totalBuildingHeight]
-
-    return (
-        <group>
-            {/* Render each floor as a separate box */}
-            {floors.map((floor, index) => (
-                <Select key={floor.index} enabled={hovered && index === 0}>
-                    <mesh
-                        position={[x, y, floor.zCenter]}
-                        castShadow
-                        receiveShadow
-                        onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
-                        onPointerOut={() => setHovered(false)}
-                        onPointerDown={index === 0 ? handlePointerDown : undefined}
-                        onPointerUp={index === 0 ? handlePointerUp : undefined}
-                        onPointerMove={index === 0 ? handlePointerMove : undefined}
-                    >
-                        <boxGeometry args={[width, depth, floor.height]} />
-                        <meshStandardMaterial
-                            color={dragging ? '#ffff00' : faces.color}
-                            transparent={true}
-                            opacity={dragging ? 0.8 : faces.opacity}
-                            side={THREE.DoubleSide}
-                            depthWrite={faces.opacity >= 0.95}
-                            roughness={0.7}
-                            metalness={0.1}
-                        />
-                        {edges.visible && (
-                            <Edges
-                                linewidth={edges.width * scaleFactor * lineScale}
-                                threshold={15}
-                                color={edges.color}
-                                transparent
-                                opacity={edges.opacity}
-                            />
-                        )}
-                    </mesh>
-                </Select>
-            ))}
-
-            {/* Max Height Plane */}
-            {showMaxHeightPlane && maxHeight > 0 && (
-                <group position={[x, y, maxHeight]}>
-                    {/* Semi-transparent plane */}
-                    <mesh>
-                        <planeGeometry args={[width, depth]} />
-                        <meshStandardMaterial
-                            color={maxHeightPlaneStyle.color || '#FF6B6B'}
-                            transparent={true}
-                            opacity={maxHeightPlaneStyle.opacity || 0.3}
-                            side={THREE.DoubleSide}
-                            depthWrite={false}
-                        />
-                    </mesh>
-                    {/* Border lines */}
-                    <Line
-                        points={[
-                            [-width / 2, -depth / 2, 0],
-                            [width / 2, -depth / 2, 0],
-                            [width / 2, depth / 2, 0],
-                            [-width / 2, depth / 2, 0],
-                            [-width / 2, -depth / 2, 0],
-                        ]}
-                        color={maxHeightPlaneStyle.lineColor || '#FF0000'}
-                        lineWidth={(maxHeightPlaneStyle.lineWidth || 2) * lineScale}
-                        dashed={maxHeightPlaneStyle.lineDashed || false}
-                        dashSize={1}
-                        gapSize={0.5}
-                    />
-                </group>
-            )}
-
-            {/* Height Dimension (shows total building height) */}
-            <Dimension
-                start={dimStart}
-                end={dimEnd}
-                label={resolveDimensionLabel(totalBuildingHeight, heightDimensionKey, dimensionSettings)}
-                offset={10}
-                color="black"
-                visible={showHeightDimensions}
-                settings={dimensionSettings}
-                lineScale={lineScale}
-            />
-
-            {/* Capture Plane for smooth dragging outside the box */}
-            {dragging && (
-                <mesh
-                    visible={false}
-                    position={[0, 0, 0]}
-                    rotation={[0, 0, 0]}
-                    onPointerMove={handlePointerMove}
-                    onPointerUp={handlePointerUp}
-                >
-                    <planeGeometry args={[1000, 1000]} />
-                </mesh>
-            )}
-        </group>
-    )
 }
 
 const SingleLine = ({ start, end, style, side, lineScale = 1 }) => {
@@ -416,10 +221,18 @@ const SceneContent = () => {
     const roadModuleStyles = useStore((state) => state.roadModuleStyles)
     const exportLineScale = useStore((state) => state.viewSettings.exportLineScale) || 1
 
-    // Polygon editing actions
+    // Polygon editing actions (lots)
     const updateVertex = useStore((state) => state.updateVertex)
     const splitEdge = useStore((state) => state.splitEdge)
     const extrudeEdge = useStore((state) => state.extrudeEdge)
+
+    // Building editing actions
+    const selectBuilding = useStore((state) => state.selectBuilding)
+    const enableBuildingPolygonMode = useStore((state) => state.enableBuildingPolygonMode)
+    const updateBuildingVertex = useStore((state) => state.updateBuildingVertex)
+    const splitBuildingEdge = useStore((state) => state.splitBuildingEdge)
+    const extrudeBuildingEdge = useStore((state) => state.extrudeBuildingEdge)
+    const setBuildingTotalHeight = useStore((state) => state.setBuildingTotalHeight)
 
     // Check if lots are in polygon mode
     const existingIsPolygon = existing.lotGeometry?.mode === 'polygon' && existing.lotGeometry?.vertices
@@ -505,14 +318,17 @@ const SceneContent = () => {
                     />
                 )}
                 {layers.buildings && (
-                    <Building
+                    <BuildingEditor
+                        model="existing"
                         width={existing.buildingWidth}
                         depth={existing.buildingDepth}
                         x={existing.buildingX}
                         y={existing.buildingY}
+                        buildingGeometry={existing.buildingGeometry}
+                        selected={existing.selectedBuilding}
                         styles={{ faces: existingStyles.buildingFaces, edges: existingStyles.buildingEdges }}
-                        renderSettings={renderSettings}
                         scaleFactor={scaleFactor}
+                        onSelect={() => selectBuilding('existing', true)}
                         onPositionChange={(x, y) => setBuildingPosition('existing', x, y)}
                         offsetGroupX={-offset}
                         stories={existing.buildingStories || 1}
@@ -521,9 +337,17 @@ const SceneContent = () => {
                         maxHeight={existing.maxHeight || 30}
                         showMaxHeightPlane={layers.maxHeightPlane}
                         maxHeightPlaneStyle={existingStyles.maxHeightPlane}
+                        roof={existing.roof}
+                        roofStyles={{ roofFaces: existingStyles.roofFaces, roofEdges: existingStyles.roofEdges }}
+                        showRoof={layers.roof}
                         showHeightDimensions={layers.dimensionsHeight}
                         dimensionSettings={styleSettings.dimensionSettings}
                         lineScale={exportLineScale}
+                        enableBuildingPolygonMode={enableBuildingPolygonMode}
+                        updateBuildingVertex={updateBuildingVertex}
+                        splitBuildingEdge={splitBuildingEdge}
+                        extrudeBuildingEdge={extrudeBuildingEdge}
+                        setBuildingTotalHeight={setBuildingTotalHeight}
                     />
                 )}
                 {/* Road Module for Existing */}
@@ -592,14 +416,17 @@ const SceneContent = () => {
                     />
                 )}
                 {layers.buildings && (
-                    <Building
+                    <BuildingEditor
+                        model="proposed"
                         width={proposed.buildingWidth}
                         depth={proposed.buildingDepth}
                         x={proposed.buildingX}
                         y={proposed.buildingY}
+                        buildingGeometry={proposed.buildingGeometry}
+                        selected={proposed.selectedBuilding}
                         styles={{ faces: proposedStyles.buildingFaces, edges: proposedStyles.buildingEdges }}
-                        renderSettings={renderSettings}
                         scaleFactor={scaleFactor}
+                        onSelect={() => selectBuilding('proposed', true)}
                         onPositionChange={(x, y) => setBuildingPosition('proposed', x, y)}
                         offsetGroupX={offset}
                         stories={proposed.buildingStories || 1}
@@ -608,9 +435,17 @@ const SceneContent = () => {
                         maxHeight={proposed.maxHeight || 30}
                         showMaxHeightPlane={layers.maxHeightPlane}
                         maxHeightPlaneStyle={proposedStyles.maxHeightPlane}
+                        roof={proposed.roof}
+                        roofStyles={{ roofFaces: proposedStyles.roofFaces, roofEdges: proposedStyles.roofEdges }}
+                        showRoof={layers.roof}
                         showHeightDimensions={layers.dimensionsHeight}
                         dimensionSettings={styleSettings.dimensionSettings}
                         lineScale={exportLineScale}
+                        enableBuildingPolygonMode={enableBuildingPolygonMode}
+                        updateBuildingVertex={updateBuildingVertex}
+                        splitBuildingEdge={splitBuildingEdge}
+                        extrudeBuildingEdge={extrudeBuildingEdge}
+                        setBuildingTotalHeight={setBuildingTotalHeight}
                     />
                 )}
                 {/* Road Module for Proposed */}

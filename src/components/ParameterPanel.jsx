@@ -1,5 +1,6 @@
 import { useStore, calculatePolygonArea } from '../store/useStore'
 import { useState } from 'react'
+import { calculateRoofPitch } from '../utils/roofGeometry'
 import StateManager from './StateManager'
 
 const ParameterPanel = () => {
@@ -21,9 +22,15 @@ const ParameterPanel = () => {
     const setPolygonEditing = useStore((state) => state.setPolygonEditing)
     const commitPolygonChanges = useStore((state) => state.commitPolygonChanges)
 
+    // Building polygon + roof actions
+    const setRoofSetting = useStore((state) => state.setRoofSetting)
+    const resetBuildingToRectangle = useStore((state) => state.resetBuildingToRectangle)
+
     // Check polygon modes
     const existingIsPolygon = existing.lotGeometry?.mode === 'polygon'
     const proposedIsPolygon = proposed.lotGeometry?.mode === 'polygon'
+    const existingBldgIsPolygon = existing.buildingGeometry?.mode === 'polygon'
+    const proposedBldgIsPolygon = proposed.buildingGeometry?.mode === 'polygon'
     const existingIsEditing = existingIsPolygon && existing.lotGeometry?.editing
     const proposedIsEditing = proposedIsPolygon && proposed.lotGeometry?.editing
 
@@ -198,6 +205,159 @@ const ParameterPanel = () => {
                             </span>
                         )}
                     </div>
+                </div>
+            </div>
+
+            {/* Building & Roof Section */}
+            <div className="mb-6 bg-gray-700/50 p-3 rounded">
+                <h3 className="text-sm font-bold mb-2 uppercase tracking-wide text-gray-400">Building & Roof</h3>
+                <div className="grid grid-cols-2 gap-3">
+                    {['existing', 'proposed'].map((model) => {
+                        const condition = model === 'existing' ? existing : proposed
+                        const roof = condition.roof || {}
+                        const isBldgPolygon = model === 'existing' ? existingBldgIsPolygon : proposedBldgIsPolygon
+
+                        // Calculate roof analytics
+                        const totalBuildingHeight = condition.firstFloorHeight +
+                            (condition.upperFloorHeight * Math.max(0, (condition.buildingStories || 1) - 1))
+                        const ridgeZ = roof.overrideHeight && roof.ridgeHeight != null
+                            ? roof.ridgeHeight
+                            : condition.maxHeight
+                        const baseZ = totalBuildingHeight
+                        const halfSpan = Math.min(condition.buildingWidth, condition.buildingDepth) / 2
+                        const roofActive = roof.type !== 'flat' && ridgeZ > baseZ
+                        const pitch = roofActive ? calculateRoofPitch(baseZ, ridgeZ, halfSpan) : null
+
+                        return (
+                            <div key={model} className="space-y-2">
+                                <span className="text-xs text-gray-400 font-medium capitalize">{model}</span>
+
+                                {/* Building Shape Status */}
+                                <div className="text-[10px] text-gray-500">
+                                    Shape: {isBldgPolygon ? (
+                                        <span className="text-green-400">
+                                            Polygon ({condition.buildingGeometry?.vertices?.length || 0}v)
+                                        </span>
+                                    ) : (
+                                        <span className="text-gray-400">Rectangle</span>
+                                    )}
+                                </div>
+                                {isBldgPolygon && (
+                                    <button
+                                        onClick={() => resetBuildingToRectangle(model)}
+                                        className="w-full px-2 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded transition-colors"
+                                    >
+                                        Reset to Rect
+                                    </button>
+                                )}
+
+                                {/* Roof Type */}
+                                <div>
+                                    <label className="text-[10px] text-gray-500 block mb-1">Roof Type</label>
+                                    <select
+                                        value={roof.type || 'flat'}
+                                        onChange={(e) => setRoofSetting(model, 'type', e.target.value)}
+                                        className="w-full bg-gray-700 text-white text-xs p-1.5 rounded border border-gray-600 focus:ring-1 focus:ring-blue-500 outline-none"
+                                    >
+                                        <option value="flat">Flat</option>
+                                        <option value="shed">Shed</option>
+                                        <option value="gabled">Gabled</option>
+                                        <option value="hipped">Hipped</option>
+                                    </select>
+                                </div>
+
+                                {/* Ridge Direction (gabled/hipped) */}
+                                {(roof.type === 'gabled' || roof.type === 'hipped') && (
+                                    <div>
+                                        <label className="text-[10px] text-gray-500 block mb-1">Ridge Direction</label>
+                                        <div className="flex gap-1">
+                                            {['x', 'y'].map((dir) => (
+                                                <button
+                                                    key={dir}
+                                                    onClick={() => setRoofSetting(model, 'ridgeDirection', dir)}
+                                                    className={`flex-1 text-[10px] px-1 py-1 rounded border transition-colors ${
+                                                        (roof.ridgeDirection || 'x') === dir
+                                                            ? 'bg-blue-900 border-blue-500 text-blue-100'
+                                                            : 'bg-transparent border-gray-600 text-gray-400 hover:border-gray-500'
+                                                    }`}
+                                                >
+                                                    {dir.toUpperCase()}-Axis
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Shed Direction */}
+                                {roof.type === 'shed' && (
+                                    <div>
+                                        <label className="text-[10px] text-gray-500 block mb-1">Slope Direction</label>
+                                        <select
+                                            value={roof.shedDirection || '+y'}
+                                            onChange={(e) => setRoofSetting(model, 'shedDirection', e.target.value)}
+                                            className="w-full bg-gray-700 text-white text-xs p-1.5 rounded border border-gray-600 focus:ring-1 focus:ring-blue-500 outline-none"
+                                        >
+                                            <option value="+x">+X (Left to Right)</option>
+                                            <option value="-x">-X (Right to Left)</option>
+                                            <option value="+y">+Y (Front to Back)</option>
+                                            <option value="-y">-Y (Back to Front)</option>
+                                        </select>
+                                    </div>
+                                )}
+
+                                {/* Override Height */}
+                                {roof.type !== 'flat' && (
+                                    <div>
+                                        <label className="flex items-center gap-1.5 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={roof.overrideHeight || false}
+                                                onChange={(e) => setRoofSetting(model, 'overrideHeight', e.target.checked)}
+                                                className="form-checkbox h-3 w-3 text-blue-600 rounded focus:ring-blue-500 bg-gray-700 border-gray-500"
+                                            />
+                                            <span className="text-[10px] text-gray-400">Override Height</span>
+                                        </label>
+                                        {roof.overrideHeight && (
+                                            <div className="flex items-center gap-1 mt-1">
+                                                <input
+                                                    type="number"
+                                                    value={roof.ridgeHeight ?? Math.round(condition.maxHeight)}
+                                                    onChange={(e) => setRoofSetting(model, 'ridgeHeight', parseFloat(e.target.value) || 0)}
+                                                    className="w-full bg-gray-700 p-1 rounded text-right text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                                    min={Math.round(totalBuildingHeight)}
+                                                    step={1}
+                                                />
+                                                <span className="text-[10px] text-gray-500">ft</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Roof Analytics */}
+                                {roofActive && pitch && (
+                                    <div className="bg-gray-800/50 p-1.5 rounded space-y-0.5">
+                                        <div className="text-[9px] text-gray-500 uppercase tracking-wider mb-1">Roof Analytics</div>
+                                        <div className="flex justify-between text-[10px]">
+                                            <span className="text-gray-500">Pitch</span>
+                                            <span className="text-white">{pitch.angleDeg.toFixed(1)}&deg;</span>
+                                        </div>
+                                        <div className="flex justify-between text-[10px]">
+                                            <span className="text-gray-500">Ratio</span>
+                                            <span className="text-white">{pitch.pitchRatio}</span>
+                                        </div>
+                                        <div className="flex justify-between text-[10px]">
+                                            <span className="text-gray-500">Rise</span>
+                                            <span className="text-white">{pitch.rise.toFixed(1)}'</span>
+                                        </div>
+                                        <div className="flex justify-between text-[10px]">
+                                            <span className="text-gray-500">Ridge</span>
+                                            <span className="text-white">{ridgeZ.toFixed(1)}'</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )
+                    })}
                 </div>
             </div>
 
