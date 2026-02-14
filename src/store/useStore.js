@@ -422,10 +422,31 @@ export const useStore = create(
                 },
                 updateExisting: (key, value) => set((state) => ({ existing: { ...state.existing, [key]: value } })),
                 updateProposed: (key, value) => set((state) => ({ proposed: { ...state.proposed, [key]: value } })),
-                // New Action: Set Building Position
-                setBuildingPosition: (model, x, y) => set((state) => ({
-                    [model]: { ...state[model], buildingX: x, buildingY: y }
-                })),
+                // New Action: Set Building Position (translates polygon vertices if in polygon mode)
+                setBuildingPosition: (model, newX, newY) => set((state) => {
+                    const current = state[model]
+                    const dx = newX - current.buildingX
+                    const dy = newY - current.buildingY
+                    const geometry = current.buildingGeometry
+
+                    if (geometry?.mode === 'polygon' && geometry.vertices?.length >= 3) {
+                        const newVertices = geometry.vertices.map(v => ({
+                            ...v,
+                            x: v.x + dx,
+                            y: v.y + dy,
+                        }))
+                        return {
+                            [model]: {
+                                ...current,
+                                buildingX: newX,
+                                buildingY: newY,
+                                buildingGeometry: { ...geometry, vertices: newVertices },
+                            }
+                        }
+                    }
+
+                    return { [model]: { ...current, buildingX: newX, buildingY: newY } }
+                }),
 
                 // ============================================
                 // Polygon Editing Actions

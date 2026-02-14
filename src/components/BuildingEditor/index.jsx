@@ -109,6 +109,20 @@ const BuildingEditor = ({
     // Active vertices (polygon or generated from rect)
     const activeVertices = isPolygon ? vertices : rectVertices
 
+    // Compute actual bounds from polygon vertices (or fall back to rect params)
+    const bounds = useMemo(() => {
+        if (isPolygon && vertices && vertices.length >= 3) {
+            const xs = vertices.map(v => v.x)
+            const ys = vertices.map(v => v.y)
+            const minX = Math.min(...xs)
+            const maxX = Math.max(...xs)
+            const minY = Math.min(...ys)
+            const maxY = Math.max(...ys)
+            return { cx: (minX + maxX) / 2, cy: (minY + maxY) / 2, w: maxX - minX, d: maxY - minY }
+        }
+        return { cx: x, cy: y, w: width, d: depth }
+    }, [isPolygon, vertices, x, y, width, depth])
+
     // Compute edges for dimension display
     const footprintEdges = useMemo(() => {
         if (!activeVertices || activeVertices.length < 3) return []
@@ -196,12 +210,12 @@ const BuildingEditor = ({
         }
     }, [model, setBuildingTotalHeight])
 
-    // Dimension start/end for height
-    const dimStart = [x + width / 2, y + depth / 2, 0]
-    const dimEnd = [x + width / 2, y + depth / 2, totalBuildingHeight]
+    // Dimension start/end for height (use polygon-aware bounds)
+    const dimStart = [bounds.cx + bounds.w / 2, bounds.cy + bounds.d / 2, 0]
+    const dimEnd = [bounds.cx + bounds.w / 2, bounds.cy + bounds.d / 2, totalBuildingHeight]
 
-    // Center position for height handle
-    const heightHandlePos = [x, y, totalBuildingHeight + 1.5]
+    // Center position for height handle (use polygon-aware bounds)
+    const heightHandlePos = [bounds.cx, bounds.cy, totalBuildingHeight + 1.5]
 
     // Vertices to use for roof (generate from rect if needed)
     const roofVertices = useMemo(() => {
@@ -294,9 +308,9 @@ const BuildingEditor = ({
             {/* ============================================ */}
 
             {showMaxHeightPlane && maxHeight > 0 && (
-                <group position={[x, y, maxHeight]}>
+                <group position={[bounds.cx, bounds.cy, maxHeight]}>
                     <mesh>
-                        <planeGeometry args={[width, depth]} />
+                        <planeGeometry args={[bounds.w, bounds.d]} />
                         <meshStandardMaterial
                             color={maxHeightPlaneStyle.color || '#FF6B6B'}
                             transparent={true}
@@ -307,11 +321,11 @@ const BuildingEditor = ({
                     </mesh>
                     <Line
                         points={[
-                            [-width / 2, -depth / 2, 0],
-                            [width / 2, -depth / 2, 0],
-                            [width / 2, depth / 2, 0],
-                            [-width / 2, depth / 2, 0],
-                            [-width / 2, -depth / 2, 0],
+                            [-bounds.w / 2, -bounds.d / 2, 0],
+                            [bounds.w / 2, -bounds.d / 2, 0],
+                            [bounds.w / 2, bounds.d / 2, 0],
+                            [-bounds.w / 2, bounds.d / 2, 0],
+                            [-bounds.w / 2, -bounds.d / 2, 0],
                         ]}
                         color={maxHeightPlaneStyle.lineColor || '#FF0000'}
                         lineWidth={(maxHeightPlaneStyle.lineWidth || 2) * lineScale}

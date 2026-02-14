@@ -122,60 +122,78 @@ export const generateShedRoof = (vertices, baseZ, ridgeZ, shedDirection) => {
 
 /**
  * Generate GABLED roof geometry
- * Ridge line runs through centroid along ridgeDirection
+ * Ridge line runs through centroid along ridgeDirection.
+ * Adds explicit ridge vertices at ridgeZ and builds slope/gable faces.
  */
 export const generateGabledRoof = (vertices, baseZ, ridgeZ, ridgeDirection) => {
     if (ridgeZ <= baseZ || !vertices || vertices.length < 3) return null
 
     const bounds = getVertexBounds(vertices)
-    const rise = ridgeZ - baseZ
     const n = vertices.length
 
-    // Perpendicular distance from ridge determines height
-    let getPerpDistance, maxPerpDistance
+    // Ridge endpoints at the extremes of the ridge axis, through the centroid
+    let ridgeStart, ridgeEnd, getSide
     if (ridgeDirection === 'x') {
-        // Ridge runs along X axis through center
-        getPerpDistance = (v) => Math.abs(v.y - bounds.centerY)
-        maxPerpDistance = bounds.depth / 2
+        ridgeStart = { x: bounds.minX, y: bounds.centerY }
+        ridgeEnd   = { x: bounds.maxX, y: bounds.centerY }
+        getSide = (v) => v.y < bounds.centerY ? -1 : v.y > bounds.centerY ? 1 : 0
     } else {
-        // Ridge runs along Y axis through center
-        getPerpDistance = (v) => Math.abs(v.x - bounds.centerX)
-        maxPerpDistance = bounds.width / 2
+        ridgeStart = { x: bounds.centerX, y: bounds.minY }
+        ridgeEnd   = { x: bounds.centerX, y: bounds.maxY }
+        getSide = (v) => v.x < bounds.centerX ? -1 : v.x > bounds.centerX ? 1 : 0
     }
-
-    if (maxPerpDistance <= 0) return null
 
     const positions = []
     const indices = []
 
-    // Top face vertices with gable Z (0 to n-1)
-    for (let i = 0; i < n; i++) {
-        const d = getPerpDistance(vertices[i])
-        const z = baseZ + (1 - d / maxPerpDistance) * rise
-        positions.push(vertices[i].x, vertices[i].y, z)
-    }
-
-    // Bottom face vertices (n to 2n-1)
+    // Footprint vertices at baseZ (indices 0 to n-1)
     for (let i = 0; i < n; i++) {
         positions.push(vertices[i].x, vertices[i].y, baseZ)
     }
 
-    // Top face triangles
-    const topTriangles = triangulatePolygon(vertices)
-    for (const [a, b, c] of topTriangles) {
-        indices.push(a, b, c)
-    }
+    // Ridge vertices at ridgeZ
+    const rsi = n      // ridge start index
+    const rei = n + 1  // ridge end index
+    positions.push(ridgeStart.x, ridgeStart.y, ridgeZ)
+    positions.push(ridgeEnd.x, ridgeEnd.y, ridgeZ)
 
-    // Bottom face triangles (reversed winding)
-    for (const [a, b, c] of topTriangles) {
-        indices.push(n + a, n + c, n + b)
-    }
-
-    // Side walls
+    // Build roof faces: each footprint edge connects to the ridge line
     for (let i = 0; i < n; i++) {
         const next = (i + 1) % n
-        indices.push(i, next, n + next)
-        indices.push(i, n + next, n + i)
+        const s1 = getSide(vertices[i])
+        const s2 = getSide(vertices[next])
+
+        if (s1 === s2 || s1 === 0 || s2 === 0) {
+            // Both on same side of ridge → slope face (quad to both ridge points)
+            indices.push(i, next, rei)
+            indices.push(i, rei, rsi)
+        } else {
+            // Different sides → gable end (triangle to nearest ridge endpoint)
+            const midCoord = ridgeDirection === 'x'
+                ? (vertices[i].x + vertices[next].x) / 2
+                : (vertices[i].y + vertices[next].y) / 2
+            const ridgeMid = ridgeDirection === 'x'
+                ? bounds.centerX
+                : bounds.centerY
+            indices.push(i, next, midCoord < ridgeMid ? rsi : rei)
+        }
+    }
+
+    // Bottom face
+    const bi = n + 2
+    for (let i = 0; i < n; i++) {
+        positions.push(vertices[i].x, vertices[i].y, baseZ)
+    }
+    const bottomTriangles = triangulatePolygon(vertices)
+    for (const [a, b, c] of bottomTriangles) {
+        indices.push(bi + a, bi + c, bi + b)
+    }
+
+    // Side walls connecting top edge to bottom edge
+    for (let i = 0; i < n; i++) {
+        const next = (i + 1) % n
+        indices.push(i, next, bi + next)
+        indices.push(i, bi + next, bi + i)
     }
 
     return buildGeometry(positions, indices)
