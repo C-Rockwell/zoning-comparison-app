@@ -5,6 +5,19 @@ import { useLot, useLotStyle, useLotVisibility } from '../hooks/useEntityStore'
 import Dimension from './Dimension'
 import LotEditor from './LotEditor'
 import BuildingEditor from './BuildingEditor'
+import LotAnnotations from './LotAnnotations'
+import { formatDimension } from '../utils/formatUnits'
+
+// Helper: compute total building height from story data
+const computeTotalHeight = (building) => {
+    if (!building) return 0
+    const stories = building.stories || 1
+    const firstFloor = building.firstFloorHeight || 12
+    const upperFloor = building.upperFloorHeight || 10
+    if (stories <= 0) return 0
+    if (stories === 1) return firstFloor
+    return firstFloor + (stories - 1) * upperFloor
+}
 
 // ============================================
 // Helper: resolve dimension label with custom labels
@@ -15,7 +28,7 @@ const resolveDimensionLabel = (value, dimensionKey, dimensionSettings) => {
     if (labelConfig?.mode === 'custom') {
         return labelConfig.text || ''
     }
-    return `${value}'`
+    return formatDimension(value, dimensionSettings?.unitFormat || 'feet')
 }
 
 // ============================================
@@ -187,7 +200,7 @@ const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, showDimensions = fa
 // from the entity system.
 // Props: lotId, offset (x position)
 // ============================================
-const LotEntity = ({ lotId, offset = 0 }) => {
+const LotEntity = ({ lotId, offset = 0, lotIndex = 1 }) => {
     const lot = useLot(lotId)
     const style = useLotStyle(lotId)
     const visibility = useLotVisibility(lotId)
@@ -351,6 +364,41 @@ const LotEntity = ({ lotId, offset = 0 }) => {
                     setBuildingTotalHeight={(_model, newHeight) => setEntityBuildingTotalHeight(lotId, 'accessory', newHeight)}
                 />
             )}
+
+            {/* ============================================ */}
+            {/* Annotation Labels */}
+            {/* ============================================ */}
+            <group position={[-lotWidth / 2, -lotDepth / 2, 0]}>
+                <LotAnnotations
+                    lotId={lotId}
+                    lotWidth={lotWidth}
+                    lotDepth={lotDepth}
+                    setbacks={{
+                        front: setbacks?.principal?.front || 0,
+                        rear: setbacks?.principal?.rear || 0,
+                        left: setbacks?.principal?.sideInterior || 0,
+                        right: setbacks?.principal?.sideInterior || 0,
+                    }}
+                    buildings={{
+                        principal: principal ? {
+                            x: (principal.x || 0) + lotWidth / 2 - principal.width / 2,
+                            y: (principal.y || 0) + lotDepth / 2 - principal.depth / 2,
+                            width: principal.width,
+                            depth: principal.depth,
+                            totalHeight: computeTotalHeight(principal),
+                        } : undefined,
+                        accessory: accessory && accessory.width > 0 ? {
+                            x: (accessory.x || 0) + lotWidth / 2 - accessory.width / 2,
+                            y: (accessory.y || 0) + lotDepth / 2 - accessory.depth / 2,
+                            width: accessory.width,
+                            depth: accessory.depth,
+                            totalHeight: computeTotalHeight(accessory),
+                        } : undefined,
+                    }}
+                    lotIndex={lotIndex}
+                    lineScale={exportLineScale}
+                />
+            </group>
         </group>
     )
 }

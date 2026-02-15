@@ -1,12 +1,51 @@
-import { Text, Line } from '@react-three/drei'
+import { useState, useCallback } from 'react'
+import { Text, Line, Billboard } from '@react-three/drei'
 import * as THREE from 'three'
 
-const Dimension = ({ start, end, label, offset = 0, color = "black", visible = true, flipText = false, settings = {}, lineScale = 1 }) => {
+/**
+ * Compute perpendicular vector for offset based on dimension plane.
+ * @param {number} ux - Normalized direction X
+ * @param {number} uy - Normalized direction Y
+ * @param {number} uz - Normalized direction Z
+ * @param {string} plane - 'XY' | 'XZ' | 'YZ' | 'auto'
+ * @param {number} dx - Raw direction delta X
+ * @param {number} dy - Raw direction delta Y
+ * @param {number} dz - Raw direction delta Z
+ */
+const computePerpendicular = (ux, uy, uz, plane, dx, dy, dz) => {
+    if (plane === 'XZ') {
+        // Elevation/front view — perpendicular in XZ plane
+        return { px: -uz, py: 0, pz: ux }
+    }
+    if (plane === 'YZ') {
+        // Side elevation — perpendicular in YZ plane
+        return { px: 0, py: -uz, pz: uy }
+    }
+    if (plane === 'auto') {
+        // Auto-detect: if Z changes significantly, use XZ or YZ
+        const absDx = Math.abs(dx), absDy = Math.abs(dy), absDz = Math.abs(dz)
+        if (absDz > 0.1 && absDz > absDy && absDx > absDy) {
+            return { px: -uz, py: 0, pz: ux } // XZ
+        }
+        if (absDz > 0.1 && absDz > absDx && absDy > absDx) {
+            return { px: 0, py: -uz, pz: uy } // YZ
+        }
+    }
+    // Default: XY plane (plan view) — current behavior
+    return { px: -uy, py: ux, pz: 0 }
+}
+
+const Dimension = ({
+    start, end, label, offset = 0, color = "black",
+    visible = true, flipText = false, settings = {}, lineScale = 1,
+    // New enhanced props (all optional, backward-compatible)
+    plane = 'XY',                   // 'XY' | 'XZ' | 'YZ' | 'auto'
+    textMode,                       // 'follow-line' | 'billboard' — overrides settings.textMode
+    textBackground,                 // { enabled, color, opacity, padding } — overrides settings.textBackground
+}) => {
     if (!visible) return null
 
-    // Use dampened scale for dimensions - pow(0.15) for closer WYSIWYG match
-    // (e.g., 4x export resolution = ~1.23x dimension scale)
-    // Tested: 0.25 (still too large), 0.35 (too large), 0.45 (too large), 0.5 (too large), 0.55 (too large), 0.65 (too large), 0.85 (too thick)
+    // WYSIWYG dampened scale
     const dampenedScale = Math.pow(lineScale, 0.15)
 
     // Defaults from settings or fallback
@@ -15,33 +54,30 @@ const Dimension = ({ start, end, label, offset = 0, color = "black", visible = t
     const baseLineWidth = settings.lineWidth || 1
     const lineWidth = baseLineWidth * dampenedScale
     const fontSize = settings.fontSize || 2
-    const endMarker = settings.endMarker || 'tick' // 'tick', 'arrow', 'dot'
+    const endMarker = settings.endMarker || 'tick'
+    const resolvedTextMode = textMode || settings.textMode || 'follow-line'
+    const resolvedBackground = textBackground || settings.textBackground || null
 
-    // Calculate direction vector
+    // Direction vector
     const dx = end[0] - start[0]
     const dy = end[1] - start[1]
     const dz = end[2] - start[2]
 
-    // Normalize direction
     const length = Math.sqrt(dx * dx + dy * dy + dz * dz)
-    if (length === 0) return null // Avoid div by zero
+    if (length === 0) return null
 
     const ux = dx / length
     const uy = dy / length
     const uz = dz / length
 
-    // Calculate perpendicular vector for offset (assuming Z is up, work in XY plane mostly)
-    // Rotate 90 degrees in XY: (-y, x)
-    let px = -uy
-    let py = ux
-    let pz = 0
+    // Perpendicular vector based on plane
+    const { px, py, pz } = computePerpendicular(ux, uy, uz, plane, dx, dy, dz)
 
-    // Apply offset magnitude
+    // Apply offset
     const ox = px * offset
     const oy = py * offset
     const oz = pz * offset
 
-    // New start/end points with offset
     const s = [start[0] + ox, start[1] + oy, start[2] + oz]
     const e = [end[0] + ox, end[1] + oy, end[2] + oz]
 
@@ -50,31 +86,92 @@ const Dimension = ({ start, end, label, offset = 0, color = "black", visible = t
     const my = (s[1] + e[1]) / 2
     const mz = (s[2] + e[2]) / 2
 
-    // Tick mark size (perpendicular local to line)
-    // Scale tick size with base lineWidth and dampened scale for export WYSIWYG
+    // Marker sizing
     const markerScale = Math.max(1.5, baseLineWidth * 0.8) * dampenedScale
     const tickSize = 1 * markerScale
     const tx = px * tickSize
     const ty = py * tickSize
+    const tz = pz * tickSize
 
-    // Extension lines (from object to dimension line)
-    const extGap = 0.5 // small gap from object
-
-    // Helper to format points for Line component
     const linePoints = [s, e]
-
-    // Extension Lines (only if offset is significant)
     const showExtensions = Math.abs(offset) > 0.1
 
-    // Calculate rotation for text to align with line
+    // Text rotation (follow-line mode)
     const angle = Math.atan2(dy, dx)
-    // Ensure text is always readable (not upside down)
     const textAngle = (angle > Math.PI / 2 || angle <= -Math.PI / 2) ? angle + Math.PI : angle
 
-    // Marker styling constants
     const arrowLength = 1 * markerScale
     const arrowWidth = 0.4 * markerScale
     const dotSize = 0.3 * markerScale
+
+    // Background box state (for measuring text bounds)
+    const [textBounds, setTextBounds] = useState(null)
+    const handleSync = useCallback((troika) => {
+        if (troika?.geometry) {
+            troika.geometry.computeBoundingBox()
+            const box = troika.geometry.boundingBox
+            if (box) {
+                setTextBounds({
+                    width: box.max.x - box.min.x,
+                    height: box.max.y - box.min.y,
+                    centerX: (box.max.x + box.min.x) / 2,
+                    centerY: (box.max.y + box.min.y) / 2,
+                })
+            }
+        }
+    }, [])
+
+    const bg = resolvedBackground?.enabled ? resolvedBackground : null
+    const bgPadding = bg?.padding ?? 0.3
+
+    // Render the label text (either billboard or follow-line)
+    const renderLabel = () => {
+        if (!label) return null
+
+        const textProps = {
+            fontSize,
+            color: textColor,
+            anchorX: "center",
+            anchorY: flipText ? "top" : "bottom",
+            outlineWidth: fontSize * (settings.outlineWidth ?? 0.1),
+            outlineColor: settings.outlineColor || "white",
+            onSync: bg ? handleSync : undefined,
+        }
+
+        const bgMesh = bg && textBounds ? (
+            <mesh position={[textBounds.centerX, textBounds.centerY, -0.05]}>
+                <planeGeometry args={[
+                    textBounds.width + bgPadding * 2 * fontSize,
+                    textBounds.height + bgPadding * 2 * fontSize,
+                ]} />
+                <meshBasicMaterial
+                    color={bg.color || '#ffffff'}
+                    opacity={bg.opacity ?? 0.85}
+                    transparent
+                    side={THREE.DoubleSide}
+                />
+            </mesh>
+        ) : null
+
+        if (resolvedTextMode === 'billboard') {
+            return (
+                <Billboard position={[mx, my, mz]}>
+                    <group>
+                        {bgMesh}
+                        <Text {...textProps}>{label}</Text>
+                    </group>
+                </Billboard>
+            )
+        }
+
+        // follow-line mode (default, original behavior)
+        return (
+            <group position={[mx, my, mz]} rotation={[0, 0, textAngle]}>
+                {bgMesh}
+                <Text {...textProps}>{label}</Text>
+            </group>
+        )
+    }
 
     return (
         <group>
@@ -84,8 +181,8 @@ const Dimension = ({ start, end, label, offset = 0, color = "black", visible = t
             {/* End Markers */}
             {endMarker === 'tick' && (
                 <>
-                    <Line points={[[s[0] - tx / 2, s[1] - ty / 2, s[2]], [s[0] + tx / 2, s[1] + ty / 2, s[2]]]} color={lineColor} lineWidth={lineWidth} />
-                    <Line points={[[e[0] - tx / 2, e[1] - ty / 2, e[2]], [e[0] + tx / 2, e[1] + ty / 2, e[2]]]} color={lineColor} lineWidth={lineWidth} />
+                    <Line points={[[s[0] - tx / 2, s[1] - ty / 2, s[2] - tz / 2], [s[0] + tx / 2, s[1] + ty / 2, s[2] + tz / 2]]} color={lineColor} lineWidth={lineWidth} />
+                    <Line points={[[e[0] - tx / 2, e[1] - ty / 2, e[2] - tz / 2], [e[0] + tx / 2, e[1] + ty / 2, e[2] + tz / 2]]} color={lineColor} lineWidth={lineWidth} />
                 </>
             )}
             {endMarker === 'dot' && (
@@ -102,14 +199,12 @@ const Dimension = ({ start, end, label, offset = 0, color = "black", visible = t
             )}
             {endMarker === 'arrow' && (
                 <>
-                    {/* Start Arrow - pointing towards start */}
                     <group position={s} rotation={[0, 0, angle + Math.PI]}>
                         <mesh position={[-arrowLength / 2, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
                             <coneGeometry args={[arrowWidth, arrowLength, 8]} />
                             <meshBasicMaterial color={lineColor} />
                         </mesh>
                     </group>
-                    {/* End Arrow - pointing towards end */}
                     <group position={e} rotation={[0, 0, angle]}>
                         <mesh position={[-arrowLength / 2, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
                             <coneGeometry args={[arrowWidth, arrowLength, 8]} />
@@ -127,21 +222,8 @@ const Dimension = ({ start, end, label, offset = 0, color = "black", visible = t
                 </>
             )}
 
-            {label && (
-                <Text
-                    position={[mx, my, mz]}
-                    color={textColor}
-                    fontSize={fontSize}
-                    anchorX="center"
-                    anchorY={flipText ? "top" : "bottom"} // Toggle "top" | "bottom"
-                    rotation={[0, 0, textAngle]} // Align with line
-                    outlineWidth={fontSize * (settings.outlineWidth ?? 0.1)} // Scale outline with font. Default 0.1
-                    outlineColor={settings.outlineColor || "white"}
-                // font={settings.font || 'https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hjp-Ek-_EeA.woff'}
-                >
-                    {label}
-                </Text>
-            )}
+            {/* Label */}
+            {renderLabel()}
         </group>
     )
 }

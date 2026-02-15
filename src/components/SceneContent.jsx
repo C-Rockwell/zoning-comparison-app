@@ -6,6 +6,28 @@ import Dimension from './Dimension'
 import LotEditor from './LotEditor'
 import RoadModule from './RoadModule'
 import BuildingEditor from './BuildingEditor'
+import LotAnnotations from './LotAnnotations'
+import RoadAnnotations from './RoadAnnotations'
+import RoadIntersectionFillet from './RoadIntersectionFillet'
+import { formatDimension } from '../utils/formatUnits'
+
+// Helper: compute total building height from story data
+const computeTotalHeight = (stories, firstFloorHeight, upperFloorHeight) => {
+    const s = stories || 1
+    const ff = firstFloorHeight || 12
+    const uf = upperFloorHeight || 10
+    if (s <= 0) return 0
+    if (s === 1) return ff
+    return ff + (s - 1) * uf
+}
+
+// Direction rotation for annotation labels (matches RoadModule.jsx)
+const DIRECTION_ROTATION = {
+    front: [0, 0, 0],
+    left: [0, 0, -Math.PI / 2],
+    right: [0, 0, Math.PI / 2],
+    rear: [0, 0, Math.PI],
+}
 
 // Helper function to resolve dimension label based on custom label settings
 const resolveDimensionLabel = (value, dimensionKey, dimensionSettings) => {
@@ -15,7 +37,7 @@ const resolveDimensionLabel = (value, dimensionKey, dimensionSettings) => {
         // Return custom text, or empty string if blank (hides label but keeps dimension lines)
         return labelConfig.text || ''
     }
-    return `${value}'`
+    return formatDimension(value, dimensionSettings?.unitFormat || 'feet')
 }
 
 const SingleLine = ({ start, end, style, side, lineScale = 1 }) => {
@@ -444,6 +466,85 @@ const SceneContent = () => {
                         )}
                     </>
                 )}
+                {/* Annotation Labels for Existing */}
+                <group position={[-existing.lotWidth, 0, 0]}>
+                    <LotAnnotations
+                        lotId="existing"
+                        lotWidth={existing.lotWidth}
+                        lotDepth={existing.lotDepth}
+                        setbacks={{
+                            front: existing.setbackFront || 0,
+                            rear: existing.setbackRear || 0,
+                            left: existing.setbackSideLeft || 0,
+                            right: existing.setbackSideRight || 0,
+                        }}
+                        buildings={{
+                            principal: {
+                                x: existing.buildingX + existing.lotWidth / 2 - existing.buildingWidth / 2,
+                                y: existing.buildingY + existing.lotDepth / 2 - existing.buildingDepth / 2,
+                                width: existing.buildingWidth,
+                                depth: existing.buildingDepth,
+                                totalHeight: computeTotalHeight(existing.buildingStories, existing.firstFloorHeight, existing.upperFloorHeight),
+                            },
+                            accessory: existingHasAccessory ? {
+                                x: existing.accessoryX + existing.lotWidth / 2 - existing.accessoryWidth / 2,
+                                y: existing.accessoryY + existing.lotDepth / 2 - existing.accessoryDepth / 2,
+                                width: existing.accessoryWidth,
+                                depth: existing.accessoryDepth,
+                                totalHeight: computeTotalHeight(existing.accessoryStories, existing.accessoryFirstFloorHeight, existing.accessoryUpperFloorHeight),
+                            } : undefined,
+                        }}
+                        lotIndex={1}
+                        lineScale={exportLineScale}
+                    />
+                </group>
+                {/* Road Annotations for Existing */}
+                {layers.roadModule && roadModule?.enabled && roadModuleStyles && (
+                    <group rotation={DIRECTION_ROTATION.front}>
+                        <RoadAnnotations
+                            roadId="existing-front"
+                            road={roadModule}
+                            spanWidth={existing.lotWidth}
+                            lineScale={exportLineScale}
+                        />
+                    </group>
+                )}
+                {layers.roadModule && roadModuleStyles && comparisonRoads && (
+                    <>
+                        {comparisonRoads.left?.enabled && (
+                            <group rotation={DIRECTION_ROTATION.left}>
+                                <RoadAnnotations roadId="existing-left" road={comparisonRoads.left} spanWidth={existing.lotWidth} lineScale={exportLineScale} />
+                            </group>
+                        )}
+                        {comparisonRoads.right?.enabled && (
+                            <group rotation={DIRECTION_ROTATION.right}>
+                                <RoadAnnotations roadId="existing-right" road={comparisonRoads.right} spanWidth={existing.lotWidth} lineScale={exportLineScale} />
+                            </group>
+                        )}
+                        {comparisonRoads.rear?.enabled && (
+                            <group rotation={DIRECTION_ROTATION.rear}>
+                                <RoadAnnotations roadId="existing-rear" road={comparisonRoads.rear} spanWidth={existing.lotWidth} lineScale={exportLineScale} />
+                            </group>
+                        )}
+                    </>
+                )}
+                {/* Road Intersection Fillets for Existing */}
+                {layers.roadIntersections && roadModuleStyles && (
+                    <>
+                        {roadModule?.enabled && comparisonRoads?.left?.enabled && (
+                            <RoadIntersectionFillet roadA={roadModule} roadB={comparisonRoads.left} corner="front-left" cornerPosition={[-existing.lotWidth, 0]} styles={roadModuleStyles} lineScale={exportLineScale} />
+                        )}
+                        {roadModule?.enabled && comparisonRoads?.right?.enabled && (
+                            <RoadIntersectionFillet roadA={roadModule} roadB={comparisonRoads.right} corner="front-right" cornerPosition={[0, 0]} styles={roadModuleStyles} lineScale={exportLineScale} />
+                        )}
+                        {comparisonRoads?.rear?.enabled && comparisonRoads?.left?.enabled && (
+                            <RoadIntersectionFillet roadA={comparisonRoads.rear} roadB={comparisonRoads.left} corner="rear-left" cornerPosition={[-existing.lotWidth, existing.lotDepth]} styles={roadModuleStyles} lineScale={exportLineScale} />
+                        )}
+                        {comparisonRoads?.rear?.enabled && comparisonRoads?.right?.enabled && (
+                            <RoadIntersectionFillet roadA={comparisonRoads.rear} roadB={comparisonRoads.right} corner="rear-right" cornerPosition={[0, existing.lotDepth]} styles={roadModuleStyles} lineScale={exportLineScale} />
+                        )}
+                    </>
+                )}
             </group>
 
             {/* PROPOSED SCENE (Right - positive X) */}
@@ -609,6 +710,85 @@ const SceneContent = () => {
                                 direction="rear"
                                 lineScale={exportLineScale}
                             />
+                        )}
+                    </>
+                )}
+                {/* Annotation Labels for Proposed */}
+                <group position={[0, 0, 0]}>
+                    <LotAnnotations
+                        lotId="proposed"
+                        lotWidth={proposed.lotWidth}
+                        lotDepth={proposed.lotDepth}
+                        setbacks={{
+                            front: proposed.setbackFront || 0,
+                            rear: proposed.setbackRear || 0,
+                            left: proposed.setbackSideLeft || 0,
+                            right: proposed.setbackSideRight || 0,
+                        }}
+                        buildings={{
+                            principal: {
+                                x: proposed.buildingX + proposed.lotWidth / 2 - proposed.buildingWidth / 2,
+                                y: proposed.buildingY + proposed.lotDepth / 2 - proposed.buildingDepth / 2,
+                                width: proposed.buildingWidth,
+                                depth: proposed.buildingDepth,
+                                totalHeight: computeTotalHeight(proposed.buildingStories, proposed.firstFloorHeight, proposed.upperFloorHeight),
+                            },
+                            accessory: proposedHasAccessory ? {
+                                x: proposed.accessoryX + proposed.lotWidth / 2 - proposed.accessoryWidth / 2,
+                                y: proposed.accessoryY + proposed.lotDepth / 2 - proposed.accessoryDepth / 2,
+                                width: proposed.accessoryWidth,
+                                depth: proposed.accessoryDepth,
+                                totalHeight: computeTotalHeight(proposed.accessoryStories, proposed.accessoryFirstFloorHeight, proposed.accessoryUpperFloorHeight),
+                            } : undefined,
+                        }}
+                        lotIndex={2}
+                        lineScale={exportLineScale}
+                    />
+                </group>
+                {/* Road Annotations for Proposed */}
+                {layers.roadModule && roadModule?.enabled && roadModuleStyles && (
+                    <group rotation={DIRECTION_ROTATION.front}>
+                        <RoadAnnotations
+                            roadId="proposed-front"
+                            road={roadModule}
+                            spanWidth={proposed.lotWidth}
+                            lineScale={exportLineScale}
+                        />
+                    </group>
+                )}
+                {layers.roadModule && roadModuleStyles && comparisonRoads && (
+                    <>
+                        {comparisonRoads.left?.enabled && (
+                            <group rotation={DIRECTION_ROTATION.left}>
+                                <RoadAnnotations roadId="proposed-left" road={comparisonRoads.left} spanWidth={proposed.lotWidth} lineScale={exportLineScale} />
+                            </group>
+                        )}
+                        {comparisonRoads.right?.enabled && (
+                            <group rotation={DIRECTION_ROTATION.right}>
+                                <RoadAnnotations roadId="proposed-right" road={comparisonRoads.right} spanWidth={proposed.lotWidth} lineScale={exportLineScale} />
+                            </group>
+                        )}
+                        {comparisonRoads.rear?.enabled && (
+                            <group rotation={DIRECTION_ROTATION.rear}>
+                                <RoadAnnotations roadId="proposed-rear" road={comparisonRoads.rear} spanWidth={proposed.lotWidth} lineScale={exportLineScale} />
+                            </group>
+                        )}
+                    </>
+                )}
+                {/* Road Intersection Fillets for Proposed */}
+                {layers.roadIntersections && roadModuleStyles && (
+                    <>
+                        {roadModule?.enabled && comparisonRoads?.left?.enabled && (
+                            <RoadIntersectionFillet roadA={roadModule} roadB={comparisonRoads.left} corner="front-left" cornerPosition={[0, 0]} styles={roadModuleStyles} lineScale={exportLineScale} />
+                        )}
+                        {roadModule?.enabled && comparisonRoads?.right?.enabled && (
+                            <RoadIntersectionFillet roadA={roadModule} roadB={comparisonRoads.right} corner="front-right" cornerPosition={[proposed.lotWidth, 0]} styles={roadModuleStyles} lineScale={exportLineScale} />
+                        )}
+                        {comparisonRoads?.rear?.enabled && comparisonRoads?.left?.enabled && (
+                            <RoadIntersectionFillet roadA={comparisonRoads.rear} roadB={comparisonRoads.left} corner="rear-left" cornerPosition={[0, proposed.lotDepth]} styles={roadModuleStyles} lineScale={exportLineScale} />
+                        )}
+                        {comparisonRoads?.rear?.enabled && comparisonRoads?.right?.enabled && (
+                            <RoadIntersectionFillet roadA={comparisonRoads.rear} roadB={comparisonRoads.right} corner="rear-right" cornerPosition={[proposed.lotWidth, proposed.lotDepth]} styles={roadModuleStyles} lineScale={exportLineScale} />
                         )}
                     </>
                 )}

@@ -349,6 +349,21 @@ export const useStore = create(
                     streetEdges: { front: true, left: false, right: false, rear: false },
                     streetTypes: { front: 'S1', left: 'S1', right: 'S2', rear: 'S3' },
                 },
+                // Annotation system — shared text labels for lots, setbacks, roads, buildings
+                annotationSettings: {
+                    textRotation: 'billboard',   // 'follow-line' | 'billboard' | 'fixed'
+                    fontSize: 1.5,
+                    textColor: '#000000',
+                    backgroundColor: '#ffffff',
+                    backgroundOpacity: 0.85,
+                    backgroundEnabled: true,
+                    leaderLineColor: '#666666',
+                    leaderLineWidth: 1,
+                    leaderLineDashed: false,
+                    unitFormat: 'feet',          // 'feet' | 'feet-inches' | 'meters'
+                },
+                annotationPositions: {},  // { [annotationId]: [x, y, z] | null }
+
                 districtParameters: {
                     // Informational/reference fields — not visualized in 3D
                     lotArea: { min: null, max: null },
@@ -451,6 +466,15 @@ export const useStore = create(
                         roadModule: true, // Road module layer
                         maxHeightPlane: true, // Max height plane layer
                         roof: true, // Roof layer
+                        // Annotation & intersection layers
+                        annotationLabels: false, // Master toggle for all annotation labels
+                        labelLotNames: true,     // "Lot 1", "Lot 2" etc.
+                        labelLotEdges: true,     // "Front of Lot", "Rear of Lot" etc.
+                        labelSetbacks: true,     // "Front Setback" etc.
+                        labelRoadNames: true,    // "S1 - Primary Street" etc.
+                        labelRoadZones: true,    // "Right of Way", "Sidewalk" etc.
+                        labelBuildings: true,    // "Principal Building", "Accessory Building"
+                        roadIntersections: true, // Road intersection fillet geometry
                     },
                     exportRequested: false,
                     exportFormat: 'obj', // 'obj' | 'glb' | 'dae' | 'dxf' | 'png' | 'jpg' | 'svg'
@@ -666,6 +690,18 @@ export const useStore = create(
                             font: 'https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hjp-Ek-_EeA.woff', // Default Inter
                             // Custom label settings - universal (applies to both existing and proposed)
                             // mode: 'value' (shows calculated value) or 'custom' (shows custom text)
+                            // Enhanced dimension settings
+                            textMode: 'follow-line',   // 'follow-line' | 'billboard'
+                            textBackground: {
+                                enabled: false,
+                                color: '#ffffff',
+                                opacity: 0.85,
+                                padding: 0.3,
+                            },
+                            autoStack: true,           // Auto-offset parallel dimensions
+                            stackGap: 8,               // Gap between stacked dimensions
+                            unitFormat: 'feet',        // 'feet' | 'feet-inches' | 'meters'
+                            draggableText: false,      // Allow dragging dimension text
                             customLabels: {
                                 lotWidth: { mode: 'value', text: 'A' },
                                 lotDepth: { mode: 'value', text: 'B' },
@@ -2222,6 +2258,23 @@ export const useStore = create(
                         }
                     }
                 })),
+                // Annotation Settings
+                setAnnotationSetting: (key, value) => set((state) => ({
+                    annotationSettings: { ...state.annotationSettings, [key]: value }
+                })),
+                setAnnotationPosition: (annotationId, position) => set((state) => ({
+                    annotationPositions: { ...state.annotationPositions, [annotationId]: position }
+                })),
+                resetAnnotationPositions: () => set({ annotationPositions: {} }),
+                resetAnnotationPositionsForCategory: (category) => set((state) => {
+                    const filtered = {}
+                    for (const [key, val] of Object.entries(state.annotationPositions)) {
+                        if (!key.startsWith(category + '-')) {
+                            filtered[key] = val
+                        }
+                    }
+                    return { annotationPositions: filtered }
+                }),
                 // Update custom label for a specific dimension
                 setCustomLabel: (dimensionKey, mode, text) => set((state) => ({
                     viewSettings: {
@@ -2682,7 +2735,7 @@ export const useStore = create(
             }),
             {
                 name: 'zoning-app-storage',
-                version: 15, // Updated to 15 for entity system (District Module)
+                version: 16, // Updated to 16 for annotations, enhanced dimensions, road intersections
                 migrate: (persistedState, version) => {
                     // Split dimensionsLot into dimensionsLotWidth and dimensionsLotDepth
                     if (persistedState.viewSettings && persistedState.viewSettings.layers && persistedState.viewSettings.layers.dimensionsLot !== undefined) {
@@ -3071,9 +3124,52 @@ export const useStore = create(
                         };
                     }
 
+                    // ============================================
+                    // v16: Annotation system + enhanced dimensions + road intersections
+                    // ============================================
+                    if (!persistedState.annotationSettings) {
+                        persistedState.annotationSettings = {
+                            textRotation: 'billboard',
+                            fontSize: 1.5,
+                            textColor: '#000000',
+                            backgroundColor: '#ffffff',
+                            backgroundOpacity: 0.85,
+                            backgroundEnabled: true,
+                            leaderLineColor: '#666666',
+                            leaderLineWidth: 1,
+                            leaderLineDashed: false,
+                            unitFormat: 'feet',
+                        };
+                    }
+                    if (!persistedState.annotationPositions) {
+                        persistedState.annotationPositions = {};
+                    }
+                    // Add new layer keys
+                    const lyrs = persistedState.viewSettings?.layers;
+                    if (lyrs) {
+                        if (lyrs.annotationLabels === undefined) lyrs.annotationLabels = false;
+                        if (lyrs.labelLotNames === undefined) lyrs.labelLotNames = true;
+                        if (lyrs.labelLotEdges === undefined) lyrs.labelLotEdges = true;
+                        if (lyrs.labelSetbacks === undefined) lyrs.labelSetbacks = true;
+                        if (lyrs.labelRoadNames === undefined) lyrs.labelRoadNames = true;
+                        if (lyrs.labelRoadZones === undefined) lyrs.labelRoadZones = true;
+                        if (lyrs.labelBuildings === undefined) lyrs.labelBuildings = true;
+                        if (lyrs.roadIntersections === undefined) lyrs.roadIntersections = true;
+                    }
+                    // Enhanced dimension settings
+                    const dimS = persistedState.viewSettings?.styleSettings?.dimensionSettings;
+                    if (dimS) {
+                        if (dimS.textMode === undefined) dimS.textMode = 'follow-line';
+                        if (dimS.textBackground === undefined) dimS.textBackground = { enabled: false, color: '#ffffff', opacity: 0.85, padding: 0.3 };
+                        if (dimS.autoStack === undefined) dimS.autoStack = true;
+                        if (dimS.stackGap === undefined) dimS.stackGap = 8;
+                        if (dimS.unitFormat === undefined) dimS.unitFormat = 'feet';
+                        if (dimS.draggableText === undefined) dimS.draggableText = false;
+                    }
+
                     return {
                         ...persistedState,
-                        version: 15 // Update verified version
+                        version: 16 // Update verified version
                     };
                 },
                 partialize: (state) => ({
@@ -3100,16 +3196,18 @@ export const useStore = create(
                     lotVisibility: state.lotVisibility,
                     modelSetup: state.modelSetup,
                     districtParameters: state.districtParameters,
+                    annotationSettings: state.annotationSettings,
+                    annotationPositions: state.annotationPositions,
                 }),
             }
         ),
         {
             limit: 50,
             partialize: (state) => {
-                const { existing, proposed, viewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, comparisonRoads, entities, entityOrder, entityStyles, lotVisibility } = state
+                const { existing, proposed, viewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, comparisonRoads, entities, entityOrder, entityStyles, lotVisibility, annotationSettings, annotationPositions } = state
                 // Exclude export triggers from undo history
                 const { exportRequested, ...trackedViewSettings } = viewSettings
-                return { existing, proposed, viewSettings: trackedViewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, comparisonRoads, entities, entityOrder, entityStyles, lotVisibility }
+                return { existing, proposed, viewSettings: trackedViewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, comparisonRoads, entities, entityOrder, entityStyles, lotVisibility, annotationSettings, annotationPositions }
             }
         }
     )

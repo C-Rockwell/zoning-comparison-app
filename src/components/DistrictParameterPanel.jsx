@@ -707,6 +707,14 @@ const LayersSection = () => {
         { key: 'dimensionsHeight', label: 'Dim: Height' },
         { key: 'grid', label: 'Grid' },
         { key: 'roadModule', label: 'Road Module' },
+        { key: 'roadIntersections', label: 'Road Intersections' },
+        { key: 'annotationLabels', label: 'Annotation Labels' },
+        { key: 'labelLotNames', label: '  Lot Names' },
+        { key: 'labelLotEdges', label: '  Lot Edges' },
+        { key: 'labelSetbacks', label: '  Setback Labels' },
+        { key: 'labelRoadNames', label: '  Road Names' },
+        { key: 'labelRoadZones', label: '  Road Zones' },
+        { key: 'labelBuildings', label: '  Building Labels' },
         { key: 'origin', label: 'Origin' },
         { key: 'ground', label: 'Ground Plane' },
         { key: 'axes', label: 'Axes' },
@@ -1713,6 +1721,83 @@ const ModelParametersSection = () => {
 // MAIN PANEL COMPONENT
 // ============================================
 
+// ============================================
+// ANNOTATION SETTINGS SECTION
+// ============================================
+
+const AnnotationSettingsSection = () => {
+    const annotationSettings = useStore((s) => s.annotationSettings)
+    const setAnnotationSetting = useStore((s) => s.setAnnotationSetting)
+    const resetAnnotationPositions = useStore((s) => s.resetAnnotationPositions)
+
+    if (!annotationSettings) return null
+
+    return (
+        <Section title="Annotation Labels" icon={<Settings className="w-4 h-4" />} defaultOpen={false}>
+            <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Text Rotation</span>
+                    <div className="flex gap-1 text-[9px]">
+                        {['billboard', 'fixed'].map(mode => (
+                            <button key={mode}
+                                onClick={() => setAnnotationSetting('textRotation', mode)}
+                                className="px-2 py-0.5 rounded border capitalize"
+                                style={{
+                                    backgroundColor: annotationSettings.textRotation === mode ? 'var(--ui-accent)' : 'var(--ui-bg-primary)',
+                                    borderColor: annotationSettings.textRotation === mode ? 'var(--ui-accent)' : 'var(--ui-border)',
+                                    color: annotationSettings.textRotation === mode ? '#fff' : 'var(--ui-text-secondary)',
+                                }}
+                            >
+                                {mode}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Font Size</span>
+                    <SliderInput value={annotationSettings.fontSize} onChange={(v) => setAnnotationSetting('fontSize', v)} min={0.5} max={5} step={0.25} />
+                </div>
+                <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Text Color</span>
+                    <ColorPicker value={annotationSettings.textColor} onChange={(c) => setAnnotationSetting('textColor', c)} />
+                </div>
+                <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Background</span>
+                    <label className="flex items-center gap-1 cursor-pointer">
+                        <input type="checkbox" checked={annotationSettings.backgroundEnabled} onChange={(e) => setAnnotationSetting('backgroundEnabled', e.target.checked)} className="rounded accent-theme" />
+                        <ColorPicker value={annotationSettings.backgroundColor} onChange={(c) => setAnnotationSetting('backgroundColor', c)} />
+                    </label>
+                </div>
+                {annotationSettings.backgroundEnabled && (
+                    <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Bg Opacity</span>
+                        <SliderInput value={annotationSettings.backgroundOpacity} onChange={(v) => setAnnotationSetting('backgroundOpacity', v)} min={0} max={1} step={0.05} />
+                    </div>
+                )}
+                <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Leader Color</span>
+                    <ColorPicker value={annotationSettings.leaderLineColor} onChange={(c) => setAnnotationSetting('leaderLineColor', c)} />
+                </div>
+                <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Leader Width</span>
+                    <SliderInput value={annotationSettings.leaderLineWidth} onChange={(v) => setAnnotationSetting('leaderLineWidth', v)} min={0.5} max={5} step={0.5} />
+                </div>
+                <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Leader Dashed</span>
+                    <input type="checkbox" checked={annotationSettings.leaderLineDashed} onChange={(e) => setAnnotationSetting('leaderLineDashed', e.target.checked)} className="rounded accent-theme" />
+                </div>
+                <button
+                    onClick={resetAnnotationPositions}
+                    className="w-full px-2 py-1 text-[10px] rounded transition-colors hover-bg-secondary"
+                    style={{ backgroundColor: 'var(--ui-bg-secondary)', color: 'var(--ui-text-secondary)', border: '1px solid var(--ui-border)' }}
+                >
+                    Reset All Label Positions
+                </button>
+            </div>
+        </Section>
+    )
+}
+
 const DistrictParameterPanel = () => {
     return (
         <div
@@ -1737,6 +1822,7 @@ const DistrictParameterPanel = () => {
             <div className="p-2">
                 <ModelSetupSection />
                 <LayersSection />
+                <AnnotationSettingsSection />
                 <DistrictParametersSection />
                 <ModelParametersSection />
                 <BuildingRoofSection />

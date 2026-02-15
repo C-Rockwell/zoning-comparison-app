@@ -5,6 +5,16 @@ import { useLotIds, useRoadModules, getLotData } from '../hooks/useEntityStore'
 import { useShallow } from 'zustand/react/shallow'
 import LotEntity from './LotEntity'
 import RoadModule from './RoadModule'
+import RoadAnnotations from './RoadAnnotations'
+import RoadIntersectionFillet from './RoadIntersectionFillet'
+
+// Direction rotation for annotation labels (matches RoadModule.jsx DIRECTION_ROTATION)
+const DIRECTION_ROTATION = {
+    front: [0, 0, 0],
+    left: [0, 0, -Math.PI / 2],
+    right: [0, 0, Math.PI / 2],
+    rear: [0, 0, Math.PI],
+}
 
 // ============================================
 // OriginMarker — small red sphere at world origin
@@ -50,6 +60,7 @@ const EntityRoadModules = ({ lotPositions }) => {
     const roadModules = useRoadModules()
     const roadModuleStyles = useStore(state => state.roadModuleStyles)
     const exportLineScale = useStore(state => state.viewSettings.exportLineScale) || 1
+    const layers = useStore(state => state.viewSettings.layers)
 
     // Calculate lot row extents and per-direction ROW widths for road connections
     const { totalExtentLeft, totalExtentRight, totalWidth, maxLotDepth, frontROW, rearROW, leftROW, rightROW } = useMemo(() => {
@@ -86,6 +97,23 @@ const EntityRoadModules = ({ lotPositions }) => {
 
     const roadEntries = Object.entries(roadModules)
     if (roadEntries.length === 0) return null
+
+    // Build a lookup of enabled roads by direction for fillet computation
+    const roadsByDir = useMemo(() => {
+        const byDir = {}
+        for (const [, road] of roadEntries) {
+            if (road.enabled) byDir[road.direction] = road
+        }
+        return byDir
+    }, [roadEntries])
+
+    // Corner pairs for intersection fillets
+    const cornerPairs = useMemo(() => [
+        { corner: 'front-left', dirA: 'front', dirB: 'left', pos: [totalExtentLeft, 0] },
+        { corner: 'front-right', dirA: 'front', dirB: 'right', pos: [totalExtentRight, 0] },
+        { corner: 'rear-left', dirA: 'rear', dirB: 'left', pos: [totalExtentLeft, maxLotDepth] },
+        { corner: 'rear-right', dirA: 'rear', dirB: 'right', pos: [totalExtentRight, maxLotDepth] },
+    ], [totalExtentLeft, totalExtentRight, maxLotDepth])
 
     return (
         <group>
@@ -130,7 +158,34 @@ const EntityRoadModules = ({ lotPositions }) => {
                             direction={dir}
                             lineScale={exportLineScale}
                         />
+                        {/* Road annotation labels (rotated to match road direction) */}
+                        <group rotation={DIRECTION_ROTATION[dir]}>
+                            <RoadAnnotations
+                                roadId={roadId}
+                                road={road}
+                                spanWidth={spanWidth}
+                                lineScale={exportLineScale}
+                            />
+                        </group>
                     </group>
+                )
+            })}
+
+            {/* Road Intersection Fillets */}
+            {layers.roadIntersections && cornerPairs.map(({ corner, dirA, dirB, pos }) => {
+                const rA = roadsByDir[dirA]
+                const rB = roadsByDir[dirB]
+                if (!rA || !rB) return null
+                return (
+                    <RoadIntersectionFillet
+                        key={corner}
+                        roadA={rA}
+                        roadB={rB}
+                        corner={corner}
+                        cornerPosition={pos}
+                        styles={roadModuleStyles}
+                        lineScale={exportLineScale}
+                    />
                 )
             })}
         </group>
@@ -192,8 +247,8 @@ const DistrictSceneContent = () => {
             {layers.origin && <OriginMarker />}
 
             {/* Lot entities */}
-            {lotPositions.map(({ lotId, offset }) => (
-                <LotEntity key={lotId} lotId={lotId} offset={offset} />
+            {lotPositions.map(({ lotId, offset }, index) => (
+                <LotEntity key={lotId} lotId={lotId} offset={offset} lotIndex={index + 1} />
             ))}
 
             {/* Road modules from entity system */}

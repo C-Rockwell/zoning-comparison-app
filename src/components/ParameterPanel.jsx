@@ -596,6 +596,11 @@ const ParameterPanel = () => {
     const roadModuleStyles = useStore((state) => state.roadModuleStyles)
     const setRoadModuleStyle = useStore((state) => state.setRoadModuleStyle)
 
+    // Annotation settings
+    const annotationSettings = useStore((state) => state.annotationSettings)
+    const setAnnotationSetting = useStore((state) => state.setAnnotationSetting)
+    const resetAnnotationPositions = useStore((state) => state.resetAnnotationPositions)
+
     // Undo
     const { undo } = useStore.temporal.getState()
     const pastStates = useZustandStore(useStore.temporal, (state) => state.pastStates)
@@ -1429,6 +1434,42 @@ const ParameterPanel = () => {
                                     <SliderInput value={styleSettings.dimensionSettings?.outlineWidth ?? 0.1} onChange={(v) => setDimensionSetting('outlineWidth', v)} min={0} max={0.5} step={0.05} />
                                 </ControlRow>
                             </div>
+                            <div className="my-1 pt-1" style={{ borderTop: '1px solid var(--ui-bg-primary)' }}>
+                                <ControlRow label="Unit Format">
+                                    <div className="flex gap-1 text-[9px]">
+                                        {[{ key: 'feet', label: "ft'" }, { key: 'feet-inches', label: "ft-in" }, { key: 'meters', label: 'm' }].map(({ key, label }) => (
+                                            <button key={key}
+                                                onClick={() => setDimensionSetting('unitFormat', key)}
+                                                className="px-2 py-0.5 rounded border"
+                                                style={{
+                                                    backgroundColor: (styleSettings.dimensionSettings?.unitFormat || 'feet') === key ? 'var(--ui-accent)' : 'var(--ui-bg-primary)',
+                                                    borderColor: (styleSettings.dimensionSettings?.unitFormat || 'feet') === key ? 'var(--ui-accent)' : 'var(--ui-border)',
+                                                    color: (styleSettings.dimensionSettings?.unitFormat || 'feet') === key ? '#fff' : 'var(--ui-text-secondary)',
+                                                }}
+                                            >
+                                                {label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </ControlRow>
+                                <ControlRow label="Text Mode">
+                                    <div className="flex gap-1 text-[9px]">
+                                        {[{ key: 'follow-line', label: 'Follow' }, { key: 'billboard', label: 'Billboard' }].map(({ key, label }) => (
+                                            <button key={key}
+                                                onClick={() => setDimensionSetting('textMode', key)}
+                                                className="px-2 py-0.5 rounded border"
+                                                style={{
+                                                    backgroundColor: (styleSettings.dimensionSettings?.textMode || 'follow-line') === key ? 'var(--ui-accent)' : 'var(--ui-bg-primary)',
+                                                    borderColor: (styleSettings.dimensionSettings?.textMode || 'follow-line') === key ? 'var(--ui-accent)' : 'var(--ui-border)',
+                                                    color: (styleSettings.dimensionSettings?.textMode || 'follow-line') === key ? '#fff' : 'var(--ui-text-secondary)',
+                                                }}
+                                            >
+                                                {label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </ControlRow>
+                            </div>
                         </SubSection>
 
                         {/* Custom Dimension Labels */}
@@ -1445,6 +1486,68 @@ const ParameterPanel = () => {
                             <CustomLabelRow label="Setback Left" dimensionKey="setbackLeft" customLabels={styleSettings.dimensionSettings?.customLabels} setCustomLabel={setCustomLabel} />
                             <CustomLabelRow label="Setback Right" dimensionKey="setbackRight" customLabels={styleSettings.dimensionSettings?.customLabels} setCustomLabel={setCustomLabel} />
                             <CustomLabelRow label="Bldg Height" dimensionKey="buildingHeight" customLabels={styleSettings.dimensionSettings?.customLabels} setCustomLabel={setCustomLabel} />
+                        </SubSection>
+
+                        {/* Annotation Labels */}
+                        <SubSection
+                            title="Annotation Labels"
+                            isOpen={openSections.annotations}
+                            onToggle={() => toggleStyleSection('annotations')}
+                        >
+                            {annotationSettings && (
+                                <div className="space-y-1.5">
+                                    <ControlRow label="Text Mode">
+                                        <div className="flex gap-1 text-[9px]">
+                                            {['billboard', 'fixed'].map(mode => (
+                                                <button key={mode}
+                                                    onClick={() => setAnnotationSetting('textRotation', mode)}
+                                                    className="px-2 py-0.5 rounded border capitalize"
+                                                    style={{
+                                                        backgroundColor: annotationSettings.textRotation === mode ? 'var(--ui-accent)' : 'var(--ui-bg-primary)',
+                                                        borderColor: annotationSettings.textRotation === mode ? 'var(--ui-accent)' : 'var(--ui-border)',
+                                                        color: annotationSettings.textRotation === mode ? '#fff' : 'var(--ui-text-secondary)',
+                                                    }}
+                                                >
+                                                    {mode}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </ControlRow>
+                                    <ControlRow label="Font Size">
+                                        <SliderInput value={annotationSettings.fontSize} onChange={(v) => setAnnotationSetting('fontSize', v)} min={0.5} max={5} step={0.25} />
+                                    </ControlRow>
+                                    <ControlRow label="Text Color">
+                                        <ColorPicker value={annotationSettings.textColor} onChange={(c) => setAnnotationSetting('textColor', c)} />
+                                    </ControlRow>
+                                    <ControlRow label="Background">
+                                        <div className="flex items-center gap-1">
+                                            <input type="checkbox" checked={annotationSettings.backgroundEnabled} onChange={(e) => setAnnotationSetting('backgroundEnabled', e.target.checked)} className="rounded accent-theme" />
+                                            <ColorPicker value={annotationSettings.backgroundColor} onChange={(c) => setAnnotationSetting('backgroundColor', c)} />
+                                        </div>
+                                    </ControlRow>
+                                    {annotationSettings.backgroundEnabled && (
+                                        <ControlRow label="Bg Opacity">
+                                            <SliderInput value={annotationSettings.backgroundOpacity} onChange={(v) => setAnnotationSetting('backgroundOpacity', v)} min={0} max={1} step={0.05} />
+                                        </ControlRow>
+                                    )}
+                                    <ControlRow label="Leader Color">
+                                        <ColorPicker value={annotationSettings.leaderLineColor} onChange={(c) => setAnnotationSetting('leaderLineColor', c)} />
+                                    </ControlRow>
+                                    <ControlRow label="Leader Width">
+                                        <SliderInput value={annotationSettings.leaderLineWidth} onChange={(v) => setAnnotationSetting('leaderLineWidth', v)} min={0.5} max={5} step={0.5} />
+                                    </ControlRow>
+                                    <ControlRow label="Leader Dashed">
+                                        <input type="checkbox" checked={annotationSettings.leaderLineDashed} onChange={(e) => setAnnotationSetting('leaderLineDashed', e.target.checked)} className="rounded accent-theme" />
+                                    </ControlRow>
+                                    <button
+                                        onClick={resetAnnotationPositions}
+                                        className="w-full px-2 py-1 text-[9px] rounded transition-colors hover-bg-secondary"
+                                        style={{ backgroundColor: 'var(--ui-bg-secondary)', color: 'var(--ui-text-secondary)', border: '1px solid var(--ui-border)' }}
+                                    >
+                                        Reset All Label Positions
+                                    </button>
+                                </div>
+                            )}
                         </SubSection>
 
                         {/* Ground Plane */}

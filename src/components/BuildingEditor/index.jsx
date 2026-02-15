@@ -10,6 +10,7 @@ import HeightHandle from './HeightHandle'
 import PolygonBuilding from './PolygonBuilding'
 import RoofMesh from './RoofMesh'
 import Dimension from '../Dimension'
+import { formatDimension } from '../../utils/formatUnits'
 
 // Helper function to resolve dimension label based on custom label settings
 const resolveDimensionLabel = (value, dimensionKey, dimensionSettings) => {
@@ -18,7 +19,7 @@ const resolveDimensionLabel = (value, dimensionKey, dimensionSettings) => {
     if (labelConfig?.mode === 'custom') {
         return labelConfig.text || ''
     }
-    return `${value}'`
+    return formatDimension(value, dimensionSettings?.unitFormat || 'feet')
 }
 
 const BuildingEditor = ({
