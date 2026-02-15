@@ -8,7 +8,7 @@ import SceneContent from './SceneContent'
 import { useStore } from '../store/useStore'
 import CameraHandler from './CameraHandler'
 import Exporter from './Exporter'
-import StyleEditor from './StyleEditor'
+// StyleEditor removed — all style controls are now integrated into ParameterPanel.jsx
 
 // High-quality lighting setup (light mode only)
 const StudioLighting = () => {
@@ -361,8 +361,6 @@ const Viewer3D = () => {
                     </button>
                 </div>
             </div>
-
-            <StyleEditor />
 
             {/* High-Quality Canvas */}
             <Canvas

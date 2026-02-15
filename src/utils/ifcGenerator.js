@@ -589,4 +589,167 @@ export const generateIFC = (existingModel, proposedModel, options = {}) => {
     return header + body + '\n' + footer
 }
 
+/**
+ * Compute total building height from story-based parameters
+ * @param {Object} building - Building sub-object with firstFloorHeight, upperFloorHeight, stories
+ * @returns {number} - Total building height
+ */
+const computeBuildingHeight = (building) => {
+    const stories = building.stories || 1
+    const firstFloor = building.firstFloorHeight || 12
+    const upperFloor = building.upperFloorHeight || 10
+    if (stories <= 1) return firstFloor
+    return firstFloor + (stories - 1) * upperFloor
+}
+
+/**
+ * Create a temporary model object compatible with existing helper functions
+ * from an entity lot's building sub-object (principal or accessory)
+ * @param {Object} building - buildings.principal or buildings.accessory from entity lot
+ * @returns {Object} - Model with buildingWidth, buildingDepth, buildingHeight, buildingX, buildingY
+ */
+const buildingToModel = (building) => ({
+    buildingWidth: building.width,
+    buildingDepth: building.depth,
+    buildingHeight: computeBuildingHeight(building),
+    buildingX: building.x || 0,
+    buildingY: building.y || 0,
+})
+
+/**
+ * Create a temporary model object compatible with getLotVertices and setback helpers
+ * from an entity lot object
+ * @param {Object} lot - Entity lot object
+ * @param {string} buildingType - 'principal' or 'accessory'
+ * @returns {Object} - Model with lotWidth, lotDepth, setbackFront, etc., and lotGeometry
+ */
+const lotToModel = (lot, buildingType = 'principal') => {
+    const setbacks = lot.setbacks?.[buildingType] || lot.setbacks?.principal || {}
+    return {
+        lotWidth: lot.lotWidth,
+        lotDepth: lot.lotDepth,
+        setbackFront: setbacks.front || 0,
+        setbackRear: setbacks.rear || 0,
+        setbackSideLeft: setbacks.sideInterior || 0,
+        setbackSideRight: setbacks.sideStreet || setbacks.sideInterior || 0,
+        lotGeometry: lot.lotGeometry,
+    }
+}
+
+/**
+ * Generate IFC for the district module (multiple lots)
+ * @param {Object} lotsMap - The entities.lots object from store
+ * @param {string[]} entityOrder - Array of lot IDs in display order
+ * @param {Object} options - { filename, lotSpacing }
+ * @returns {string} - Complete IFC-SPF file content
+ */
+export const generateDistrictIFC = (lotsMap, entityOrder, options = {}) => {
+    // Reset entity counter
+    entityId = 0
+    const entities = []
+    const lotSpacing = options.lotSpacing || 10
+
+    // 1. Generate shared context
+    const contextIds = generateContext(entities)
+
+    // 2. Generate project
+    const { projectId, ownerHistory } = generateProject(entities, contextIds)
+
+    // 3. Iterate lots and generate spatial hierarchy for each
+    const siteIds = []
+    const lotShapeRepIds = []        // For 'Lot Lines' layer
+    const setbackShapeRepIds = []    // For 'Setback Lines' layer
+    const buildingShapeRepIds = []   // For 'Buildings' layer
+    const accessoryShapeRepIds = []  // For 'Accessory Buildings' layer
+
+    // Calculate X offsets: Lot 1 extends in positive X from origin,
+    // Lots 2+ extend in negative X from origin
+    let negOffset = 0
+
+    entityOrder.forEach((lotId, index) => {
+        const lot = lotsMap[lotId]
+        if (!lot) return
+
+        let lotCenterX
+        if (index === 0) {
+            // Lot 1: front-left at origin, extends positive X
+            lotCenterX = lot.lotWidth / 2
+        } else {
+            // Lots 2+: extend in negative X
+            negOffset -= lot.lotWidth
+            lotCenterX = negOffset + lot.lotWidth / 2
+        }
+        const lotCenterY = lot.lotDepth / 2
+        const lotLabel = `Lot ${index + 1}`
+
+        // Create a model-compatible object for lot helpers
+        const lotModel = lotToModel(lot, 'principal')
+
+        // Generate site for this lot
+        const siteId = generateSite(entities, lotModel, contextIds, ownerHistory, lotLabel, lotCenterX, lotCenterY)
+        siteIds.push(siteId)
+
+        // Generate building container
+        const buildingId = generateBuilding(entities, contextIds, ownerHistory, siteId, `${lotLabel} Building`)
+        generateAggregation(entities, ownerHistory, siteId, [buildingId])
+
+        // Generate storey
+        const storeyId = generateStorey(entities, contextIds, ownerHistory, buildingId)
+        generateAggregation(entities, ownerHistory, buildingId, [storeyId])
+
+        // Generate lot surface
+        const lotSurface = generateLotSurface(entities, lotModel, contextIds, ownerHistory, storeyId, `${lotLabel} Surface`, lotCenterX, lotCenterY)
+        lotShapeRepIds.push(lotSurface.shapeRepId)
+
+        // Generate setback lines
+        const setbackLines = generateSetbackLines(entities, lotModel, contextIds, ownerHistory, storeyId, `${lotLabel} Setbacks`, lotCenterX, lotCenterY)
+        setbackShapeRepIds.push(setbackLines.shapeRepId)
+
+        // Collect all elements for containment
+        const containedElements = [lotSurface.elementId, setbackLines.elementId]
+
+        // Generate principal building mass
+        const principal = lot.buildings?.principal
+        if (principal && principal.width > 0 && principal.depth > 0) {
+            const principalModel = buildingToModel(principal)
+            const principalMass = generateBuildingMass(entities, principalModel, contextIds, ownerHistory, storeyId, `${lotLabel} Principal`, lotCenterX, lotCenterY)
+            buildingShapeRepIds.push(principalMass.shapeRepId)
+            containedElements.push(principalMass.elementId)
+        }
+
+        // Generate accessory building mass
+        const accessory = lot.buildings?.accessory
+        if (accessory && accessory.width > 0 && accessory.depth > 0) {
+            const accessoryModel = buildingToModel(accessory)
+            const accessoryMass = generateBuildingMass(entities, accessoryModel, contextIds, ownerHistory, storeyId, `${lotLabel} Accessory`, lotCenterX, lotCenterY)
+            accessoryShapeRepIds.push(accessoryMass.shapeRepId)
+            containedElements.push(accessoryMass.elementId)
+        }
+
+        // Contain all elements in storey
+        generateContainment(entities, ownerHistory, storeyId, containedElements)
+
+        // Advance spacing for lots 2+ (negative direction)
+        if (index > 0) negOffset -= lotSpacing
+    })
+
+    // 4. Aggregate all sites to project
+    if (siteIds.length > 0) {
+        generateAggregation(entities, ownerHistory, projectId, siteIds)
+    }
+
+    // 5. Create layer assignments
+    generateLayerAssignment(entities, 'Lot Lines', lotShapeRepIds)
+    generateLayerAssignment(entities, 'Setback Lines', setbackShapeRepIds)
+    generateLayerAssignment(entities, 'Buildings', buildingShapeRepIds)
+    generateLayerAssignment(entities, 'Accessory Buildings', accessoryShapeRepIds)
+
+    // Assemble file
+    const header = generateHeader(options.filename || 'zoning-district.ifc')
+    const body = entities.join('\n')
+    const footer = generateFooter()
+
+    return header + body + '\n' + footer
+}
+
 export default generateIFC

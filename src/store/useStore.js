@@ -104,6 +104,115 @@ const getEdgePerpendicular = (v1, v2) => {
     return { x: -dy / len, y: dx / len };
 };
 
+// ============================================
+// Entity Factory Functions
+// ============================================
+
+let entityIdCounter = 0;
+const generateEntityId = (prefix = 'lot') => `${prefix}-${Date.now()}-${entityIdCounter++}`;
+
+export const createDefaultLot = (overrides = {}) => ({
+    lotWidth: 50,
+    lotDepth: 100,
+    setbacks: {
+        principal: {
+            front: 20, maxFront: null, btzFront: null,
+            rear: 10,
+            sideInterior: 5,
+            minSideStreet: null, maxSideStreet: null, btzSideStreet: null,
+        },
+        accessory: {
+            front: null, rear: 5, sideInterior: 3, sideStreet: null,
+        },
+    },
+    lotGeometry: { mode: 'rectangle', editing: false, vertices: null },
+    buildings: {
+        principal: {
+            width: 30, depth: 40, stories: 2,
+            firstFloorHeight: 12, upperFloorHeight: 10,
+            x: 0, y: 0, maxHeight: 30,
+            geometry: { mode: 'rectangle', vertices: null },
+            selected: false,
+            roof: { type: 'flat', overrideHeight: false, ridgeHeight: null, ridgeDirection: 'x', shedDirection: '+y' },
+        },
+        accessory: {
+            width: 12, depth: 16, stories: 1,
+            firstFloorHeight: 10, upperFloorHeight: 10,
+            x: 0, y: 0, maxHeight: 15,
+            geometry: { mode: 'rectangle', vertices: null },
+            selected: false,
+            roof: { type: 'flat', overrideHeight: false, ridgeHeight: null, ridgeDirection: 'x', shedDirection: '+y' },
+        },
+    },
+    // Lot access (Model Parameters)
+    lotAccess: { front: false, sideInterior: false, sideStreet: false, rear: false },
+    // Parking locations (Model Parameters)
+    parking: { front: false, sideInterior: false, sideStreet: false, rear: false },
+    // Parking setbacks (Model Parameters)
+    parkingSetbacks: { front: null, sideInterior: null, sideStreet: null, rear: null },
+    ...overrides,
+});
+
+export const createDefaultLotStyle = (overrides = {}) => ({
+    lotLines: {
+        color: '#000000', width: 1.5, dashed: false, dashSize: 0.5, gapSize: 0.2, opacity: 1.0,
+        overrides: {
+            front: { enabled: false, color: '#000000', width: 1.5, dashed: false },
+            rear: { enabled: false, color: '#000000', width: 1.5, dashed: false },
+            left: { enabled: false, color: '#000000', width: 1.5, dashed: false },
+            right: { enabled: false, color: '#000000', width: 1.5, dashed: false },
+        }
+    },
+    setbacks: {
+        color: '#000000', width: 1, dashed: true, dashSize: 1, gapSize: 0.5, dashScale: 1, opacity: 1.0,
+        overrides: {
+            front: { enabled: false, color: '#000000', width: 1, dashed: true },
+            rear: { enabled: false, color: '#000000', width: 1, dashed: true },
+            left: { enabled: false, color: '#000000', width: 1, dashed: true },
+            right: { enabled: false, color: '#000000', width: 1, dashed: true },
+        }
+    },
+    lotFill: { color: '#E5E5E5', opacity: 1.0, visible: true },
+    buildingEdges: { color: '#000000', width: 1.5, visible: true, dashed: false, opacity: 1.0 },
+    buildingFaces: { color: '#D5D5D5', opacity: 1.0, transparent: true },
+    maxHeightPlane: { color: '#FF6B6B', opacity: 0.3, lineColor: '#FF0000', lineWidth: 2, lineDashed: true },
+    roofFaces: { color: '#B8A088', opacity: 0.85, transparent: true },
+    roofEdges: { color: '#000000', width: 1.5, visible: true, opacity: 1.0 },
+    ...overrides,
+});
+
+export const createDefaultRoadModule = (direction = 'front', type = 'S1', overrides = {}) => {
+    const defaults = {
+        S1: { rightOfWay: 50, roadWidth: 24 },
+        S2: { rightOfWay: 40, roadWidth: 24 },
+        S3: { rightOfWay: 20, roadWidth: 16 },
+    };
+    const d = defaults[type] || defaults.S1;
+    return {
+        direction,
+        type,
+        enabled: true,
+        rightOfWay: d.rightOfWay,
+        roadWidth: d.roadWidth,
+        leftParking: null, rightParking: null,
+        leftVerge: null, rightVerge: null,
+        leftSidewalk: null, rightSidewalk: null,
+        leftTransitionZone: null, rightTransitionZone: null,
+        ...overrides,
+    };
+};
+
+export const createDefaultLotVisibility = () => ({
+    lotLines: true,
+    setbacks: true,
+    buildings: true,
+    roof: true,
+    maxHeightPlane: true,
+    dimensions: true,
+    accessoryBuilding: true,
+    parkingSetbacks: false,
+});
+
 export const useStore = create(
     temporal(
         persist(
@@ -147,6 +256,24 @@ export const useStore = create(
                         ridgeDirection: 'x',   // Ridge axis for gabled/hipped
                         shedDirection: '+y',   // Slope direction for shed: '+x' | '-x' | '+y' | '-y'
                     },
+                    // Accessory building fields (0 width = hidden/disabled)
+                    accessoryWidth: 0,
+                    accessoryDepth: 0,
+                    accessoryX: 0,
+                    accessoryY: 0,
+                    accessoryStories: 1,
+                    accessoryFirstFloorHeight: 10,
+                    accessoryUpperFloorHeight: 10,
+                    accessoryMaxHeight: 15,
+                    accessoryBuildingGeometry: { mode: 'rectangle' },
+                    accessorySelectedBuilding: false,
+                    accessoryRoof: {
+                        type: 'flat',
+                        overrideHeight: false,
+                        ridgeHeight: null,
+                        ridgeDirection: 'x',
+                        shedDirection: '+y',
+                    },
                 },
                 proposed: {
                     lotWidth: 72,
@@ -183,7 +310,96 @@ export const useStore = create(
                         ridgeDirection: 'x',   // Ridge axis for gabled/hipped
                         shedDirection: '+y',   // Slope direction for shed: '+x' | '-x' | '+y' | '-y'
                     },
+                    // Accessory building fields (0 width = hidden/disabled)
+                    accessoryWidth: 0,
+                    accessoryDepth: 0,
+                    accessoryX: 0,
+                    accessoryY: 0,
+                    accessoryStories: 1,
+                    accessoryFirstFloorHeight: 10,
+                    accessoryUpperFloorHeight: 10,
+                    accessoryMaxHeight: 15,
+                    accessoryBuildingGeometry: { mode: 'rectangle' },
+                    accessorySelectedBuilding: false,
+                    accessoryRoof: {
+                        type: 'flat',
+                        overrideHeight: false,
+                        ridgeHeight: null,
+                        ridgeDirection: 'x',
+                        shedDirection: '+y',
+                    },
                 },
+                // ============================================
+                // Entity System (District Module)
+                // ============================================
+                // Coexists with existing/proposed for backward compat
+                activeModule: 'comparison', // 'comparison' | 'district'
+                entities: {
+                    lots: {},         // { [lotId]: lotData }
+                    roadModules: {},  // { [roadId]: roadModuleData }
+                },
+                entityOrder: [],      // lot IDs in display order
+                nextEntityId: 1,
+                activeEntityId: null,
+                selectedBuildingType: null, // 'principal' | 'accessory' | null
+                entityStyles: {},     // { [lotId]: styleData }
+                lotVisibility: {},    // { [lotId]: per-parameter visibility }
+                modelSetup: {
+                    numLots: 1,
+                    streetEdges: { front: true, left: false, right: false, rear: false },
+                    streetTypes: { front: 'S1', left: 'S1', right: 'S2', rear: 'S3' },
+                },
+                districtParameters: {
+                    // Informational/reference fields — not visualized in 3D
+                    lotArea: { min: null, max: null },
+                    lotCoverage: { min: null, max: null },
+                    lotWidth: { min: null, max: null },
+                    lotWidthAtSetback: { min: null, max: null },
+                    lotDepth: { min: null, max: null },
+                    setbacksPrincipal: {
+                        front: { min: null, max: null },
+                        btzFront: null,
+                        rear: { min: null, max: null },
+                        sideInterior: { min: null, max: null },
+                        sideStreet: { min: null, max: null },
+                        btzSideStreet: null,
+                        distanceBetweenBuildings: { min: null, max: null },
+                    },
+                    setbacksAccessory: {
+                        front: { min: null, max: null },
+                        rear: { min: null, max: null },
+                        sideInterior: { min: null, max: null },
+                        sideStreet: { min: null, max: null },
+                        distanceBetweenBuildings: { min: null, max: null },
+                    },
+                    structures: {
+                        principal: {
+                            height: { min: null, max: null },
+                            stories: { min: null, max: null },
+                            firstStoryHeight: { min: null, max: null },
+                            upperStoryHeight: { min: null, max: null },
+                        },
+                        accessory: {
+                            height: { min: null, max: null },
+                            stories: { min: null, max: null },
+                            firstStoryHeight: { min: null, max: null },
+                            upperStoryHeight: { min: null, max: null },
+                        },
+                    },
+                    lotAccess: {
+                        primaryStreet: { min: null, max: null, permitted: false },
+                        secondaryStreet: { min: null, max: null, permitted: false },
+                        rearAlley: { min: null, max: null, permitted: false },
+                        sharedDrive: { min: null, max: null, permitted: false },
+                    },
+                    parkingLocations: {
+                        front: { min: null, max: null, permitted: false },
+                        sideInterior: { min: null, max: null, permitted: false },
+                        sideStreet: { min: null, max: null, permitted: false },
+                        rear: { min: null, max: null, permitted: false },
+                    },
+                },
+
                 // Sun Simulation Settings (optional, for time-of-day shadows)
                 sunSettings: {
                     enabled: false,
@@ -308,6 +524,30 @@ export const useStore = create(
                                 visible: true,
                                 opacity: 1.0,
                             },
+                            // Accessory building styles
+                            accessoryBuildingEdges: {
+                                color: '#555555',
+                                width: 1.0,
+                                visible: true,
+                                dashed: false,
+                                opacity: 1.0,
+                            },
+                            accessoryBuildingFaces: {
+                                color: '#E0E0E0',
+                                opacity: 0.9,
+                                transparent: true,
+                            },
+                            accessoryRoofFaces: {
+                                color: '#C8B898',
+                                opacity: 0.85,
+                                transparent: true,
+                            },
+                            accessoryRoofEdges: {
+                                color: '#555555',
+                                width: 1.0,
+                                visible: true,
+                                opacity: 1.0,
+                            },
                         },
                         proposed: {
                             lotLines: {
@@ -371,6 +611,30 @@ export const useStore = create(
                             roofEdges: {
                                 color: '#000000',
                                 width: 1.5,
+                                visible: true,
+                                opacity: 1.0,
+                            },
+                            // Accessory building styles
+                            accessoryBuildingEdges: {
+                                color: '#555555',
+                                width: 1.0,
+                                visible: true,
+                                dashed: false,
+                                opacity: 1.0,
+                            },
+                            accessoryBuildingFaces: {
+                                color: '#F0F0F0',
+                                opacity: 0.85,
+                                transparent: true,
+                            },
+                            accessoryRoofFaces: {
+                                color: '#D4C8B8',
+                                opacity: 0.85,
+                                transparent: true,
+                            },
+                            accessoryRoofEdges: {
+                                color: '#555555',
+                                width: 1.0,
                                 visible: true,
                                 opacity: 1.0,
                             },
@@ -696,10 +960,10 @@ export const useStore = create(
                     [model]: { ...state[model], selectedBuilding: selected }
                 })),
 
-                // Deselect all buildings (click-outside)
+                // Deselect all buildings (click-outside) — includes accessory
                 deselectAllBuildings: () => set((state) => ({
-                    existing: { ...state.existing, selectedBuilding: false },
-                    proposed: { ...state.proposed, selectedBuilding: false },
+                    existing: { ...state.existing, selectedBuilding: false, accessorySelectedBuilding: false },
+                    proposed: { ...state.proposed, selectedBuilding: false, accessorySelectedBuilding: false },
                 })),
 
                 // Enable building polygon mode - converts rect to vertices centered on building position
@@ -869,6 +1133,977 @@ export const useStore = create(
                         roof: { ...state[model].roof, [key]: value }
                     }
                 })),
+
+                // ============================================
+                // Accessory Building Actions (Comparison Module)
+                // ============================================
+
+                // Select/deselect accessory building
+                selectAccessoryBuilding: (model, selected) => set((state) => ({
+                    [model]: { ...state[model], accessorySelectedBuilding: selected }
+                })),
+
+                // Deselect all accessory buildings (click-outside)
+                deselectAllAccessoryBuildings: () => set((state) => ({
+                    existing: { ...state.existing, accessorySelectedBuilding: false },
+                    proposed: { ...state.proposed, accessorySelectedBuilding: false },
+                })),
+
+                // Set accessory building position (translates polygon vertices if in polygon mode)
+                setAccessoryBuildingPosition: (model, newX, newY) => set((state) => {
+                    const current = state[model]
+                    const dx = newX - current.accessoryX
+                    const dy = newY - current.accessoryY
+                    const geometry = current.accessoryBuildingGeometry
+
+                    if (geometry?.mode === 'polygon' && geometry.vertices?.length >= 3) {
+                        const newVertices = geometry.vertices.map(v => ({
+                            ...v,
+                            x: v.x + dx,
+                            y: v.y + dy,
+                        }))
+                        return {
+                            [model]: {
+                                ...current,
+                                accessoryX: newX,
+                                accessoryY: newY,
+                                accessoryBuildingGeometry: { ...geometry, vertices: newVertices },
+                            }
+                        }
+                    }
+
+                    return { [model]: { ...current, accessoryX: newX, accessoryY: newY } }
+                }),
+
+                // Enable accessory building polygon mode
+                enableAccessoryBuildingPolygonMode: (model) => set((state) => {
+                    const params = state[model];
+                    const bx = params.accessoryX;
+                    const by = params.accessoryY;
+                    const w2 = params.accessoryWidth / 2;
+                    const d2 = params.accessoryDepth / 2;
+                    const vertices = [
+                        { id: generateVertexId(), x: bx - w2, y: by - d2 },
+                        { id: generateVertexId(), x: bx + w2, y: by - d2 },
+                        { id: generateVertexId(), x: bx + w2, y: by + d2 },
+                        { id: generateVertexId(), x: bx - w2, y: by + d2 },
+                    ];
+                    return {
+                        [model]: {
+                            ...state[model],
+                            accessoryBuildingGeometry: { mode: 'polygon', vertices },
+                        }
+                    };
+                }),
+
+                // Update accessory building vertex with perpendicular constraints + grid snap
+                updateAccessoryBuildingVertex: (model, vertexIndex, newX, newY) => set((state) => {
+                    const geometry = state[model].accessoryBuildingGeometry;
+                    if (!geometry || !geometry.vertices) return state;
+                    const snappedX = snapToGrid(newX);
+                    const snappedY = snapToGrid(newY);
+                    const newVertices = applyPerpendicularConstraint(geometry.vertices, vertexIndex, snappedX, snappedY);
+                    const bounds = verticesToBoundingRect(newVertices);
+                    return {
+                        [model]: {
+                            ...state[model],
+                            accessoryWidth: bounds.width,
+                            accessoryDepth: bounds.depth,
+                            accessoryX: bounds.centerX,
+                            accessoryY: bounds.centerY,
+                            accessoryBuildingGeometry: { ...geometry, vertices: newVertices },
+                        }
+                    };
+                }),
+
+                // Split accessory building edge
+                splitAccessoryBuildingEdge: (model, edgeIndex) => set((state) => {
+                    const geometry = state[model].accessoryBuildingGeometry;
+                    if (!geometry || !geometry.vertices) return state;
+                    const vertices = geometry.vertices;
+                    const n = vertices.length;
+                    const v1 = vertices[edgeIndex];
+                    const v2 = vertices[(edgeIndex + 1) % n];
+                    const newVertex = {
+                        id: generateVertexId(),
+                        x: snapToGrid((v1.x + v2.x) / 2),
+                        y: snapToGrid((v1.y + v2.y) / 2),
+                    };
+                    const newVertices = [
+                        ...vertices.slice(0, edgeIndex + 1),
+                        newVertex,
+                        ...vertices.slice(edgeIndex + 1)
+                    ];
+                    return {
+                        [model]: {
+                            ...state[model],
+                            accessoryBuildingGeometry: { ...geometry, vertices: newVertices },
+                        }
+                    };
+                }),
+
+                // Extrude accessory building edge perpendicular
+                extrudeAccessoryBuildingEdge: (model, edgeIndex, distance) => set((state) => {
+                    const geometry = state[model].accessoryBuildingGeometry;
+                    if (!geometry || !geometry.vertices) return state;
+                    const vertices = geometry.vertices;
+                    const n = vertices.length;
+                    const v1Index = edgeIndex;
+                    const v2Index = (edgeIndex + 1) % n;
+                    const v1 = vertices[v1Index];
+                    const v2 = vertices[v2Index];
+                    const perp = getEdgePerpendicular(v1, v2);
+                    const snappedDistance = snapToGrid(distance);
+                    if (Math.abs(snappedDistance) < 0.5) return state;
+                    const newVertices = vertices.map((v, i) => {
+                        if (i === v1Index || i === v2Index) {
+                            return {
+                                ...v,
+                                x: snapToGrid(v.x + perp.x * snappedDistance),
+                                y: snapToGrid(v.y + perp.y * snappedDistance),
+                            };
+                        }
+                        return v;
+                    });
+                    const bounds = verticesToBoundingRect(newVertices);
+                    return {
+                        [model]: {
+                            ...state[model],
+                            accessoryWidth: bounds.width,
+                            accessoryDepth: bounds.depth,
+                            accessoryX: bounds.centerX,
+                            accessoryY: bounds.centerY,
+                            accessoryBuildingGeometry: { ...geometry, vertices: newVertices },
+                        }
+                    };
+                }),
+
+                // Delete accessory building vertex (minimum 4)
+                deleteAccessoryBuildingVertex: (model, vertexIndex) => set((state) => {
+                    const geometry = state[model].accessoryBuildingGeometry;
+                    if (!geometry || !geometry.vertices || geometry.vertices.length <= 4) return state;
+                    const newVertices = geometry.vertices.filter((_, i) => i !== vertexIndex);
+                    const bounds = verticesToBoundingRect(newVertices);
+                    return {
+                        [model]: {
+                            ...state[model],
+                            accessoryWidth: bounds.width,
+                            accessoryDepth: bounds.depth,
+                            accessoryX: bounds.centerX,
+                            accessoryY: bounds.centerY,
+                            accessoryBuildingGeometry: { ...geometry, vertices: newVertices },
+                        }
+                    };
+                }),
+
+                // Reset accessory building to rectangle
+                resetAccessoryBuildingToRectangle: (model) => set((state) => {
+                    const geometry = state[model].accessoryBuildingGeometry;
+                    if (!geometry || geometry.mode !== 'polygon') return state;
+                    const bounds = geometry.vertices ? verticesToBoundingRect(geometry.vertices) : {
+                        width: state[model].accessoryWidth,
+                        depth: state[model].accessoryDepth,
+                        centerX: state[model].accessoryX,
+                        centerY: state[model].accessoryY,
+                    };
+                    return {
+                        [model]: {
+                            ...state[model],
+                            accessoryWidth: bounds.width,
+                            accessoryDepth: bounds.depth,
+                            accessoryX: bounds.centerX,
+                            accessoryY: bounds.centerY,
+                            accessoryBuildingGeometry: { mode: 'rectangle', vertices: null },
+                        }
+                    };
+                }),
+
+                // Set accessory building total height
+                setAccessoryBuildingTotalHeight: (model, newTotalHeight) => set((state) => {
+                    const params = state[model];
+                    const stories = params.accessoryStories || 1;
+                    const firstFloor = params.accessoryFirstFloorHeight;
+                    if (stories === 1) {
+                        return { [model]: { ...state[model], accessoryFirstFloorHeight: Math.max(1, newTotalHeight) } };
+                    }
+                    const newUpperFloor = Math.max(1, (newTotalHeight - firstFloor) / (stories - 1));
+                    return {
+                        [model]: { ...state[model], accessoryUpperFloorHeight: newUpperFloor }
+                    };
+                }),
+
+                // Set accessory roof setting
+                setAccessoryRoofSetting: (model, key, value) => set((state) => ({
+                    [model]: {
+                        ...state[model],
+                        accessoryRoof: { ...state[model].accessoryRoof, [key]: value }
+                    }
+                })),
+
+                // ============================================
+                // Entity CRUD Actions (District Module)
+                // ============================================
+
+                setActiveModule: (module) => set({ activeModule: module }),
+
+                // Model setup
+                setModelSetup: (key, value) => set((state) => ({
+                    modelSetup: { ...state.modelSetup, [key]: value }
+                })),
+                setStreetEdge: (edge, enabled) => set((state) => ({
+                    modelSetup: {
+                        ...state.modelSetup,
+                        streetEdges: { ...state.modelSetup.streetEdges, [edge]: enabled }
+                    }
+                })),
+                setStreetType: (edge, type) => set((state) => ({
+                    modelSetup: {
+                        ...state.modelSetup,
+                        streetTypes: { ...state.modelSetup.streetTypes, [edge]: type }
+                    }
+                })),
+
+                // District parameters (informational)
+                setDistrictParameter: (path, value) => set((state) => {
+                    // path is dot-separated, e.g. 'lotArea.min' or 'setbacksPrincipal.front.min'
+                    const keys = path.split('.');
+                    const newParams = JSON.parse(JSON.stringify(state.districtParameters));
+                    let obj = newParams;
+                    for (let i = 0; i < keys.length - 1; i++) {
+                        if (!obj[keys[i]]) obj[keys[i]] = {};
+                        obj = obj[keys[i]];
+                    }
+                    obj[keys[keys.length - 1]] = value;
+                    return { districtParameters: newParams };
+                }),
+
+                // Lot CRUD
+                addLot: (initialData) => set((state) => {
+                    const lotId = generateEntityId('lot');
+                    const lot = createDefaultLot(initialData);
+                    const style = createDefaultLotStyle();
+                    const visibility = createDefaultLotVisibility();
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: { ...state.entities.lots, [lotId]: lot },
+                        },
+                        entityOrder: [...state.entityOrder, lotId],
+                        nextEntityId: state.nextEntityId + 1,
+                        entityStyles: { ...state.entityStyles, [lotId]: style },
+                        lotVisibility: { ...state.lotVisibility, [lotId]: visibility },
+                    };
+                }),
+
+                removeLot: (lotId) => set((state) => {
+                    const { [lotId]: _, ...remainingLots } = state.entities.lots;
+                    const { [lotId]: __, ...remainingStyles } = state.entityStyles;
+                    const { [lotId]: ___, ...remainingVisibility } = state.lotVisibility;
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: remainingLots,
+                        },
+                        entityOrder: state.entityOrder.filter(id => id !== lotId),
+                        entityStyles: remainingStyles,
+                        lotVisibility: remainingVisibility,
+                        activeEntityId: state.activeEntityId === lotId ? null : state.activeEntityId,
+                    };
+                }),
+
+                duplicateLot: (lotId) => set((state) => {
+                    const sourceLot = state.entities.lots[lotId];
+                    const sourceStyle = state.entityStyles[lotId];
+                    const sourceVisibility = state.lotVisibility[lotId];
+                    if (!sourceLot) return state;
+
+                    const newLotId = generateEntityId('lot');
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [newLotId]: JSON.parse(JSON.stringify(sourceLot)),
+                            },
+                        },
+                        entityOrder: [...state.entityOrder, newLotId],
+                        nextEntityId: state.nextEntityId + 1,
+                        entityStyles: {
+                            ...state.entityStyles,
+                            [newLotId]: JSON.parse(JSON.stringify(sourceStyle || createDefaultLotStyle())),
+                        },
+                        lotVisibility: {
+                            ...state.lotVisibility,
+                            [newLotId]: JSON.parse(JSON.stringify(sourceVisibility || createDefaultLotVisibility())),
+                        },
+                    };
+                }),
+
+                // Lot parameter updates
+                updateLotParam: (lotId, key, value) => set((state) => {
+                    const lot = state.entities.lots[lotId];
+                    if (!lot) return state;
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: { ...lot, [key]: value },
+                            },
+                        },
+                    };
+                }),
+
+                updateLotSetback: (lotId, buildingType, key, value) => set((state) => {
+                    const lot = state.entities.lots[lotId];
+                    if (!lot) return state;
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    setbacks: {
+                                        ...lot.setbacks,
+                                        [buildingType]: {
+                                            ...lot.setbacks[buildingType],
+                                            [key]: value,
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    };
+                }),
+
+                // Building parameter updates
+                updateBuildingParam: (lotId, buildingType, key, value) => set((state) => {
+                    const lot = state.entities.lots[lotId];
+                    if (!lot || !lot.buildings[buildingType]) return state;
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    buildings: {
+                                        ...lot.buildings,
+                                        [buildingType]: {
+                                            ...lot.buildings[buildingType],
+                                            [key]: value,
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    };
+                }),
+
+                // Building roof settings (entity version)
+                setEntityRoofSetting: (lotId, buildingType, key, value) => set((state) => {
+                    const lot = state.entities.lots[lotId];
+                    if (!lot || !lot.buildings[buildingType]) return state;
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    buildings: {
+                                        ...lot.buildings,
+                                        [buildingType]: {
+                                            ...lot.buildings[buildingType],
+                                            roof: {
+                                                ...lot.buildings[buildingType].roof,
+                                                [key]: value,
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    };
+                }),
+
+                // Building total height (entity version)
+                setEntityBuildingTotalHeight: (lotId, buildingType, newTotalHeight) => set((state) => {
+                    const lot = state.entities.lots[lotId];
+                    if (!lot) return state;
+                    const building = lot.buildings[buildingType];
+                    if (!building) return state;
+                    const stories = building.stories || 1;
+                    const firstFloor = building.firstFloorHeight;
+                    let updates;
+                    if (stories === 1) {
+                        updates = { firstFloorHeight: Math.max(1, newTotalHeight) };
+                    } else {
+                        updates = { upperFloorHeight: Math.max(1, (newTotalHeight - firstFloor) / (stories - 1)) };
+                    }
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    buildings: {
+                                        ...lot.buildings,
+                                        [buildingType]: { ...building, ...updates },
+                                    },
+                                },
+                            },
+                        },
+                    };
+                }),
+
+                // Entity selection
+                selectEntity: (lotId) => set({ activeEntityId: lotId }),
+                deselectEntity: () => set({ activeEntityId: null, selectedBuildingType: null }),
+                selectEntityBuilding: (lotId, buildingType) => set((state) => {
+                    // Deselect any previously selected building
+                    const lots = { ...state.entities.lots };
+                    for (const id of state.entityOrder) {
+                        if (lots[id]) {
+                            const lot = lots[id];
+                            const pSelected = lot.buildings.principal.selected;
+                            const aSelected = lot.buildings.accessory.selected;
+                            if (pSelected || aSelected) {
+                                lots[id] = {
+                                    ...lot,
+                                    buildings: {
+                                        ...lot.buildings,
+                                        principal: { ...lot.buildings.principal, selected: false },
+                                        accessory: { ...lot.buildings.accessory, selected: false },
+                                    },
+                                };
+                            }
+                        }
+                    }
+                    // Select the target building
+                    if (lots[lotId]) {
+                        lots[lotId] = {
+                            ...lots[lotId],
+                            buildings: {
+                                ...lots[lotId].buildings,
+                                [buildingType]: { ...lots[lotId].buildings[buildingType], selected: true },
+                            },
+                        };
+                    }
+                    return {
+                        entities: { ...state.entities, lots },
+                        activeEntityId: lotId,
+                        selectedBuildingType: buildingType,
+                    };
+                }),
+                deselectAllEntityBuildings: () => set((state) => {
+                    const lots = { ...state.entities.lots };
+                    for (const id of state.entityOrder) {
+                        if (lots[id]) {
+                            const lot = lots[id];
+                            if (lot.buildings.principal.selected || lot.buildings.accessory.selected) {
+                                lots[id] = {
+                                    ...lot,
+                                    buildings: {
+                                        ...lot.buildings,
+                                        principal: { ...lot.buildings.principal, selected: false },
+                                        accessory: { ...lot.buildings.accessory, selected: false },
+                                    },
+                                };
+                            }
+                        }
+                    }
+                    return {
+                        entities: { ...state.entities, lots },
+                        selectedBuildingType: null,
+                    };
+                }),
+
+                // Entity building position
+                setEntityBuildingPosition: (lotId, buildingType, newX, newY) => set((state) => {
+                    const lot = state.entities.lots[lotId];
+                    if (!lot) return state;
+                    const building = lot.buildings[buildingType];
+                    if (!building) return state;
+                    const dx = newX - building.x;
+                    const dy = newY - building.y;
+                    const geometry = building.geometry;
+
+                    let updatedBuilding;
+                    if (geometry?.mode === 'polygon' && geometry.vertices?.length >= 3) {
+                        const newVertices = geometry.vertices.map(v => ({ ...v, x: v.x + dx, y: v.y + dy }));
+                        updatedBuilding = { ...building, x: newX, y: newY, geometry: { ...geometry, vertices: newVertices } };
+                    } else {
+                        updatedBuilding = { ...building, x: newX, y: newY };
+                    }
+
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    buildings: { ...lot.buildings, [buildingType]: updatedBuilding },
+                                },
+                            },
+                        },
+                    };
+                }),
+
+                // Entity polygon editing (lot)
+                enableEntityPolygonMode: (lotId) => set((state) => {
+                    const lot = state.entities.lots[lotId];
+                    if (!lot) return state;
+                    const w = lot.lotWidth;
+                    const d = lot.lotDepth;
+                    // District lots anchor at bottom-left (0,0), extend to positive X
+                    const vertices = [
+                        { id: generateVertexId(), x: 0, y: 0 },
+                        { id: generateVertexId(), x: w, y: 0 },
+                        { id: generateVertexId(), x: w, y: d },
+                        { id: generateVertexId(), x: 0, y: d },
+                    ];
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    lotGeometry: { mode: 'polygon', editing: true, vertices },
+                                },
+                            },
+                        },
+                    };
+                }),
+
+                setEntityPolygonEditing: (lotId, editing) => set((state) => {
+                    const lot = state.entities.lots[lotId];
+                    if (!lot || lot.lotGeometry?.mode !== 'polygon') return state;
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    lotGeometry: { ...lot.lotGeometry, editing },
+                                },
+                            },
+                        },
+                    };
+                }),
+
+                updateEntityVertex: (lotId, vertexIndex, newX, newY) => set((state) => {
+                    const lot = state.entities.lots[lotId];
+                    if (!lot || !lot.lotGeometry?.vertices) return state;
+                    const snappedX = snapToGrid(newX);
+                    const snappedY = snapToGrid(newY);
+                    const newVertices = applyPerpendicularConstraint(lot.lotGeometry.vertices, vertexIndex, snappedX, snappedY);
+                    const bounds = verticesToBoundingRect(newVertices);
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    lotWidth: bounds.width,
+                                    lotDepth: bounds.depth,
+                                    lotGeometry: { ...lot.lotGeometry, vertices: newVertices },
+                                },
+                            },
+                        },
+                    };
+                }),
+
+                splitEntityEdge: (lotId, edgeIndex) => set((state) => {
+                    const lot = state.entities.lots[lotId];
+                    if (!lot || !lot.lotGeometry?.vertices) return state;
+                    const vertices = lot.lotGeometry.vertices;
+                    const n = vertices.length;
+                    const v1 = vertices[edgeIndex];
+                    const v2 = vertices[(edgeIndex + 1) % n];
+                    const newVertex = { id: generateVertexId(), x: snapToGrid((v1.x + v2.x) / 2), y: snapToGrid((v1.y + v2.y) / 2) };
+                    const newVertices = [...vertices.slice(0, edgeIndex + 1), newVertex, ...vertices.slice(edgeIndex + 1)];
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: { ...lot, lotGeometry: { ...lot.lotGeometry, vertices: newVertices } },
+                            },
+                        },
+                    };
+                }),
+
+                extrudeEntityEdge: (lotId, edgeIndex, distance) => set((state) => {
+                    const lot = state.entities.lots[lotId];
+                    if (!lot || !lot.lotGeometry?.vertices) return state;
+                    const vertices = lot.lotGeometry.vertices;
+                    const n = vertices.length;
+                    const v1Index = edgeIndex;
+                    const v2Index = (edgeIndex + 1) % n;
+                    const perp = getEdgePerpendicular(vertices[v1Index], vertices[v2Index]);
+                    const snappedDistance = snapToGrid(distance);
+                    if (Math.abs(snappedDistance) < 0.5) return state;
+                    const newVertices = vertices.map((v, i) => {
+                        if (i === v1Index || i === v2Index) {
+                            return { ...v, x: snapToGrid(v.x + perp.x * snappedDistance), y: snapToGrid(v.y + perp.y * snappedDistance) };
+                        }
+                        return v;
+                    });
+                    const bounds = verticesToBoundingRect(newVertices);
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: { ...lot, lotWidth: bounds.width, lotDepth: bounds.depth, lotGeometry: { ...lot.lotGeometry, vertices: newVertices } },
+                            },
+                        },
+                    };
+                }),
+
+                deleteEntityVertex: (lotId, vertexIndex) => set((state) => {
+                    const lot = state.entities.lots[lotId];
+                    if (!lot || !lot.lotGeometry?.vertices || lot.lotGeometry.vertices.length <= 4) return state;
+                    const newVertices = lot.lotGeometry.vertices.filter((_, i) => i !== vertexIndex);
+                    const bounds = verticesToBoundingRect(newVertices);
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: { ...lot, lotWidth: bounds.width, lotDepth: bounds.depth, lotGeometry: { ...lot.lotGeometry, vertices: newVertices } },
+                            },
+                        },
+                    };
+                }),
+
+                commitEntityPolygonChanges: (lotId) => set((state) => {
+                    const lot = state.entities.lots[lotId];
+                    if (!lot || lot.lotGeometry?.mode !== 'polygon' || !lot.lotGeometry.vertices) return state;
+                    const bounds = verticesToBoundingRect(lot.lotGeometry.vertices);
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: { ...lot, lotWidth: bounds.width, lotDepth: bounds.depth, lotGeometry: { ...lot.lotGeometry, editing: false } },
+                            },
+                        },
+                    };
+                }),
+
+                resetEntityToRectangle: (lotId) => set((state) => {
+                    const lot = state.entities.lots[lotId];
+                    if (!lot || lot.lotGeometry?.mode !== 'polygon') return state;
+                    const bounds = lot.lotGeometry.vertices ? verticesToBoundingRect(lot.lotGeometry.vertices) : { width: lot.lotWidth, depth: lot.lotDepth };
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: { ...lot, lotWidth: bounds.width, lotDepth: bounds.depth, lotGeometry: { mode: 'rectangle', editing: false, vertices: null } },
+                            },
+                        },
+                    };
+                }),
+
+                // Entity building polygon editing
+                enableEntityBuildingPolygonMode: (lotId, buildingType) => set((state) => {
+                    const lot = state.entities.lots[lotId];
+                    if (!lot) return state;
+                    const building = lot.buildings[buildingType];
+                    if (!building) return state;
+                    const bx = building.x;
+                    const by = building.y;
+                    const w2 = building.width / 2;
+                    const d2 = building.depth / 2;
+                    const vertices = [
+                        { id: generateVertexId(), x: bx - w2, y: by - d2 },
+                        { id: generateVertexId(), x: bx + w2, y: by - d2 },
+                        { id: generateVertexId(), x: bx + w2, y: by + d2 },
+                        { id: generateVertexId(), x: bx - w2, y: by + d2 },
+                    ];
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    buildings: {
+                                        ...lot.buildings,
+                                        [buildingType]: { ...building, geometry: { mode: 'polygon', vertices } },
+                                    },
+                                },
+                            },
+                        },
+                    };
+                }),
+
+                updateEntityBuildingVertex: (lotId, buildingType, vertexIndex, newX, newY) => set((state) => {
+                    const lot = state.entities.lots[lotId];
+                    if (!lot) return state;
+                    const building = lot.buildings[buildingType];
+                    if (!building || !building.geometry?.vertices) return state;
+                    const snappedX = snapToGrid(newX);
+                    const snappedY = snapToGrid(newY);
+                    const newVertices = applyPerpendicularConstraint(building.geometry.vertices, vertexIndex, snappedX, snappedY);
+                    const bounds = verticesToBoundingRect(newVertices);
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    buildings: {
+                                        ...lot.buildings,
+                                        [buildingType]: {
+                                            ...building,
+                                            width: bounds.width, depth: bounds.depth,
+                                            x: bounds.centerX, y: bounds.centerY,
+                                            geometry: { ...building.geometry, vertices: newVertices },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    };
+                }),
+
+                splitEntityBuildingEdge: (lotId, buildingType, edgeIndex) => set((state) => {
+                    const lot = state.entities.lots[lotId];
+                    if (!lot) return state;
+                    const building = lot.buildings[buildingType];
+                    if (!building || !building.geometry?.vertices) return state;
+                    const vertices = building.geometry.vertices;
+                    const n = vertices.length;
+                    const v1 = vertices[edgeIndex];
+                    const v2 = vertices[(edgeIndex + 1) % n];
+                    const newVertex = { id: generateVertexId(), x: snapToGrid((v1.x + v2.x) / 2), y: snapToGrid((v1.y + v2.y) / 2) };
+                    const newVertices = [...vertices.slice(0, edgeIndex + 1), newVertex, ...vertices.slice(edgeIndex + 1)];
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    buildings: {
+                                        ...lot.buildings,
+                                        [buildingType]: { ...building, geometry: { ...building.geometry, vertices: newVertices } },
+                                    },
+                                },
+                            },
+                        },
+                    };
+                }),
+
+                extrudeEntityBuildingEdge: (lotId, buildingType, edgeIndex, distance) => set((state) => {
+                    const lot = state.entities.lots[lotId];
+                    if (!lot) return state;
+                    const building = lot.buildings[buildingType];
+                    if (!building || !building.geometry?.vertices) return state;
+                    const vertices = building.geometry.vertices;
+                    const n = vertices.length;
+                    const v1Index = edgeIndex;
+                    const v2Index = (edgeIndex + 1) % n;
+                    const perp = getEdgePerpendicular(vertices[v1Index], vertices[v2Index]);
+                    const snappedDistance = snapToGrid(distance);
+                    if (Math.abs(snappedDistance) < 0.5) return state;
+                    const newVertices = vertices.map((v, i) => {
+                        if (i === v1Index || i === v2Index) {
+                            return { ...v, x: snapToGrid(v.x + perp.x * snappedDistance), y: snapToGrid(v.y + perp.y * snappedDistance) };
+                        }
+                        return v;
+                    });
+                    const bounds = verticesToBoundingRect(newVertices);
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    buildings: {
+                                        ...lot.buildings,
+                                        [buildingType]: { ...building, width: bounds.width, depth: bounds.depth, x: bounds.centerX, y: bounds.centerY, geometry: { ...building.geometry, vertices: newVertices } },
+                                    },
+                                },
+                            },
+                        },
+                    };
+                }),
+
+                deleteEntityBuildingVertex: (lotId, buildingType, vertexIndex) => set((state) => {
+                    const lot = state.entities.lots[lotId];
+                    if (!lot) return state;
+                    const building = lot.buildings[buildingType];
+                    if (!building || !building.geometry?.vertices || building.geometry.vertices.length <= 4) return state;
+                    const newVertices = building.geometry.vertices.filter((_, i) => i !== vertexIndex);
+                    const bounds = verticesToBoundingRect(newVertices);
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    buildings: {
+                                        ...lot.buildings,
+                                        [buildingType]: { ...building, width: bounds.width, depth: bounds.depth, x: bounds.centerX, y: bounds.centerY, geometry: { ...building.geometry, vertices: newVertices } },
+                                    },
+                                },
+                            },
+                        },
+                    };
+                }),
+
+                resetEntityBuildingToRectangle: (lotId, buildingType) => set((state) => {
+                    const lot = state.entities.lots[lotId];
+                    if (!lot) return state;
+                    const building = lot.buildings[buildingType];
+                    if (!building || building.geometry?.mode !== 'polygon') return state;
+                    const bounds = building.geometry.vertices ? verticesToBoundingRect(building.geometry.vertices) : { width: building.width, depth: building.depth, centerX: building.x, centerY: building.y };
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    buildings: {
+                                        ...lot.buildings,
+                                        [buildingType]: { ...building, width: bounds.width, depth: bounds.depth, x: bounds.centerX, y: bounds.centerY, geometry: { mode: 'rectangle', vertices: null } },
+                                    },
+                                },
+                            },
+                        },
+                    };
+                }),
+
+                // Road module CRUD (entity system)
+                addEntityRoadModule: (direction, type) => set((state) => {
+                    const roadId = generateEntityId('road');
+                    const road = createDefaultRoadModule(direction, type);
+                    return {
+                        entities: {
+                            ...state.entities,
+                            roadModules: { ...state.entities.roadModules, [roadId]: road },
+                        },
+                    };
+                }),
+
+                removeEntityRoadModule: (roadId) => set((state) => {
+                    const { [roadId]: _, ...remaining } = state.entities.roadModules;
+                    return {
+                        entities: { ...state.entities, roadModules: remaining },
+                    };
+                }),
+
+                updateEntityRoadModule: (roadId, key, value) => set((state) => {
+                    const road = state.entities.roadModules[roadId];
+                    if (!road) return state;
+                    return {
+                        entities: {
+                            ...state.entities,
+                            roadModules: {
+                                ...state.entities.roadModules,
+                                [roadId]: { ...road, [key]: value },
+                            },
+                        },
+                    };
+                }),
+
+                changeEntityRoadModuleType: (roadId, newType) => set((state) => {
+                    const road = state.entities.roadModules[roadId];
+                    if (!road) return state;
+                    const defaults = createDefaultRoadModule(road.direction, newType);
+                    return {
+                        entities: {
+                            ...state.entities,
+                            roadModules: {
+                                ...state.entities.roadModules,
+                                [roadId]: { ...road, type: newType, rightOfWay: defaults.rightOfWay, roadWidth: defaults.roadWidth },
+                            },
+                        },
+                    };
+                }),
+
+                // Entity style actions
+                setEntityStyle: (lotId, category, property, value) => set((state) => {
+                    const style = state.entityStyles[lotId];
+                    if (!style) return state;
+                    return {
+                        entityStyles: {
+                            ...state.entityStyles,
+                            [lotId]: {
+                                ...style,
+                                [category]: {
+                                    ...style[category],
+                                    [property]: value,
+                                },
+                            },
+                        },
+                    };
+                }),
+
+                setEntityStyleOverride: (lotId, category, side, key, value) => set((state) => {
+                    const style = state.entityStyles[lotId];
+                    if (!style || !style[category]) return state;
+                    const currentOverrides = style[category].overrides || {};
+                    const currentSide = currentOverrides[side] || {};
+                    return {
+                        entityStyles: {
+                            ...state.entityStyles,
+                            [lotId]: {
+                                ...style,
+                                [category]: {
+                                    ...style[category],
+                                    overrides: {
+                                        ...currentOverrides,
+                                        [side]: { ...currentSide, [key]: value },
+                                    },
+                                },
+                            },
+                        },
+                    };
+                }),
+
+                applyStyleToAllLots: (category, property, value) => set((state) => {
+                    const newStyles = { ...state.entityStyles };
+                    for (const lotId of state.entityOrder) {
+                        if (newStyles[lotId] && newStyles[lotId][category]) {
+                            newStyles[lotId] = {
+                                ...newStyles[lotId],
+                                [category]: {
+                                    ...newStyles[lotId][category],
+                                    [property]: value,
+                                },
+                            };
+                        }
+                    }
+                    return { entityStyles: newStyles };
+                }),
+
+                // Per-lot visibility toggles
+                setLotVisibility: (lotId, key, value) => set((state) => {
+                    const vis = state.lotVisibility[lotId];
+                    if (!vis) return state;
+                    return {
+                        lotVisibility: {
+                            ...state.lotVisibility,
+                            [lotId]: { ...vis, [key]: value },
+                        },
+                    };
+                }),
 
                 toggleViewMode: () => set((state) => ({ viewSettings: { ...state.viewSettings, mode: state.viewSettings.mode === 'split' ? 'overlay' : 'split' } })),
                 setCameraView: (view) => set((state) => ({
@@ -1107,6 +2342,33 @@ export const useStore = create(
                         fillOpacity: 0.6,
                     },
                 },
+                // ============================================
+                // Comparison Roads (multi-direction, left/right/rear)
+                // ============================================
+                // Front road is the legacy `roadModule` above; these are additional direction roads
+                comparisonRoads: {
+                    left: {
+                        enabled: false, type: 'S2', rightOfWay: 40, roadWidth: 24,
+                        leftParking: null, rightParking: null,
+                        leftVerge: null, rightVerge: null,
+                        leftSidewalk: null, rightSidewalk: null,
+                        leftTransitionZone: null, rightTransitionZone: null,
+                    },
+                    right: {
+                        enabled: false, type: 'S2', rightOfWay: 40, roadWidth: 24,
+                        leftParking: null, rightParking: null,
+                        leftVerge: null, rightVerge: null,
+                        leftSidewalk: null, rightSidewalk: null,
+                        leftTransitionZone: null, rightTransitionZone: null,
+                    },
+                    rear: {
+                        enabled: false, type: 'S3', rightOfWay: 20, roadWidth: 16,
+                        leftParking: null, rightParking: null,
+                        leftVerge: null, rightVerge: null,
+                        leftSidewalk: null, rightSidewalk: null,
+                        leftTransitionZone: null, rightTransitionZone: null,
+                    },
+                },
                 setLayoutSetting: (key, value) => set((state) => ({
                     layoutSettings: { ...state.layoutSettings, [key]: value }
                 })),
@@ -1122,6 +2384,25 @@ export const useStore = create(
                             [property]: value
                         }
                     }
+                })),
+                // Comparison Roads Actions
+                setComparisonRoadSetting: (direction, key, value) => set((state) => ({
+                    comparisonRoads: {
+                        ...state.comparisonRoads,
+                        [direction]: {
+                            ...state.comparisonRoads[direction],
+                            [key]: value,
+                        },
+                    },
+                })),
+                toggleComparisonRoad: (direction) => set((state) => ({
+                    comparisonRoads: {
+                        ...state.comparisonRoads,
+                        [direction]: {
+                            ...state.comparisonRoads[direction],
+                            enabled: !state.comparisonRoads[direction].enabled,
+                        },
+                    },
                 })),
                 setStyleOverride: (model, category, side, key, value) => set((state) => {
                     const currentStyle = state.viewSettings.styleSettings[model][category];
@@ -1198,6 +2479,19 @@ export const useStore = create(
                 layerStates: [], // Layer states for current project
                 cameraState: null, // Current camera state for snapshots
 
+                // Auto-save state
+                autoSave: {
+                    enabled: false,
+                    intervalMs: 30000, // 30 seconds
+                    lastSavedAt: null,
+                    isDirty: false,
+                },
+
+                // Auto-save actions
+                setAutoSaveEnabled: (enabled) => set({ autoSave: { ...get().autoSave, enabled } }),
+                markDirty: () => set({ autoSave: { ...get().autoSave, isDirty: true } }),
+                markSaved: () => set({ autoSave: { ...get().autoSave, isDirty: false, lastSavedAt: Date.now() } }),
+
                 // Toast notifications
                 toast: null, // { message, type: 'success' | 'error' | 'info', id }
                 showToast: (message, type = 'success') => {
@@ -1251,9 +2545,18 @@ export const useStore = create(
                         camera: state.cameraState,
                         roadModule: state.roadModule,
                         roadModuleStyles: state.roadModuleStyles,
+                        comparisonRoads: state.comparisonRoads,
                         renderSettings: state.renderSettings,
                         sunSettings: state.sunSettings,
                         layoutSettings: state.layoutSettings,
+                        // Entity system data
+                        entities: state.entities,
+                        entityOrder: state.entityOrder,
+                        entityStyles: state.entityStyles,
+                        lotVisibility: state.lotVisibility,
+                        activeModule: state.activeModule,
+                        modelSetup: state.modelSetup,
+                        districtParameters: state.districtParameters,
                     };
                 },
 
@@ -1288,9 +2591,18 @@ export const useStore = create(
                         },
                         roadModule: snapshotData.roadModule || state.roadModule,
                         roadModuleStyles: snapshotData.roadModuleStyles || state.roadModuleStyles,
+                        comparisonRoads: snapshotData.comparisonRoads || state.comparisonRoads,
                         renderSettings: snapshotData.renderSettings || state.renderSettings,
                         sunSettings: snapshotData.sunSettings || state.sunSettings,
                         layoutSettings: snapshotData.layoutSettings || state.layoutSettings,
+                        // Entity system restoration
+                        entities: snapshotData.entities || state.entities,
+                        entityOrder: snapshotData.entityOrder || state.entityOrder,
+                        entityStyles: snapshotData.entityStyles || state.entityStyles,
+                        lotVisibility: snapshotData.lotVisibility || state.lotVisibility,
+                        activeModule: snapshotData.activeModule || state.activeModule,
+                        modelSetup: snapshotData.modelSetup || state.modelSetup,
+                        districtParameters: snapshotData.districtParameters || state.districtParameters,
                     };
                     // Camera will be restored separately by the CameraHandler
                     if (snapshotData.camera) {
@@ -1320,11 +2632,20 @@ export const useStore = create(
                         viewSettings: state.viewSettings,
                         roadModule: state.roadModule,
                         roadModuleStyles: state.roadModuleStyles,
+                        comparisonRoads: state.comparisonRoads,
                         renderSettings: state.renderSettings,
                         sunSettings: state.sunSettings,
                         layoutSettings: state.layoutSettings,
                         savedViews: state.savedViews,
                         uiTheme: state.uiTheme,
+                        // Entity system data
+                        entities: state.entities,
+                        entityOrder: state.entityOrder,
+                        entityStyles: state.entityStyles,
+                        lotVisibility: state.lotVisibility,
+                        activeModule: state.activeModule,
+                        modelSetup: state.modelSetup,
+                        districtParameters: state.districtParameters,
                     };
                 },
 
@@ -1339,11 +2660,20 @@ export const useStore = create(
                     },
                     roadModule: projectState.roadModule || state.roadModule,
                     roadModuleStyles: projectState.roadModuleStyles || state.roadModuleStyles,
+                    comparisonRoads: projectState.comparisonRoads || state.comparisonRoads,
                     renderSettings: projectState.renderSettings || state.renderSettings,
                     sunSettings: projectState.sunSettings || state.sunSettings,
                     layoutSettings: projectState.layoutSettings || state.layoutSettings,
                     savedViews: projectState.savedViews || state.savedViews,
                     uiTheme: projectState.uiTheme || state.uiTheme,
+                    // Entity system restoration
+                    entities: projectState.entities || state.entities,
+                    entityOrder: projectState.entityOrder || state.entityOrder,
+                    entityStyles: projectState.entityStyles || state.entityStyles,
+                    lotVisibility: projectState.lotVisibility || state.lotVisibility,
+                    activeModule: projectState.activeModule || state.activeModule,
+                    modelSetup: projectState.modelSetup || state.modelSetup,
+                    districtParameters: projectState.districtParameters || state.districtParameters,
                 })),
 
                 // Flag to signal camera restoration needed
@@ -1352,7 +2682,7 @@ export const useStore = create(
             }),
             {
                 name: 'zoning-app-storage',
-                version: 14, // Updated to 14 for building editor + roof layer
+                version: 15, // Updated to 15 for entity system (District Module)
                 migrate: (persistedState, version) => {
                     // Split dimensionsLot into dimensionsLotWidth and dimensionsLotDepth
                     if (persistedState.viewSettings && persistedState.viewSettings.layers && persistedState.viewSettings.layers.dimensionsLot !== undefined) {
@@ -1629,9 +2959,121 @@ export const useStore = create(
                         }
                     }
 
+                    if (version < 15) {
+                        // Migration to 15 - Entity system for District Module
+                        // Initialize entity state if not present
+                        if (!persistedState.entities) {
+                            persistedState.entities = { lots: {}, roadModules: {} };
+                        }
+                        if (!persistedState.entityOrder) {
+                            persistedState.entityOrder = [];
+                        }
+                        if (persistedState.nextEntityId === undefined) {
+                            persistedState.nextEntityId = 1;
+                        }
+                        if (persistedState.activeEntityId === undefined) {
+                            persistedState.activeEntityId = null;
+                        }
+                        if (persistedState.selectedBuildingType === undefined) {
+                            persistedState.selectedBuildingType = null;
+                        }
+                        if (!persistedState.entityStyles) {
+                            persistedState.entityStyles = {};
+                        }
+                        if (!persistedState.lotVisibility) {
+                            persistedState.lotVisibility = {};
+                        }
+                        if (!persistedState.activeModule) {
+                            persistedState.activeModule = 'comparison';
+                        }
+                        if (!persistedState.modelSetup) {
+                            persistedState.modelSetup = {
+                                numLots: 1,
+                                streetEdges: { front: true, left: false, right: false, rear: false },
+                                streetTypes: { front: 'S1', left: 'S1', right: 'S2', rear: 'S3' },
+                            };
+                        }
+                        if (!persistedState.districtParameters) {
+                            persistedState.districtParameters = {};
+                        }
+                    }
+
+                    // ============================================
+                    // Accessory building fields migration (Phase 4.1)
+                    // Always run — patches existing v15 data that lacks these fields
+                    // ============================================
+                    const migrateAccessory = (condition) => {
+                        if (!condition) return;
+                        if (condition.accessoryWidth === undefined) condition.accessoryWidth = 0;
+                        if (condition.accessoryDepth === undefined) condition.accessoryDepth = 0;
+                        if (condition.accessoryX === undefined) condition.accessoryX = 0;
+                        if (condition.accessoryY === undefined) condition.accessoryY = 0;
+                        if (condition.accessoryStories === undefined) condition.accessoryStories = 1;
+                        if (condition.accessoryFirstFloorHeight === undefined) condition.accessoryFirstFloorHeight = 10;
+                        if (condition.accessoryUpperFloorHeight === undefined) condition.accessoryUpperFloorHeight = 10;
+                        if (condition.accessoryMaxHeight === undefined) condition.accessoryMaxHeight = 15;
+                        if (!condition.accessoryBuildingGeometry) condition.accessoryBuildingGeometry = { mode: 'rectangle' };
+                        if (condition.accessorySelectedBuilding === undefined) condition.accessorySelectedBuilding = false;
+                        if (!condition.accessoryRoof) {
+                            condition.accessoryRoof = {
+                                type: 'flat', overrideHeight: false, ridgeHeight: null,
+                                ridgeDirection: 'x', shedDirection: '+y',
+                            };
+                        }
+                    };
+                    migrateAccessory(persistedState.existing);
+                    migrateAccessory(persistedState.proposed);
+
+                    // Accessory style defaults
+                    const defaultAccessoryBuildingEdges = { color: '#555555', width: 1.0, visible: true, dashed: false, opacity: 1.0 };
+                    const defaultAccessoryRoofEdges = { color: '#555555', width: 1.0, visible: true, opacity: 1.0 };
+                    if (persistedState.viewSettings?.styleSettings?.existing) {
+                        const es = persistedState.viewSettings.styleSettings.existing;
+                        if (!es.accessoryBuildingFaces) es.accessoryBuildingFaces = { color: '#E0E0E0', opacity: 0.9, transparent: true };
+                        if (!es.accessoryBuildingEdges) es.accessoryBuildingEdges = { ...defaultAccessoryBuildingEdges };
+                        if (!es.accessoryRoofFaces) es.accessoryRoofFaces = { color: '#C8B898', opacity: 0.85, transparent: true };
+                        if (!es.accessoryRoofEdges) es.accessoryRoofEdges = { ...defaultAccessoryRoofEdges };
+                    }
+                    if (persistedState.viewSettings?.styleSettings?.proposed) {
+                        const ps = persistedState.viewSettings.styleSettings.proposed;
+                        if (!ps.accessoryBuildingFaces) ps.accessoryBuildingFaces = { color: '#F0F0F0', opacity: 0.85, transparent: true };
+                        if (!ps.accessoryBuildingEdges) ps.accessoryBuildingEdges = { ...defaultAccessoryBuildingEdges };
+                        if (!ps.accessoryRoofFaces) ps.accessoryRoofFaces = { color: '#D4C8B8', opacity: 0.85, transparent: true };
+                        if (!ps.accessoryRoofEdges) ps.accessoryRoofEdges = { ...defaultAccessoryRoofEdges };
+                    }
+
+                    // ============================================
+                    // Comparison Roads migration (Phase 4.2)
+                    // ============================================
+                    if (!persistedState.comparisonRoads) {
+                        persistedState.comparisonRoads = {
+                            left: {
+                                enabled: false, type: 'S2', rightOfWay: 40, roadWidth: 24,
+                                leftParking: null, rightParking: null,
+                                leftVerge: null, rightVerge: null,
+                                leftSidewalk: null, rightSidewalk: null,
+                                leftTransitionZone: null, rightTransitionZone: null,
+                            },
+                            right: {
+                                enabled: false, type: 'S2', rightOfWay: 40, roadWidth: 24,
+                                leftParking: null, rightParking: null,
+                                leftVerge: null, rightVerge: null,
+                                leftSidewalk: null, rightSidewalk: null,
+                                leftTransitionZone: null, rightTransitionZone: null,
+                            },
+                            rear: {
+                                enabled: false, type: 'S3', rightOfWay: 20, roadWidth: 16,
+                                leftParking: null, rightParking: null,
+                                leftVerge: null, rightVerge: null,
+                                leftSidewalk: null, rightSidewalk: null,
+                                leftTransitionZone: null, rightTransitionZone: null,
+                            },
+                        };
+                    }
+
                     return {
                         ...persistedState,
-                        version: 14 // Update verified version
+                        version: 15 // Update verified version
                     };
                 },
                 partialize: (state) => ({
@@ -1643,21 +3085,31 @@ export const useStore = create(
                     layoutSettings: state.layoutSettings,
                     roadModule: state.roadModule,
                     roadModuleStyles: state.roadModuleStyles,
+                    comparisonRoads: state.comparisonRoads,
                     savedViews: state.savedViews,
                     userDefaults: state.userDefaults,
                     projectConfig: state.projectConfig,
                     currentProject: state.currentProject,
                     uiTheme: state.uiTheme,
+                    // Entity system
+                    entities: state.entities,
+                    entityOrder: state.entityOrder,
+                    nextEntityId: state.nextEntityId,
+                    activeModule: state.activeModule,
+                    entityStyles: state.entityStyles,
+                    lotVisibility: state.lotVisibility,
+                    modelSetup: state.modelSetup,
+                    districtParameters: state.districtParameters,
                 }),
             }
         ),
         {
             limit: 50,
             partialize: (state) => {
-                const { existing, proposed, viewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles } = state
+                const { existing, proposed, viewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, comparisonRoads, entities, entityOrder, entityStyles, lotVisibility } = state
                 // Exclude export triggers from undo history
                 const { exportRequested, ...trackedViewSettings } = viewSettings
-                return { existing, proposed, viewSettings: trackedViewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles }
+                return { existing, proposed, viewSettings: trackedViewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, comparisonRoads, entities, entityOrder, entityStyles, lotVisibility }
             }
         }
     )

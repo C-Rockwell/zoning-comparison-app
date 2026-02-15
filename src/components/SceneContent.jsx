@@ -219,6 +219,7 @@ const SceneContent = () => {
     const setBuildingPosition = useStore((state) => state.setBuildingPosition)
     const roadModule = useStore((state) => state.roadModule)
     const roadModuleStyles = useStore((state) => state.roadModuleStyles)
+    const comparisonRoads = useStore((state) => state.comparisonRoads)
     const exportLineScale = useStore((state) => state.viewSettings.exportLineScale) || 1
 
     // Polygon editing actions (lots)
@@ -226,13 +227,22 @@ const SceneContent = () => {
     const splitEdge = useStore((state) => state.splitEdge)
     const extrudeEdge = useStore((state) => state.extrudeEdge)
 
-    // Building editing actions
+    // Building editing actions (principal)
     const selectBuilding = useStore((state) => state.selectBuilding)
     const enableBuildingPolygonMode = useStore((state) => state.enableBuildingPolygonMode)
     const updateBuildingVertex = useStore((state) => state.updateBuildingVertex)
     const splitBuildingEdge = useStore((state) => state.splitBuildingEdge)
     const extrudeBuildingEdge = useStore((state) => state.extrudeBuildingEdge)
     const setBuildingTotalHeight = useStore((state) => state.setBuildingTotalHeight)
+
+    // Accessory building editing actions
+    const selectAccessoryBuilding = useStore((state) => state.selectAccessoryBuilding)
+    const setAccessoryBuildingPosition = useStore((state) => state.setAccessoryBuildingPosition)
+    const enableAccessoryBuildingPolygonMode = useStore((state) => state.enableAccessoryBuildingPolygonMode)
+    const updateAccessoryBuildingVertex = useStore((state) => state.updateAccessoryBuildingVertex)
+    const splitAccessoryBuildingEdge = useStore((state) => state.splitAccessoryBuildingEdge)
+    const extrudeAccessoryBuildingEdge = useStore((state) => state.extrudeAccessoryBuildingEdge)
+    const setAccessoryBuildingTotalHeight = useStore((state) => state.setAccessoryBuildingTotalHeight)
 
     // Check if lots are in polygon mode
     const existingIsPolygon = existing.lotGeometry?.mode === 'polygon' && existing.lotGeometry?.vertices
@@ -241,6 +251,10 @@ const SceneContent = () => {
     // Check if polygon editing is active (show handles)
     const existingIsEditing = existingIsPolygon && existing.lotGeometry?.editing
     const proposedIsEditing = proposedIsPolygon && proposed.lotGeometry?.editing
+
+    // Check if accessory buildings are enabled (width > 0)
+    const existingHasAccessory = existing.accessoryWidth > 0
+    const proposedHasAccessory = proposed.accessoryWidth > 0
 
     const scaleFactor = 1
     const spacing = layoutSettings?.lotSpacing ?? 0
@@ -317,6 +331,7 @@ const SceneContent = () => {
                         lineScale={exportLineScale}
                     />
                 )}
+                {/* Principal Building for Existing */}
                 {layers.buildings && (
                     <BuildingEditor
                         model="existing"
@@ -350,7 +365,41 @@ const SceneContent = () => {
                         setBuildingTotalHeight={setBuildingTotalHeight}
                     />
                 )}
-                {/* Road Module for Existing */}
+                {/* Accessory Building for Existing */}
+                {layers.buildings && existingHasAccessory && (
+                    <BuildingEditor
+                        model="existing"
+                        width={existing.accessoryWidth}
+                        depth={existing.accessoryDepth}
+                        x={existing.accessoryX}
+                        y={existing.accessoryY}
+                        buildingGeometry={existing.accessoryBuildingGeometry}
+                        selected={existing.accessorySelectedBuilding}
+                        styles={{ faces: existingStyles.accessoryBuildingFaces, edges: existingStyles.accessoryBuildingEdges }}
+                        scaleFactor={scaleFactor}
+                        onSelect={() => selectAccessoryBuilding('existing', true)}
+                        onPositionChange={(x, y) => setAccessoryBuildingPosition('existing', x, y)}
+                        offsetGroupX={-offset}
+                        stories={existing.accessoryStories || 1}
+                        firstFloorHeight={existing.accessoryFirstFloorHeight || 10}
+                        upperFloorHeight={existing.accessoryUpperFloorHeight || 10}
+                        maxHeight={existing.accessoryMaxHeight || 15}
+                        showMaxHeightPlane={false}
+                        maxHeightPlaneStyle={{}}
+                        roof={existing.accessoryRoof}
+                        roofStyles={{ roofFaces: existingStyles.accessoryRoofFaces, roofEdges: existingStyles.accessoryRoofEdges }}
+                        showRoof={layers.roof}
+                        showHeightDimensions={false}
+                        dimensionSettings={styleSettings.dimensionSettings}
+                        lineScale={exportLineScale}
+                        enableBuildingPolygonMode={enableAccessoryBuildingPolygonMode}
+                        updateBuildingVertex={updateAccessoryBuildingVertex}
+                        splitBuildingEdge={splitAccessoryBuildingEdge}
+                        extrudeBuildingEdge={extrudeAccessoryBuildingEdge}
+                        setBuildingTotalHeight={setAccessoryBuildingTotalHeight}
+                    />
+                )}
+                {/* Front Road Module for Existing */}
                 {layers.roadModule && roadModule?.enabled && roadModuleStyles && (
                     <RoadModule
                         lotWidth={existing.lotWidth}
@@ -359,6 +408,41 @@ const SceneContent = () => {
                         model="existing"
                         lineScale={exportLineScale}
                     />
+                )}
+                {/* Multi-Direction Comparison Roads for Existing */}
+                {layers.roadModule && roadModuleStyles && comparisonRoads && (
+                    <>
+                        {comparisonRoads.left?.enabled && (
+                            <RoadModule
+                                lotWidth={existing.lotWidth}
+                                roadModule={comparisonRoads.left}
+                                styles={roadModuleStyles}
+                                model="existing"
+                                direction="left"
+                                lineScale={exportLineScale}
+                            />
+                        )}
+                        {comparisonRoads.right?.enabled && (
+                            <RoadModule
+                                lotWidth={existing.lotWidth}
+                                roadModule={comparisonRoads.right}
+                                styles={roadModuleStyles}
+                                model="existing"
+                                direction="right"
+                                lineScale={exportLineScale}
+                            />
+                        )}
+                        {comparisonRoads.rear?.enabled && (
+                            <RoadModule
+                                lotWidth={existing.lotWidth}
+                                roadModule={comparisonRoads.rear}
+                                styles={roadModuleStyles}
+                                model="existing"
+                                direction="rear"
+                                lineScale={exportLineScale}
+                            />
+                        )}
+                    </>
                 )}
             </group>
 
@@ -415,6 +499,7 @@ const SceneContent = () => {
                         lineScale={exportLineScale}
                     />
                 )}
+                {/* Principal Building for Proposed */}
                 {layers.buildings && (
                     <BuildingEditor
                         model="proposed"
@@ -448,7 +533,41 @@ const SceneContent = () => {
                         setBuildingTotalHeight={setBuildingTotalHeight}
                     />
                 )}
-                {/* Road Module for Proposed */}
+                {/* Accessory Building for Proposed */}
+                {layers.buildings && proposedHasAccessory && (
+                    <BuildingEditor
+                        model="proposed"
+                        width={proposed.accessoryWidth}
+                        depth={proposed.accessoryDepth}
+                        x={proposed.accessoryX}
+                        y={proposed.accessoryY}
+                        buildingGeometry={proposed.accessoryBuildingGeometry}
+                        selected={proposed.accessorySelectedBuilding}
+                        styles={{ faces: proposedStyles.accessoryBuildingFaces, edges: proposedStyles.accessoryBuildingEdges }}
+                        scaleFactor={scaleFactor}
+                        onSelect={() => selectAccessoryBuilding('proposed', true)}
+                        onPositionChange={(x, y) => setAccessoryBuildingPosition('proposed', x, y)}
+                        offsetGroupX={offset}
+                        stories={proposed.accessoryStories || 1}
+                        firstFloorHeight={proposed.accessoryFirstFloorHeight || 10}
+                        upperFloorHeight={proposed.accessoryUpperFloorHeight || 10}
+                        maxHeight={proposed.accessoryMaxHeight || 15}
+                        showMaxHeightPlane={false}
+                        maxHeightPlaneStyle={{}}
+                        roof={proposed.accessoryRoof}
+                        roofStyles={{ roofFaces: proposedStyles.accessoryRoofFaces, roofEdges: proposedStyles.accessoryRoofEdges }}
+                        showRoof={layers.roof}
+                        showHeightDimensions={false}
+                        dimensionSettings={styleSettings.dimensionSettings}
+                        lineScale={exportLineScale}
+                        enableBuildingPolygonMode={enableAccessoryBuildingPolygonMode}
+                        updateBuildingVertex={updateAccessoryBuildingVertex}
+                        splitBuildingEdge={splitAccessoryBuildingEdge}
+                        extrudeBuildingEdge={extrudeAccessoryBuildingEdge}
+                        setBuildingTotalHeight={setAccessoryBuildingTotalHeight}
+                    />
+                )}
+                {/* Front Road Module for Proposed */}
                 {layers.roadModule && roadModule?.enabled && roadModuleStyles && (
                     <RoadModule
                         lotWidth={proposed.lotWidth}
@@ -457,6 +576,41 @@ const SceneContent = () => {
                         model="proposed"
                         lineScale={exportLineScale}
                     />
+                )}
+                {/* Multi-Direction Comparison Roads for Proposed */}
+                {layers.roadModule && roadModuleStyles && comparisonRoads && (
+                    <>
+                        {comparisonRoads.left?.enabled && (
+                            <RoadModule
+                                lotWidth={proposed.lotWidth}
+                                roadModule={comparisonRoads.left}
+                                styles={roadModuleStyles}
+                                model="proposed"
+                                direction="left"
+                                lineScale={exportLineScale}
+                            />
+                        )}
+                        {comparisonRoads.right?.enabled && (
+                            <RoadModule
+                                lotWidth={proposed.lotWidth}
+                                roadModule={comparisonRoads.right}
+                                styles={roadModuleStyles}
+                                model="proposed"
+                                direction="right"
+                                lineScale={exportLineScale}
+                            />
+                        )}
+                        {comparisonRoads.rear?.enabled && (
+                            <RoadModule
+                                lotWidth={proposed.lotWidth}
+                                roadModule={comparisonRoads.rear}
+                                styles={roadModuleStyles}
+                                model="proposed"
+                                direction="rear"
+                                lineScale={exportLineScale}
+                            />
+                        )}
+                    </>
                 )}
             </group>
         </group>

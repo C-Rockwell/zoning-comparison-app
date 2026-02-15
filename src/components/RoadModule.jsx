@@ -3,24 +3,46 @@ import { Line } from '@react-three/drei'
 import * as THREE from 'three'
 
 /**
+ * Direction-to-rotation mapping for multi-direction road rendering.
+ * Roads are rendered in their canonical "front" orientation (along X, stacking in -Y),
+ * then rotated around Z so the lot-facing edge normal points toward the lots.
+ *
+ * Canonical lot-facing normal = +Y (toward the lot from the road).
+ * After rotation, the normal should point:
+ * - front: +Y (no rotation) — road in front of lots (negative Y side)
+ * - left:  +X (90 CW)       — road to the left, lot-facing edge faces +X toward lots
+ * - right: -X (90 CCW)      — road to the right, lot-facing edge faces -X toward lots
+ * - rear:  -Y (180)         — road behind lots, lot-facing edge faces -Y toward lots
+ */
+const DIRECTION_ROTATION = {
+    front: 0,
+    left: -Math.PI / 2,
+    right: Math.PI / 2,
+    rear: Math.PI,
+}
+
+/**
  * RoadModule Component
  *
- * Renders a road cross-section module in front of a lot.
- * The module extends in the negative Y direction from the lot's front edge (x-axis).
+ * Renders a road cross-section module adjacent to a lot edge.
+ * The module is rendered in a canonical "front" orientation (zones stacking in -Y from
+ * a front edge along the X-axis), then rotated via the `direction` prop to face any edge.
  *
- * Geometry Layout (from positive Y to negative Y):
+ * Geometry Layout (canonical / front direction, from positive Y to negative Y):
  * - Lot front line is at Y=0
  * - Right side elements (parking, verge, sidewalk, transition) stack from road edge toward Y=0
  * - Road width polygon is centered on the centerline (rightOfWay/2)
  * - Left side elements stack from road edge toward the outer right-of-way line
  * - Right-of-way outer line is at Y = -rightOfWay
  *
- * @param {number} lotWidth - Width of the lot (determines road module width)
+ * @param {number} lotWidth - Width of the lot (determines road module width along its primary axis)
  * @param {object} roadModule - Road module parameters
  * @param {object} styles - Style settings for each layer type
- * @param {string} model - 'existing' or 'proposed' (for positioning)
+ * @param {string} model - 'existing' or 'proposed' (for positioning in comparison view)
+ * @param {string} direction - 'front' | 'right' | 'rear' | 'left' (default: 'front')
+ * @param {number} lineScale - Line width multiplier for export scaling
  */
-const RoadModule = ({ lotWidth, roadModule, styles, model, lineScale = 1 }) => {
+const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', lineScale = 1 }) => {
     // Early return if missing required data
     if (!roadModule || !styles || !lotWidth) {
         return null
@@ -228,8 +250,11 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, lineScale = 1 }) => {
     const rowStyle = styles.rightOfWay || { color: '#000000', width: 1, dashed: true, dashSize: 2, gapSize: 1, opacity: 1 }
     const roadStyle = styles.roadWidth || { lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1, fillColor: '#666666', fillOpacity: 0.8 }
 
+    // Resolve rotation angle from direction prop
+    const rotationZ = DIRECTION_ROTATION[direction] || 0
+
     return (
-        <group>
+        <group rotation={[0, 0, rotationZ]}>
             {/* Right-of-Way Lines (2 polylines) */}
             {/* Line 1: At Y=0 (lot front line / property line) - matches lot width */}
             <Line

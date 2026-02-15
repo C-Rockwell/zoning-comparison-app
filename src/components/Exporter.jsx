@@ -3,7 +3,7 @@ import { useThree } from '@react-three/fiber'
 import { useStore } from '../store/useStore'
 import { OBJExporter, GLTFExporter, ColladaExporter } from 'three-stdlib'
 import * as THREE from 'three'
-import { generateIFC } from '../utils/ifcGenerator'
+import { generateIFC, generateDistrictIFC } from '../utils/ifcGenerator'
 import * as api from '../services/api'
 
 const Exporter = ({ target }) => {
@@ -183,17 +183,30 @@ const Exporter = ({ target }) => {
                             saveOrDownload(result.data, 'zoning-model.dae', 'application/xml', false, projectId, showToast)
 
                         } else if (exportFormat === 'dxf') {
+                            // DXF operates on the Three.js scene graph, so it handles whatever
+                            // geometry is rendered (works for both comparison and district modules)
                             const dxfString = generateDXF(tempGroup)
                             saveOrDownload(dxfString, 'zoning-model.dxf', 'application/dxf', false, projectId, showToast)
 
                         } else if (exportFormat === 'ifc') {
                             // IFC export reads directly from store, not from Three.js scene
                             const state = useStore.getState()
-                            const ifcString = generateIFC(state.existing, state.proposed, {
-                                filename: 'zoning-model.ifc',
-                                lotSpacing: state.layoutSettings?.lotSpacing || 10
-                            })
-                            saveOrDownload(ifcString, 'zoning-model.ifc', 'application/x-step', false, projectId, showToast)
+                            let ifcString
+                            if (state.activeModule === 'district') {
+                                // District module: multi-lot IFC from entity system
+                                ifcString = generateDistrictIFC(state.entities.lots, state.entityOrder, {
+                                    filename: 'zoning-district.ifc',
+                                    lotSpacing: state.layoutSettings?.lotSpacing || 10
+                                })
+                                saveOrDownload(ifcString, 'zoning-district.ifc', 'application/x-step', false, projectId, showToast)
+                            } else {
+                                // Comparison module: existing vs proposed IFC
+                                ifcString = generateIFC(state.existing, state.proposed, {
+                                    filename: 'zoning-model.ifc',
+                                    lotSpacing: state.layoutSettings?.lotSpacing || 10
+                                })
+                                saveOrDownload(ifcString, 'zoning-model.ifc', 'application/x-step', false, projectId, showToast)
+                            }
 
                         } else if (exportFormat === 'png') {
                             const url = gl.domElement.toDataURL('image/png')

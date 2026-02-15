@@ -139,14 +139,14 @@ const StateManager = () => {
 
   return (
     <>
-      <div className="bg-gray-700/50 rounded mb-4">
+      <div className="rounded mb-4" style={{ backgroundColor: 'var(--ui-bg-secondary-50)' }}>
         {/* Header */}
         <button
           onClick={() => setIsExpanded(!isExpanded)}
           className="w-full flex items-center justify-between p-3"
         >
-          <h3 className="text-sm font-bold uppercase tracking-wide text-gray-400">
-            Saved States
+          <h3 className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--ui-text-secondary)' }}>
+            Views
           </h3>
           {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
@@ -157,22 +157,22 @@ const StateManager = () => {
             <div className="flex gap-1 mb-3">
               <button
                 onClick={() => setActiveTab('snapshots')}
-                className={`flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
-                  activeTab === 'snapshots'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
-                }`}
+                className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded text-xs font-medium transition-colors"
+                style={{
+                  backgroundColor: activeTab === 'snapshots' ? 'var(--ui-accent)' : 'var(--ui-border)',
+                  color: activeTab === 'snapshots' ? '#fff' : 'var(--ui-text-secondary)',
+                }}
               >
                 <Camera size={14} />
-                Snapshots
+                Views
               </button>
               <button
                 onClick={() => setActiveTab('layer-states')}
-                className={`flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
-                  activeTab === 'layer-states'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
-                }`}
+                className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded text-xs font-medium transition-colors"
+                style={{
+                  backgroundColor: activeTab === 'layer-states' ? 'var(--ui-accent)' : 'var(--ui-border)',
+                  color: activeTab === 'layer-states' ? '#fff' : 'var(--ui-text-secondary)',
+                }}
               >
                 <Layers size={14} />
                 Layer States
@@ -182,35 +182,39 @@ const StateManager = () => {
             {/* Tab Content */}
             {activeTab === 'snapshots' ? (
               <div>
-                <p className="text-xs text-gray-400 mb-2">
+                <p className="text-xs mb-2" style={{ color: 'var(--ui-text-secondary)' }}>
                   Full state including camera position
                 </p>
                 <button
                   onClick={() => openSaveModal('snapshot')}
-                  className="w-full flex items-center justify-center gap-1 px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded text-sm mb-2 transition-colors"
+                  className="w-full flex items-center justify-center gap-1 px-3 py-2 rounded text-sm mb-2 transition-colors hover-bg-secondary"
+                  style={{ backgroundColor: 'var(--ui-border)', color: 'var(--ui-text-primary)' }}
                 >
                   <Save size={14} />
-                  Save Snapshot
+                  Save View
                 </button>
                 <div className="max-h-40 overflow-y-auto space-y-1">
                   {snapshots.length === 0 ? (
-                    <p className="text-xs text-gray-500 text-center py-2">No snapshots</p>
+                    <p className="text-xs text-center py-2" style={{ color: 'var(--ui-text-muted)' }}>No views</p>
                   ) : (
                     snapshots.map((snapshot) => (
                       <div
                         key={snapshot.filename}
-                        className="flex items-center gap-1 bg-gray-600/50 rounded px-2 py-1.5 group"
+                        className="flex items-center gap-1 rounded px-2 py-1.5 group"
+                        style={{ backgroundColor: 'var(--ui-bg-secondary-50)' }}
                       >
                         <button
                           onClick={() => handleLoadSnapshot(snapshot)}
                           disabled={loading}
-                          className="flex-1 text-left text-sm truncate hover:text-blue-400 transition-colors disabled:opacity-50"
+                          className="flex-1 text-left text-sm truncate hover-text-accent transition-colors disabled:opacity-50"
+                          style={{ color: 'var(--ui-text-primary)' }}
                         >
                           {snapshot.name}
                         </button>
                         <button
                           onClick={() => handleDeleteSnapshot(snapshot)}
-                          className="p-1 text-gray-400 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                          className="p-1 hover-text-error opacity-0 group-hover:opacity-100 transition-all"
+                          style={{ color: 'var(--ui-text-secondary)' }}
                           title="Delete"
                         >
                           <Trash2 size={12} />
@@ -222,35 +226,39 @@ const StateManager = () => {
               </div>
             ) : (
               <div>
-                <p className="text-xs text-gray-400 mb-2">
+                <p className="text-xs mb-2" style={{ color: 'var(--ui-text-secondary)' }}>
                   Styles and visibility only (no camera)
                 </p>
                 <button
                   onClick={() => openSaveModal('layer-state')}
-                  className="w-full flex items-center justify-center gap-1 px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded text-sm mb-2 transition-colors"
+                  className="w-full flex items-center justify-center gap-1 px-3 py-2 rounded text-sm mb-2 transition-colors hover-bg-secondary"
+                  style={{ backgroundColor: 'var(--ui-border)', color: 'var(--ui-text-primary)' }}
                 >
                   <Save size={14} />
                   Save Layer State
                 </button>
                 <div className="max-h-40 overflow-y-auto space-y-1">
                   {layerStates.length === 0 ? (
-                    <p className="text-xs text-gray-500 text-center py-2">No layer states</p>
+                    <p className="text-xs text-center py-2" style={{ color: 'var(--ui-text-muted)' }}>No layer states</p>
                   ) : (
                     layerStates.map((layerState) => (
                       <div
                         key={layerState.filename}
-                        className="flex items-center gap-1 bg-gray-600/50 rounded px-2 py-1.5 group"
+                        className="flex items-center gap-1 rounded px-2 py-1.5 group"
+                        style={{ backgroundColor: 'var(--ui-bg-secondary-50)' }}
                       >
                         <button
                           onClick={() => handleLoadLayerState(layerState)}
                           disabled={loading}
-                          className="flex-1 text-left text-sm truncate hover:text-blue-400 transition-colors disabled:opacity-50"
+                          className="flex-1 text-left text-sm truncate hover-text-accent transition-colors disabled:opacity-50"
+                          style={{ color: 'var(--ui-text-primary)' }}
                         >
                           {layerState.name}
                         </button>
                         <button
                           onClick={() => handleDeleteLayerState(layerState)}
-                          className="p-1 text-gray-400 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                          className="p-1 hover-text-error opacity-0 group-hover:opacity-100 transition-all"
+                          style={{ color: 'var(--ui-text-secondary)' }}
                           title="Delete"
                         >
                           <Trash2 size={12} />
@@ -268,9 +276,9 @@ const StateManager = () => {
       {/* Save Modal */}
       {showSaveModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-sm mx-4 border border-gray-700">
-            <h2 className="text-lg font-bold mb-4">
-              Save {saveType === 'snapshot' ? 'Snapshot' : 'Layer State'}
+          <div className="rounded-lg p-6 w-full max-w-sm mx-4" style={{ backgroundColor: 'var(--ui-bg-primary)', border: '1px solid var(--ui-border)' }}>
+            <h2 className="text-lg font-bold mb-4" style={{ color: 'var(--ui-text-primary)' }}>
+              Save {saveType === 'snapshot' ? 'View' : 'Layer State'}
             </h2>
             <form onSubmit={handleSave}>
               <input
@@ -278,22 +286,25 @@ const StateManager = () => {
                 value={saveName}
                 onChange={(e) => setSaveName(e.target.value)}
                 placeholder="Name"
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded mb-4 text-white placeholder-gray-500"
+                className="w-full px-3 py-2 rounded mb-4 placeholder-theme"
+                style={{ backgroundColor: 'var(--ui-bg-secondary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-primary)' }}
                 autoFocus
               />
-              {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
+              {error && <p className="text-sm mb-4" style={{ color: 'var(--ui-error)' }}>{error}</p>}
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowSaveModal(false)}
-                  className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+                  className="px-4 py-2 hover-text-primary transition-colors"
+                  style={{ color: 'var(--ui-text-secondary)' }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loading || !saveName.trim()}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded disabled:opacity-50 transition-colors"
+                  className="px-4 py-2 rounded disabled:opacity-50 transition-colors hover-bg-accent-hover"
+                  style={{ backgroundColor: 'var(--ui-accent)', color: '#fff' }}
                 >
                   {loading ? 'Saving...' : 'Save'}
                 </button>

@@ -16,6 +16,12 @@
   --ui-success: #10b981;         /* green-500 */
   --ui-error: #ef4444;           /* red-500 */
   --ui-border-glow: none;
+  --ui-warning: #f59e0b;
+  --ui-bg-secondary-50: rgba(55, 65, 81, 0.5);
+  --ui-accent-muted: rgba(59, 130, 246, 0.15);
+  --ui-error-muted: rgba(239, 68, 68, 0.15);
+  --ui-success-muted: rgba(16, 185, 129, 0.15);
+  --ui-warning-muted: rgba(245, 158, 11, 0.15);
 }
 
 /* Modern Theme (black + cyan neon) */
@@ -32,6 +38,12 @@
   --ui-success: #00ff88;         /* neon green */
   --ui-error: #ff4466;           /* neon red */
   --ui-border-glow: 0 0 10px rgba(0, 255, 204, 0.3);
+  --ui-warning: #ffaa00;
+  --ui-bg-secondary-50: rgba(26, 26, 26, 0.5);
+  --ui-accent-muted: rgba(0, 255, 204, 0.1);
+  --ui-error-muted: rgba(255, 68, 102, 0.1);
+  --ui-success-muted: rgba(0, 255, 136, 0.1);
+  --ui-warning-muted: rgba(255, 170, 0, 0.1);
 }
 
 html,
@@ -44,6 +56,26 @@ body,
 }
 
 @layer utilities {
+
+  /* Theme-aware pseudo-class utilities */
+  .hover-bg-secondary:hover { background-color: var(--ui-bg-secondary); }
+  .hover-bg-primary:hover { background-color: var(--ui-bg-primary); }
+  .hover-bg-accent:hover { background-color: var(--ui-accent); }
+  .hover-bg-accent-hover:hover { background-color: var(--ui-accent-hover); }
+  .hover-text-primary:hover { color: var(--ui-text-primary); }
+  .hover-text-secondary:hover { color: var(--ui-text-secondary); }
+  .hover-text-accent:hover { color: var(--ui-accent); }
+  .hover-text-error:hover { color: var(--ui-error); }
+  .hover-border-accent:hover { border-color: var(--ui-accent); }
+
+  .focus-ring-accent:focus { outline: none; box-shadow: 0 0 0 2px var(--ui-accent); }
+  .focus-ring-accent-1:focus { outline: none; box-shadow: 0 0 0 1px var(--ui-accent); }
+
+  .accent-theme { accent-color: var(--ui-accent); }
+  .placeholder-theme::placeholder { color: var(--ui-text-muted); }
+  .scrollbar-theme::-webkit-scrollbar-thumb { background-color: var(--ui-border); }
+
+  .input-theme:disabled { background-color: var(--ui-bg-primary); color: var(--ui-text-muted); }
 
   .no-spinner::-webkit-inner-spin-button,
   .no-spinner::-webkit-outer-spin-button {

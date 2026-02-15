@@ -1,8 +1,14 @@
 import { useEffect } from 'react'
+import { Routes, Route } from 'react-router-dom'
 import ParameterPanel from './components/ParameterPanel'
 import Viewer3D from './components/Viewer3D'
 import ProjectManager from './components/ProjectManager'
+import StartScreen from './components/StartScreen'
+import DistrictViewer from './components/DistrictViewer'
+import DistrictParameterPanel from './components/DistrictParameterPanel'
 import { useStore } from './store/useStore'
+import { useAutoSave } from './hooks/useAutoSave'
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 
 // Toast notification component
 const Toast = () => {
@@ -35,13 +41,9 @@ const Toast = () => {
   )
 }
 
-function App() {
-  const uiTheme = useStore(state => state.uiTheme)
-
-  // Apply theme data attribute to document root
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', uiTheme)
-  }, [uiTheme])
+// Main workspace layout (shown at /app)
+const MainLayout = () => {
+  const activeModule = useStore(state => state.activeModule)
 
   return (
     <div
@@ -50,11 +52,41 @@ function App() {
     >
       <ProjectManager />
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-        <Viewer3D />
-        <ParameterPanel />
+        {activeModule === 'district' ? (
+          <>
+            <DistrictViewer />
+            <DistrictParameterPanel />
+          </>
+        ) : (
+          <>
+            <Viewer3D />
+            <ParameterPanel />
+          </>
+        )}
       </div>
-      <Toast />
     </div>
+  )
+}
+
+function App() {
+  const uiTheme = useStore(state => state.uiTheme)
+
+  useAutoSave()
+  useKeyboardShortcuts()
+
+  // Apply theme data attribute to document root
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', uiTheme)
+  }, [uiTheme])
+
+  return (
+    <>
+      <Routes>
+        <Route path="/" element={<StartScreen />} />
+        <Route path="/app" element={<MainLayout />} />
+      </Routes>
+      <Toast />
+    </>
   )
 }
 
