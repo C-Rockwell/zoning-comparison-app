@@ -69,39 +69,65 @@ const RoadIntersectionFillet = ({
                         const strokeWidth = (isOutermost && roadWidthStyle?.lineWidth) || zone.stroke.width
                         const strokeDashed = isOutermost ? (roadWidthStyle?.lineDashed ?? zone.stroke.dashed) : zone.stroke.dashed
                         const strokeOpacity = (isOutermost && roadWidthStyle?.lineOpacity != null) ? roadWidthStyle.lineOpacity : zone.stroke.opacity
-                        // Sub-sample arc points for outermost line to reduce Line2 miter thickening
-                        const arcPoints = isOutermost
-                            ? zone.outerArcPoints.filter((_, i) => i % 2 === 0 || i === zone.outerArcPoints.length - 1)
-                            : zone.outerArcPoints
+
+                        // Use original points without sub-sampling. 
+                        // To avoid miter thickening from Line2 polylines, we render each segment 
+                        // as a separate 2-point Line. This matches RoadModule's straight edges.
+                        const points = zone.outerArcPoints
+
+                        // Create array of segments from points
+                        const segments = []
+                        for (let i = 0; i < points.length - 1; i++) {
+                            segments.push([points[i], points[i + 1]])
+                        }
+
                         return (
-                            <Line
-                                points={arcPoints}
-                                color={strokeColor}
-                                lineWidth={strokeWidth * lineScale}
-                                dashed={strokeDashed}
-                                dashSize={strokeDashed ? 1 : undefined}
-                                gapSize={strokeDashed ? 0.5 : undefined}
-                                transparent
-                                opacity={strokeOpacity}
-                                renderOrder={3}
-                            />
+                            <group>
+                                {segments.map((segment, i) => (
+                                    <Line
+                                        key={`arc-segment-${i}`}
+                                        points={segment}
+                                        color={strokeColor}
+                                        lineWidth={strokeWidth * lineScale}
+                                        dashed={strokeDashed}
+                                        dashSize={strokeDashed ? 1 : undefined}
+                                        gapSize={strokeDashed ? 0.5 : undefined}
+                                        transparent
+                                        opacity={strokeOpacity}
+                                        renderOrder={3}
+                                    />
+                                ))}
+                            </group>
                         )
                     })()}
 
                     {/* Inner arc border line (skip for innermost zone / road surface) */}
-                    {zone.innerArcPoints.length >= 2 && (
-                        <Line
-                            points={zone.innerArcPoints}
-                            color={zone.stroke.color}
-                            lineWidth={zone.stroke.width * lineScale}
-                            dashed={zone.stroke.dashed}
-                            dashSize={zone.stroke.dashed ? 1 : undefined}
-                            gapSize={zone.stroke.dashed ? 0.5 : undefined}
-                            transparent
-                            opacity={zone.stroke.opacity}
-                            renderOrder={3}
-                        />
-                    )}
+                    {zone.innerArcPoints.length >= 2 && (() => {
+                        const points = zone.innerArcPoints
+                        const segments = []
+                        for (let i = 0; i < points.length - 1; i++) {
+                            segments.push([points[i], points[i + 1]])
+                        }
+
+                        return (
+                            <group>
+                                {segments.map((segment, i) => (
+                                    <Line
+                                        key={`inner-arc-segment-${i}`}
+                                        points={segment}
+                                        color={zone.stroke.color}
+                                        lineWidth={zone.stroke.width * lineScale}
+                                        dashed={zone.stroke.dashed}
+                                        dashSize={zone.stroke.dashed ? 1 : undefined}
+                                        gapSize={zone.stroke.dashed ? 0.5 : undefined}
+                                        transparent
+                                        opacity={zone.stroke.opacity}
+                                        renderOrder={3}
+                                    />
+                                ))}
+                            </group>
+                        )
+                    })()}
                 </group>
             ))}
         </group>
