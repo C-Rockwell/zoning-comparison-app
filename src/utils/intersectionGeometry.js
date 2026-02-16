@@ -19,6 +19,10 @@ import * as THREE from 'three'
 /**
  * Returns the start and end angles for a quarter-circle arc at a given corner.
  *
+ * The fillet is centered at the lot property corner. Arcs sweep through the
+ * quadrant between the two roads (toward the intersection), curving the
+ * toward-lot zones (verge, sidewalk, etc.) around the corner.
+ *
  * Corner layout (top-down, lot block in center):
  *   rear-left  ---- rear road ---- rear-right
  *       |                              |
@@ -27,10 +31,10 @@ import * as THREE from 'three'
  *  front-left ---- front road --- front-right
  *
  * Arc angles (standard math convention, CCW from +X):
- *   front-left:  π   to 3π/2   (-X to -Y quadrant)
- *   front-right: 3π/2 to 2π    (-Y to +X quadrant)
- *   rear-left:   π/2 to π      (+Y to -X quadrant)
- *   rear-right:  0   to π/2    (+X to +Y quadrant)
+ *   front-left:  π     to 3π/2   (-X to -Y quadrant, between front & left roads)
+ *   front-right: 3π/2  to 2π     (-Y to +X quadrant, between front & right roads)
+ *   rear-left:   π/2   to π      (+Y to -X quadrant, between rear & left roads)
+ *   rear-right:  0     to π/2    (+X to +Y quadrant, between rear & right roads)
  */
 export function getCornerAngles(corner) {
     switch (corner) {
@@ -43,7 +47,7 @@ export function getCornerAngles(corner) {
         case 'rear-right':
             return { startAngle: 0, endAngle: Math.PI * 0.5 }
         default:
-            return { startAngle: 0, endAngle: Math.PI * 0.5 }
+            return { startAngle: Math.PI, endAngle: Math.PI * 1.5 }
     }
 }
 
@@ -157,80 +161,6 @@ function computeZoneStack(road, side) {
 }
 
 /**
- * Determines which side of each road faces the corner.
- *
- * At each corner, the fillet connects zones from the "away from lot" side
- * of both roads — the side that faces outward into the corner area.
- *
- *   front-left:  front road left side  + left road left side
- *   front-right: front road left side  + right road right side
- *   rear-left:   rear road right side  + left road right side
- *   rear-right:  rear road left side   + right road left side
- *
- * Why these sides?
- * - Front road: left = -Y (away from lot). The front-left and front-right
- *   corners are both on the away-from-lot side of the front road.
- * - Left road (runs along Y, lot on +X side): at front-left corner the
- *   road's left side (away from lot, -X direction) faces the corner.
- * - Right road (runs along Y, lot on -X side): at front-right corner the
- *   road's right side (away from lot, +X direction) faces the corner.
- * - Rear road: right = +Y (away from lot when rear is flipped).
- *
- * @param {string} corner
- * @returns {{ sideA: 'left' | 'right', sideB: 'left' | 'right' }}
- */
-function getCornerSides(corner) {
-    switch (corner) {
-        case 'front-left':
-            return { sideA: 'left', sideB: 'left' }
-        case 'front-right':
-            return { sideA: 'left', sideB: 'right' }
-        case 'rear-left':
-            return { sideA: 'right', sideB: 'right' }
-        case 'rear-right':
-            return { sideA: 'left', sideB: 'left' }
-        default:
-            return { sideA: 'left', sideB: 'left' }
-    }
-}
-
-/**
- * Computes the base radius for the innermost fillet zone at a corner.
- *
- * This is the distance from the corner point to the road surface edge
- * on the side that faces the corner. Both roads contribute a base radius;
- * we use the larger of the two so the fillet clears both road surfaces.
- *
- * For a road in canonical front orientation:
- *   - Left side base = |roadBottomY| = rightOfWay/2 + roadWidth/2
- *   - Right side base = |roadTopY distance from lot edge| ... but actually
- *     the right side base = rightOfWay/2 - roadWidth/2 (from Y=0 down to roadTopY)
- *
- * Wait — the base radius is measured from the CORNER POINT. The corner point
- * is where two property lines meet. From the corner, the road surface edge
- * distance depends on the side:
- *   - Left side (away from lot): distance = rightOfWay/2 + roadWidth/2
- *     (from Y=0, the road surface bottom edge is at -(ROW/2 + rw/2))
- *   - Right side (toward lot): distance = rightOfWay/2 - roadWidth/2
- *     (from Y=0, the road surface top edge is at -(ROW/2 - rw/2))
- *
- * @param {object} road - Road module data
- * @param {'left' | 'right'} side - Which side of the road
- * @returns {number} Base radius from corner to road surface edge
- */
-function getBaseRadius(road, side) {
-    const halfROW = road.rightOfWay / 2
-    const halfRoad = road.roadWidth / 2
-    if (side === 'left') {
-        // Away from lot: road bottom edge distance from property line (Y=0)
-        return halfROW + halfRoad
-    } else {
-        // Toward lot: road top edge distance from property line (Y=0)
-        return halfROW - halfRoad
-    }
-}
-
-/**
  * Computes the full fillet zone stack for a corner intersection.
  *
  * Given two perpendicular roads meeting at a corner, computes the arc
@@ -244,6 +174,8 @@ function getBaseRadius(road, side) {
  * @param {string} corner - 'front-left' | 'front-right' | 'rear-left' | 'rear-right'
  * @param {object} styles - roadModuleStyles object with zone fill/stroke colors
  *   Shape: { leftParking: { fillColor, fillOpacity, lineColor, lineWidth, lineDashed, lineOpacity }, ... }
+ * @param {'left' | 'right'} sideA - Which side of roadA to use ('right' = toward lot, 'left' = away from lot)
+ * @param {'left' | 'right'} sideB - Which side of roadB to use
  * @returns {Array<{
  *   zoneType: string,
  *   shape: THREE.Shape,
@@ -254,117 +186,79 @@ function getBaseRadius(road, side) {
  *   zOffset: number,
  * }>}
  */
-export function computeCornerZoneStack(roadA, roadB, corner, styles) {
+export function computeCornerZoneStack(roadA, roadB, corner, styles, sideA = 'right', sideB = 'right') {
     const { startAngle, endAngle } = getCornerAngles(corner)
-    const { sideA, sideB } = getCornerSides(corner)
 
-    // Get zone stacks from each road's corner-facing side
-    const zonesA = computeZoneStack(roadA, sideA)
-    const zonesB = computeZoneStack(roadB, sideB)
+    // Use the specified side for each road. Fall back to the opposite side
+    // if the requested side has no zones configured.
+    let innerZonesA = computeZoneStack(roadA, sideA)
+    if (innerZonesA.length === 0) innerZonesA = computeZoneStack(roadA, sideA === 'right' ? 'left' : 'right')
 
-    // Base radius: the road surface edge distance from the corner point.
-    // Use the larger of the two roads so the fillet clears both road surfaces.
-    const baseRadiusA = getBaseRadius(roadA, sideA)
-    const baseRadiusB = getBaseRadius(roadB, sideB)
-    const baseRadius = Math.max(baseRadiusA, baseRadiusB)
+    let innerZonesB = computeZoneStack(roadB, sideB)
+    if (innerZonesB.length === 0) innerZonesB = computeZoneStack(roadB, sideB === 'right' ? 'left' : 'right')
 
-    // Merge zone stacks: iterate through zone layers, using roadA's zone depths
-    // as the primary source. If roadA doesn't have a zone but roadB does, use
-    // roadB's depth. If both have it, average the depths for a smooth transition.
+    const segments = 24
+    const baseZOffset = 0.05
+    const result = []
+
+    // Zone type definitions for merging — ordered from lot corner outward
+    // (transition closest to lot, parking closest to road surface)
     const allZoneTypes = [
-        { type: 'Parking', leftKey: 'leftParking', rightKey: 'rightParking' },
-        { type: 'Verge', leftKey: 'leftVerge', rightKey: 'rightVerge' },
-        { type: 'Sidewalk', leftKey: 'leftSidewalk', rightKey: 'rightSidewalk' },
         { type: 'TransitionZone', leftKey: 'leftTransitionZone', rightKey: 'rightTransitionZone' },
+        { type: 'Sidewalk', leftKey: 'leftSidewalk', rightKey: 'rightSidewalk' },
+        { type: 'Verge', leftKey: 'leftVerge', rightKey: 'rightVerge' },
+        { type: 'Parking', leftKey: 'leftParking', rightKey: 'rightParking' },
     ]
 
-    const result = []
-    let currentRadius = baseRadius
-    const segments = 24
-    const baseZOffset = 0.015
-
-    // Also add a road surface arc to fill the corner between the two overlapping
-    // road surface rectangles. This covers the curved gap.
-    const roadSurfaceRadius = baseRadius
-    if (roadSurfaceRadius > 0) {
-        const roadSurfaceShape = computeZoneArc(0, roadSurfaceRadius, startAngle, endAngle, segments)
-        const roadStyle = styles.roadWidth || {
-            lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1,
-            fillColor: '#666666', fillOpacity: 0.8,
+    // Merge toward-lot zones from both roads, averaging depths when both have the same zone
+    const merged = []
+    for (const { type, leftKey, rightKey } of allZoneTypes) {
+        const zA = innerZonesA.find(z => z.zoneType === leftKey || z.zoneType === rightKey)
+        const zB = innerZonesB.find(z => z.zoneType === leftKey || z.zoneType === rightKey)
+        if (!zA && !zB) continue
+        let depth, styleKey
+        if (zA && zB) {
+            depth = (zA.depth + zB.depth) / 2
+            styleKey = zA.styleKey
+        } else if (zA) {
+            depth = zA.depth
+            styleKey = zA.styleKey
+        } else {
+            depth = zB.depth
+            styleKey = zB.styleKey
         }
-        result.push({
-            zoneType: 'roadSurface',
-            shape: roadSurfaceShape,
-            fill: {
-                color: roadStyle.fillColor,
-                opacity: roadStyle.fillOpacity,
-            },
-            stroke: {
-                color: roadStyle.lineColor,
-                width: roadStyle.lineWidth,
-                dashed: roadStyle.lineDashed,
-                opacity: roadStyle.lineOpacity,
-            },
-            outerArcPoints: getArcPoints(roadSurfaceRadius, startAngle, endAngle, segments, baseZOffset),
-            innerArcPoints: [],
-            zOffset: baseZOffset,
-        })
+        if (depth <= 0) continue
+        merged.push({ type, depth, styleKey })
     }
 
-    for (let i = 0; i < allZoneTypes.length; i++) {
-        const { type, leftKey, rightKey } = allZoneTypes[i]
-
-        // Find this zone type in each road's stack
-        const zoneA = zonesA.find(z => z.zoneType === leftKey || z.zoneType === rightKey)
-        const zoneB = zonesB.find(z => z.zoneType === leftKey || z.zoneType === rightKey)
-
-        if (!zoneA && !zoneB) continue
-
-        // Determine the depth for this zone layer
-        let depth
-        if (zoneA && zoneB) {
-            depth = (zoneA.depth + zoneB.depth) / 2
-        } else if (zoneA) {
-            depth = zoneA.depth
-        } else {
-            depth = zoneB.depth
-        }
-
-        if (depth <= 0) continue
-
+    // Stack toward-lot zones from radius 0 outward, from lot corner toward
+    // road surface (transition → sidewalk → verge → parking).
+    let currentRadius = 0
+    for (const zone of merged) {
         const innerRadius = currentRadius
-        const outerRadius = currentRadius + depth
-
-        // Create the arc shape
+        const outerRadius = currentRadius + zone.depth
         const shape = computeZoneArc(innerRadius, outerRadius, startAngle, endAngle, segments)
-
-        // Resolve style — prefer the zone found in roadA's side, fall back to roadB
-        const styleKey = zoneA ? zoneA.styleKey : zoneB.styleKey
-        const zoneStyle = styles[styleKey] || {
+        const zoneStyle = styles[zone.styleKey] || {
             lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1,
             fillColor: '#888888', fillOpacity: 0.6,
         }
-
-        const zOffset = baseZOffset + (result.length) * 0.001
-
+        const zOffset = baseZOffset + result.length * 0.001
         result.push({
-            zoneType: `${sideA}${type}`,
+            zoneType: zone.type,
             shape,
-            fill: {
-                color: zoneStyle.fillColor,
-                opacity: zoneStyle.fillOpacity,
-            },
+            fill: { color: zoneStyle.fillColor, opacity: zoneStyle.fillOpacity },
             stroke: {
                 color: zoneStyle.lineColor,
                 width: zoneStyle.lineWidth,
                 dashed: zoneStyle.lineDashed,
                 opacity: zoneStyle.lineOpacity,
             },
-            outerArcPoints: getArcPoints(outerRadius, startAngle, endAngle, segments, zOffset),
-            innerArcPoints: getArcPoints(innerRadius, startAngle, endAngle, segments, zOffset),
+            outerArcPoints: getArcPoints(outerRadius, startAngle, endAngle, segments, zOffset + 0.005),
+            innerArcPoints: innerRadius > 0
+                ? getArcPoints(innerRadius, startAngle, endAngle, segments, zOffset + 0.005)
+                : [],
             zOffset,
         })
-
         currentRadius = outerRadius
     }
 

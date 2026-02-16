@@ -29,6 +29,30 @@ const DIRECTION_ROTATION = {
     rear: [0, 0, Math.PI],
 }
 
+// Generate all 4 fillet sub-corners for a pair of perpendicular roads at an intersection
+function generateFilletCorners(roadA, dirA, roadB, dirB, lotPos) {
+    if (!roadA?.enabled || !roadB?.enabled) return []
+    const flipA = d => d === 'front' ? 'rear' : d === 'rear' ? 'front' : d
+    const flipB = d => d === 'left' ? 'right' : d === 'right' ? 'left' : d
+    const getOffset = (dir, road) => {
+        const row = road.rightOfWay || 0
+        if (dir === 'front') return { dx: 0, dy: -row }
+        if (dir === 'rear') return { dx: 0, dy: row }
+        if (dir === 'left') return { dx: -row, dy: 0 }
+        if (dir === 'right') return { dx: row, dy: 0 }
+        return { dx: 0, dy: 0 }
+    }
+    const pairName = `${dirA}-${dirB}`
+    const oA = getOffset(dirA, roadA)
+    const oB = getOffset(dirB, roadB)
+    return [
+        { roadA, roadB, corner: pairName, pos: lotPos, sideA: 'right', sideB: 'right' },
+        { roadA, roadB, corner: `${dirA}-${flipB(dirB)}`, pos: [lotPos[0] + oB.dx, lotPos[1] + oB.dy], sideA: 'right', sideB: 'left' },
+        { roadA, roadB, corner: `${flipA(dirA)}-${dirB}`, pos: [lotPos[0] + oA.dx, lotPos[1] + oA.dy], sideA: 'left', sideB: 'right' },
+        { roadA, roadB, corner: `${flipA(dirA)}-${flipB(dirB)}`, pos: [lotPos[0] + oA.dx + oB.dx, lotPos[1] + oA.dy + oB.dy], sideA: 'left', sideB: 'left' },
+    ]
+}
+
 // Helper function to resolve dimension label based on custom label settings
 const resolveDimensionLabel = (value, dimensionKey, dimensionSettings) => {
     const customLabels = dimensionSettings?.customLabels || {}
@@ -528,23 +552,19 @@ const SceneContent = () => {
                         )}
                     </>
                 )}
-                {/* Road Intersection Fillets for Existing */}
-                {layers.roadIntersections && roadModuleStyles && (
-                    <>
-                        {roadModule?.enabled && comparisonRoads?.left?.enabled && (
-                            <RoadIntersectionFillet roadA={roadModule} roadB={comparisonRoads.left} corner="front-left" cornerPosition={[-existing.lotWidth, 0]} styles={roadModuleStyles} lineScale={exportLineScale} />
-                        )}
-                        {roadModule?.enabled && comparisonRoads?.right?.enabled && (
-                            <RoadIntersectionFillet roadA={roadModule} roadB={comparisonRoads.right} corner="front-right" cornerPosition={[0, 0]} styles={roadModuleStyles} lineScale={exportLineScale} />
-                        )}
-                        {comparisonRoads?.rear?.enabled && comparisonRoads?.left?.enabled && (
-                            <RoadIntersectionFillet roadA={comparisonRoads.rear} roadB={comparisonRoads.left} corner="rear-left" cornerPosition={[-existing.lotWidth, existing.lotDepth]} styles={roadModuleStyles} lineScale={exportLineScale} />
-                        )}
-                        {comparisonRoads?.rear?.enabled && comparisonRoads?.right?.enabled && (
-                            <RoadIntersectionFillet roadA={comparisonRoads.rear} roadB={comparisonRoads.right} corner="rear-right" cornerPosition={[0, existing.lotDepth]} styles={roadModuleStyles} lineScale={exportLineScale} />
-                        )}
-                    </>
-                )}
+                {/* Road Intersection Fillets for Existing — all 4 sub-corners per intersection */}
+                {(layers.roadIntersections !== false) && roadModuleStyles && (() => {
+                    const W = existing.lotWidth, D = existing.lotDepth
+                    const allCorners = [
+                        ...generateFilletCorners(roadModule, 'front', comparisonRoads?.left, 'left', [-W, 0]),
+                        ...generateFilletCorners(roadModule, 'front', comparisonRoads?.right, 'right', [0, 0]),
+                        ...generateFilletCorners(comparisonRoads?.rear, 'rear', comparisonRoads?.left, 'left', [-W, D]),
+                        ...generateFilletCorners(comparisonRoads?.rear, 'rear', comparisonRoads?.right, 'right', [0, D]),
+                    ]
+                    return allCorners.map((c, i) => (
+                        <RoadIntersectionFillet key={`ex-fillet-${i}`} roadA={c.roadA} roadB={c.roadB} corner={c.corner} cornerPosition={c.pos} styles={roadModuleStyles} lineScale={exportLineScale} sideA={c.sideA} sideB={c.sideB} />
+                    ))
+                })()}
             </group>
 
             {/* PROPOSED SCENE (Right - positive X) */}
@@ -775,23 +795,19 @@ const SceneContent = () => {
                         )}
                     </>
                 )}
-                {/* Road Intersection Fillets for Proposed */}
-                {layers.roadIntersections && roadModuleStyles && (
-                    <>
-                        {roadModule?.enabled && comparisonRoads?.left?.enabled && (
-                            <RoadIntersectionFillet roadA={roadModule} roadB={comparisonRoads.left} corner="front-left" cornerPosition={[0, 0]} styles={roadModuleStyles} lineScale={exportLineScale} />
-                        )}
-                        {roadModule?.enabled && comparisonRoads?.right?.enabled && (
-                            <RoadIntersectionFillet roadA={roadModule} roadB={comparisonRoads.right} corner="front-right" cornerPosition={[proposed.lotWidth, 0]} styles={roadModuleStyles} lineScale={exportLineScale} />
-                        )}
-                        {comparisonRoads?.rear?.enabled && comparisonRoads?.left?.enabled && (
-                            <RoadIntersectionFillet roadA={comparisonRoads.rear} roadB={comparisonRoads.left} corner="rear-left" cornerPosition={[0, proposed.lotDepth]} styles={roadModuleStyles} lineScale={exportLineScale} />
-                        )}
-                        {comparisonRoads?.rear?.enabled && comparisonRoads?.right?.enabled && (
-                            <RoadIntersectionFillet roadA={comparisonRoads.rear} roadB={comparisonRoads.right} corner="rear-right" cornerPosition={[proposed.lotWidth, proposed.lotDepth]} styles={roadModuleStyles} lineScale={exportLineScale} />
-                        )}
-                    </>
-                )}
+                {/* Road Intersection Fillets for Proposed — all 4 sub-corners per intersection */}
+                {(layers.roadIntersections !== false) && roadModuleStyles && (() => {
+                    const W = proposed.lotWidth, D = proposed.lotDepth
+                    const allCorners = [
+                        ...generateFilletCorners(roadModule, 'front', comparisonRoads?.left, 'left', [0, 0]),
+                        ...generateFilletCorners(roadModule, 'front', comparisonRoads?.right, 'right', [W, 0]),
+                        ...generateFilletCorners(comparisonRoads?.rear, 'rear', comparisonRoads?.left, 'left', [0, D]),
+                        ...generateFilletCorners(comparisonRoads?.rear, 'rear', comparisonRoads?.right, 'right', [W, D]),
+                    ]
+                    return allCorners.map((c, i) => (
+                        <RoadIntersectionFillet key={`pr-fillet-${i}`} roadA={c.roadA} roadB={c.roadB} corner={c.corner} cornerPosition={c.pos} styles={roadModuleStyles} lineScale={exportLineScale} sideA={c.sideA} sideB={c.sideB} />
+                    ))
+                })()}
             </group>
         </group>
     )

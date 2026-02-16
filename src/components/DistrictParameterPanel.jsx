@@ -1206,6 +1206,125 @@ const RoadModulesSection = () => {
     )
 }
 
+// ============================================
+// ROAD MODULE STYLES SECTION
+// ============================================
+
+/** Simple label + control row */
+const ControlRow = ({ label, children }) => (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
+        <label style={{ fontSize: '10px', fontWeight: 500, color: 'var(--ui-text-secondary)' }}>{label}</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>{children}</div>
+    </div>
+)
+
+const RoadModuleStylesSection = () => {
+    const roadModuleStyles = useStore((s) => s.roadModuleStyles)
+    const setRoadModuleStyle = useStore((s) => s.setRoadModuleStyle)
+
+    if (!roadModuleStyles) return null
+
+    return (
+        <Section title="Road Module Styles" icon={<Palette className="w-4 h-4" />} defaultOpen={false}>
+            {/* Right-of-Way Lines */}
+            <div style={{ marginBottom: '12px' }}>
+                <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '4px', color: 'var(--ui-text-muted)' }}>Right-of-Way Lines</span>
+                <ControlRow label="Color">
+                    <ColorPicker value={roadModuleStyles.rightOfWay?.color ?? '#000000'} onChange={(c) => setRoadModuleStyle('rightOfWay', 'color', c)} />
+                </ControlRow>
+                <ControlRow label="Width">
+                    <SliderInput value={roadModuleStyles.rightOfWay?.width ?? 1} onChange={(v) => setRoadModuleStyle('rightOfWay', 'width', v)} min={0.5} max={5} step={0.5} />
+                </ControlRow>
+                <ControlRow label="Opacity">
+                    <SliderInput value={roadModuleStyles.rightOfWay?.opacity ?? 1} onChange={(v) => setRoadModuleStyle('rightOfWay', 'opacity', v)} min={0} max={1} step={0.05} />
+                </ControlRow>
+                <div style={{ paddingTop: '4px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer', color: 'var(--ui-text-muted)' }}>
+                        <input
+                            type="checkbox"
+                            checked={roadModuleStyles.rightOfWay?.dashed ?? true}
+                            onChange={(e) => setRoadModuleStyle('rightOfWay', 'dashed', e.target.checked)}
+                            style={{ borderColor: 'var(--ui-border)' }}
+                        />
+                        Dashed
+                    </label>
+                </div>
+            </div>
+
+            {/* Road Surface */}
+            <div style={{ paddingTop: '8px', marginBottom: '12px', borderTop: '1px solid var(--ui-bg-primary)' }}>
+                <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '4px', color: 'var(--ui-text-muted)' }}>Road Surface</span>
+                <ControlRow label="Line Color">
+                    <ColorPicker value={roadModuleStyles.roadWidth?.lineColor ?? '#000000'} onChange={(c) => setRoadModuleStyle('roadWidth', 'lineColor', c)} />
+                </ControlRow>
+                <ControlRow label="Line Width">
+                    <SliderInput value={roadModuleStyles.roadWidth?.lineWidth ?? 1} onChange={(v) => setRoadModuleStyle('roadWidth', 'lineWidth', v)} min={0.5} max={5} step={0.5} />
+                </ControlRow>
+                <ControlRow label="Fill Color">
+                    <ColorPicker value={roadModuleStyles.roadWidth?.fillColor ?? '#666666'} onChange={(c) => setRoadModuleStyle('roadWidth', 'fillColor', c)} />
+                </ControlRow>
+                <ControlRow label="Fill Opacity">
+                    <SliderInput value={roadModuleStyles.roadWidth?.fillOpacity ?? 0.8} onChange={(v) => setRoadModuleStyle('roadWidth', 'fillOpacity', v)} min={0} max={1} step={0.05} />
+                </ControlRow>
+            </div>
+
+            {/* Left Side Elements */}
+            <div style={{ paddingTop: '8px', marginBottom: '12px', borderTop: '1px solid var(--ui-bg-primary)' }}>
+                <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '8px', fontWeight: 'bold', color: 'var(--ui-accent)' }}>Left Side</span>
+                {[
+                    { key: 'leftParking', label: 'Parking', defaultFill: '#888888' },
+                    { key: 'leftVerge', label: 'Verge', defaultFill: '#c4a77d' },
+                    { key: 'leftSidewalk', label: 'Sidewalk', defaultFill: '#90EE90' },
+                    { key: 'leftTransitionZone', label: 'Transition Zone', defaultFill: '#98D8AA' },
+                ].map(({ key, label, defaultFill }) => (
+                    <div key={key} style={{ marginBottom: '12px', paddingLeft: '8px', borderLeft: '2px solid var(--ui-border)' }}>
+                        <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '4px', color: 'var(--ui-text-muted)' }}>{label}</span>
+                        <ControlRow label="Line Color">
+                            <ColorPicker value={roadModuleStyles[key]?.lineColor ?? '#000000'} onChange={(c) => setRoadModuleStyle(key, 'lineColor', c)} />
+                        </ControlRow>
+                        <ControlRow label="Line Width">
+                            <SliderInput value={roadModuleStyles[key]?.lineWidth ?? 1} onChange={(v) => setRoadModuleStyle(key, 'lineWidth', v)} min={0.5} max={5} step={0.5} />
+                        </ControlRow>
+                        <ControlRow label="Fill Color">
+                            <ColorPicker value={roadModuleStyles[key]?.fillColor ?? defaultFill} onChange={(c) => setRoadModuleStyle(key, 'fillColor', c)} />
+                        </ControlRow>
+                        <ControlRow label="Fill Opacity">
+                            <SliderInput value={roadModuleStyles[key]?.fillOpacity ?? 0.7} onChange={(v) => setRoadModuleStyle(key, 'fillOpacity', v)} min={0} max={1} step={0.05} />
+                        </ControlRow>
+                    </div>
+                ))}
+            </div>
+
+            {/* Right Side Elements */}
+            <div style={{ paddingTop: '8px', borderTop: '1px solid var(--ui-bg-primary)' }}>
+                <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '8px', fontWeight: 'bold', color: 'var(--ui-success, var(--ui-accent))' }}>Right Side</span>
+                {[
+                    { key: 'rightParking', label: 'Parking', defaultFill: '#888888' },
+                    { key: 'rightVerge', label: 'Verge', defaultFill: '#c4a77d' },
+                    { key: 'rightSidewalk', label: 'Sidewalk', defaultFill: '#90EE90' },
+                    { key: 'rightTransitionZone', label: 'Transition Zone', defaultFill: '#98D8AA' },
+                ].map(({ key, label, defaultFill }) => (
+                    <div key={key} style={{ marginBottom: '12px', paddingLeft: '8px', borderLeft: '2px solid var(--ui-border)' }}>
+                        <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '4px', color: 'var(--ui-text-muted)' }}>{label}</span>
+                        <ControlRow label="Line Color">
+                            <ColorPicker value={roadModuleStyles[key]?.lineColor ?? '#000000'} onChange={(c) => setRoadModuleStyle(key, 'lineColor', c)} />
+                        </ControlRow>
+                        <ControlRow label="Line Width">
+                            <SliderInput value={roadModuleStyles[key]?.lineWidth ?? 1} onChange={(v) => setRoadModuleStyle(key, 'lineWidth', v)} min={0.5} max={5} step={0.5} />
+                        </ControlRow>
+                        <ControlRow label="Fill Color">
+                            <ColorPicker value={roadModuleStyles[key]?.fillColor ?? defaultFill} onChange={(c) => setRoadModuleStyle(key, 'fillColor', c)} />
+                        </ControlRow>
+                        <ControlRow label="Fill Opacity">
+                            <SliderInput value={roadModuleStyles[key]?.fillOpacity ?? 0.7} onChange={(v) => setRoadModuleStyle(key, 'fillOpacity', v)} min={0} max={1} step={0.05} />
+                        </ControlRow>
+                    </div>
+                ))}
+            </div>
+        </Section>
+    )
+}
+
 const RoadModuleCard = ({ road, onRemove, onUpdate, onChangeType }) => {
     const [isOpen, setIsOpen] = useState(true)
 
@@ -1827,6 +1946,7 @@ const DistrictParameterPanel = () => {
                 <ModelParametersSection />
                 <BuildingRoofSection />
                 <RoadModulesSection />
+                <RoadModuleStylesSection />
                 <ViewsSection />
             </div>
         </div>

@@ -183,8 +183,8 @@ export const createDefaultLotStyle = (overrides = {}) => ({
 
 export const createDefaultRoadModule = (direction = 'front', type = 'S1', overrides = {}) => {
     const defaults = {
-        S1: { rightOfWay: 50, roadWidth: 24 },
-        S2: { rightOfWay: 40, roadWidth: 24 },
+        S1: { rightOfWay: 50, roadWidth: 24, rightVerge: 7, rightSidewalk: 6 },
+        S2: { rightOfWay: 40, roadWidth: 24, rightVerge: 5, rightSidewalk: 5 },
         S3: { rightOfWay: 20, roadWidth: 16 },
     };
     const d = defaults[type] || defaults.S1;
@@ -195,8 +195,8 @@ export const createDefaultRoadModule = (direction = 'front', type = 'S1', overri
         rightOfWay: d.rightOfWay,
         roadWidth: d.roadWidth,
         leftParking: null, rightParking: null,
-        leftVerge: null, rightVerge: null,
-        leftSidewalk: null, rightSidewalk: null,
+        leftVerge: null, rightVerge: d.rightVerge || null,
+        leftSidewalk: null, rightSidewalk: d.rightSidewalk || null,
         leftTransitionZone: null, rightTransitionZone: null,
         ...overrides,
     };
@@ -2067,7 +2067,14 @@ export const useStore = create(
                             ...state.entities,
                             roadModules: {
                                 ...state.entities.roadModules,
-                                [roadId]: { ...road, type: newType, rightOfWay: defaults.rightOfWay, roadWidth: defaults.roadWidth },
+                                [roadId]: {
+                                    ...road,
+                                    type: newType,
+                                    rightOfWay: defaults.rightOfWay,
+                                    roadWidth: defaults.roadWidth,
+                                    rightVerge: defaults.rightVerge,
+                                    rightSidewalk: defaults.rightSidewalk,
+                                },
                             },
                         },
                     };
@@ -2735,7 +2742,7 @@ export const useStore = create(
             }),
             {
                 name: 'zoning-app-storage',
-                version: 16, // Updated to 16 for annotations, enhanced dimensions, road intersections
+                version: 17, // Updated to 17 for fillOpacity 1.0 defaults (opacity convention fix)
                 migrate: (persistedState, version) => {
                     // Split dimensionsLot into dimensionsLotWidth and dimensionsLotDepth
                     if (persistedState.viewSettings && persistedState.viewSettings.layers && persistedState.viewSettings.layers.dimensionsLot !== undefined) {
@@ -2878,7 +2885,7 @@ export const useStore = create(
                             lineDashed: false,
                             lineOpacity: 1.0,
                             fillColor,
-                            fillOpacity: 0.7,
+                            fillOpacity: 1.0,
                         });
 
                         persistedState.roadModuleStyles = {
@@ -2896,7 +2903,7 @@ export const useStore = create(
                                 lineDashed: false,
                                 lineOpacity: 1.0,
                                 fillColor: '#666666',
-                                fillOpacity: 0.8,
+                                fillOpacity: 1.0,
                             },
                             // Left side
                             leftParking: persistedState.roadModuleStyles?.leftParking || persistedState.roadModuleStyles?.parking || defaultStyle('#888888'),
@@ -3167,9 +3174,26 @@ export const useStore = create(
                         if (dimS.draggableText === undefined) dimS.draggableText = false;
                     }
 
+                    if (version < 17) {
+                        // Migration to 17 — fix fillOpacity defaults to 1.0
+                        // Old defaults (0.7 for zones, 0.8 for roadWidth) caused transparent
+                        // sorting issues with Three.js, hiding arc lines behind fill rects.
+                        const rms = persistedState.roadModuleStyles;
+                        if (rms) {
+                            if (rms.roadWidth && rms.roadWidth.fillOpacity === 0.8) rms.roadWidth.fillOpacity = 1.0;
+                            const zoneKeys = [
+                                'leftParking', 'leftVerge', 'leftSidewalk', 'leftTransitionZone',
+                                'rightParking', 'rightVerge', 'rightSidewalk', 'rightTransitionZone',
+                            ];
+                            for (const key of zoneKeys) {
+                                if (rms[key] && rms[key].fillOpacity === 0.7) rms[key].fillOpacity = 1.0;
+                            }
+                        }
+                    }
+
                     return {
                         ...persistedState,
-                        version: 16 // Update verified version
+                        version: 17 // Update verified version
                     };
                 },
                 partialize: (state) => ({

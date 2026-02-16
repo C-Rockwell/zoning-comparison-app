@@ -32,24 +32,24 @@ const RoadIntersectionFillet = ({
     styles,
     lineScale = 1,
     visible = true,
+    sideA = 'right',
+    sideB = 'right',
+    roadWidthStyle,
 }) => {
     // Compute all zone arc geometries when inputs change
     const zones = useMemo(() => {
         if (!roadA || !roadB || !styles) return []
-        return computeCornerZoneStack(roadA, roadB, corner, styles)
-    }, [roadA, roadB, corner, styles])
+        return computeCornerZoneStack(roadA, roadB, corner, styles, sideA, sideB)
+    }, [roadA, roadB, corner, styles, sideA, sideB])
 
     if (!visible || zones.length === 0) return null
-
-    // Dampened line scale for border widths (matches RoadModule WYSIWYG convention)
-    const dampenedLineScale = Math.pow(lineScale, 0.15)
 
     return (
         <group position={[cornerPosition[0], cornerPosition[1], 0]}>
             {zones.map((zone, index) => (
                 <group key={`${zone.zoneType}-${index}`}>
                     {/* Filled arc shape */}
-                    <mesh position={[0, 0, zone.zOffset]} receiveShadow>
+                    <mesh position={[0, 0, zone.zOffset]} receiveShadow renderOrder={2}>
                         <shapeGeometry args={[zone.shape]} />
                         <meshStandardMaterial
                             color={zone.fill.color}
@@ -62,31 +62,44 @@ const RoadIntersectionFillet = ({
                         />
                     </mesh>
 
-                    {/* Outer arc border line */}
-                    {zone.outerArcPoints.length >= 2 && (
-                        <Line
-                            points={zone.outerArcPoints}
-                            color={zone.stroke.color}
-                            lineWidth={zone.stroke.width * dampenedLineScale}
-                            dashed={zone.stroke.dashed}
-                            dashSize={zone.stroke.dashed ? 1 : undefined}
-                            gapSize={zone.stroke.dashed ? 0.5 : undefined}
-                            transparent
-                            opacity={zone.stroke.opacity}
-                        />
-                    )}
+                    {/* Outer arc border line — outermost zone uses roadWidth style */}
+                    {zone.outerArcPoints.length >= 2 && (() => {
+                        const isOutermost = index === zones.length - 1
+                        const strokeColor = (isOutermost && roadWidthStyle?.lineColor) || zone.stroke.color
+                        const strokeWidth = (isOutermost && roadWidthStyle?.lineWidth) || zone.stroke.width
+                        const strokeDashed = isOutermost ? (roadWidthStyle?.lineDashed ?? zone.stroke.dashed) : zone.stroke.dashed
+                        const strokeOpacity = (isOutermost && roadWidthStyle?.lineOpacity != null) ? roadWidthStyle.lineOpacity : zone.stroke.opacity
+                        // Sub-sample arc points for outermost line to reduce Line2 miter thickening
+                        const arcPoints = isOutermost
+                            ? zone.outerArcPoints.filter((_, i) => i % 2 === 0 || i === zone.outerArcPoints.length - 1)
+                            : zone.outerArcPoints
+                        return (
+                            <Line
+                                points={arcPoints}
+                                color={strokeColor}
+                                lineWidth={strokeWidth * lineScale}
+                                dashed={strokeDashed}
+                                dashSize={strokeDashed ? 1 : undefined}
+                                gapSize={strokeDashed ? 0.5 : undefined}
+                                transparent
+                                opacity={strokeOpacity}
+                                renderOrder={3}
+                            />
+                        )
+                    })()}
 
                     {/* Inner arc border line (skip for innermost zone / road surface) */}
                     {zone.innerArcPoints.length >= 2 && (
                         <Line
                             points={zone.innerArcPoints}
                             color={zone.stroke.color}
-                            lineWidth={zone.stroke.width * dampenedLineScale}
+                            lineWidth={zone.stroke.width * lineScale}
                             dashed={zone.stroke.dashed}
                             dashSize={zone.stroke.dashed ? 1 : undefined}
                             gapSize={zone.stroke.dashed ? 0.5 : undefined}
                             transparent
                             opacity={zone.stroke.opacity}
+                            renderOrder={3}
                         />
                     )}
                 </group>
