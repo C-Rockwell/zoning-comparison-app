@@ -3,6 +3,38 @@ import { Line } from '@react-three/drei'
 import * as THREE from 'three'
 import { computeCornerZoneStack } from '../utils/intersectionGeometry'
 
+const ArcLineSegments = ({
+    points,
+    color,
+    lineWidth,
+    dashed,
+    dashSize,
+    gapSize,
+    opacity,
+    renderOrder,
+}) => {
+    if (!points || points.length < 2) return null
+
+    return (
+        <group>
+            {points.slice(0, -1).map((start, index) => (
+                <Line
+                    key={`arc-segment-${index}`}
+                    points={[start, points[index + 1]]}
+                    color={color}
+                    lineWidth={lineWidth}
+                    dashed={dashed}
+                    dashSize={dashSize}
+                    gapSize={gapSize}
+                    transparent
+                    opacity={opacity}
+                    renderOrder={renderOrder}
+                />
+            ))}
+        </group>
+    )
+}
+
 /**
  * RoadIntersectionFillet Component
  *
@@ -69,19 +101,14 @@ const RoadIntersectionFillet = ({
                         const strokeWidth = (isOutermost && roadWidthStyle?.lineWidth) || zone.stroke.width
                         const strokeDashed = isOutermost ? (roadWidthStyle?.lineDashed ?? zone.stroke.dashed) : zone.stroke.dashed
                         const strokeOpacity = (isOutermost && roadWidthStyle?.lineOpacity != null) ? roadWidthStyle.lineOpacity : zone.stroke.opacity
-                        // Sub-sample arc points for outermost line to reduce Line2 miter thickening
-                        const arcPoints = isOutermost
-                            ? zone.outerArcPoints.filter((_, i) => i % 2 === 0 || i === zone.outerArcPoints.length - 1)
-                            : zone.outerArcPoints
                         return (
-                            <Line
-                                points={arcPoints}
+                            <ArcLineSegments
+                                points={zone.outerArcPoints}
                                 color={strokeColor}
                                 lineWidth={strokeWidth * lineScale}
                                 dashed={strokeDashed}
                                 dashSize={strokeDashed ? 1 : undefined}
                                 gapSize={strokeDashed ? 0.5 : undefined}
-                                transparent
                                 opacity={strokeOpacity}
                                 renderOrder={3}
                             />
