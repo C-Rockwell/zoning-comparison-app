@@ -62,7 +62,13 @@ const buildRoundedRectPath = (path, bounds, radii) => {
     else path.lineTo(left, bottom)
 }
 
-const createBandShape = (lotBounds, inner, outer) => {
+const radiusFromOffsets = (offsetA, offsetB, cornerLimit) => {
+    const offset = Math.min(offsetA, offsetB)
+    if (cornerLimit <= 0) return 0
+    return offset <= cornerLimit ? offset : 0
+}
+
+const createBandShape = (lotBounds, inner, outer, cornerLimits) => {
     const outerBounds = {
         left: lotBounds.xMin - outer.left,
         right: lotBounds.xMax + outer.right,
@@ -84,21 +90,24 @@ const createBandShape = (lotBounds, inner, outer) => {
     )
     if (!hasThickness) return null
 
+    const outerRadii = {
+        bl: radiusFromOffsets(outer.front, outer.left, cornerLimits.bl),
+        br: radiusFromOffsets(outer.front, outer.right, cornerLimits.br),
+        tr: radiusFromOffsets(outer.rear, outer.right, cornerLimits.tr),
+        tl: radiusFromOffsets(outer.rear, outer.left, cornerLimits.tl),
+    }
+    const innerRadii = {
+        bl: radiusFromOffsets(inner.front, inner.left, cornerLimits.bl),
+        br: radiusFromOffsets(inner.front, inner.right, cornerLimits.br),
+        tr: radiusFromOffsets(inner.rear, inner.right, cornerLimits.tr),
+        tl: radiusFromOffsets(inner.rear, inner.left, cornerLimits.tl),
+    }
+
     const shape = new THREE.Shape()
-    buildRoundedRectPath(shape, outerBounds, {
-        bl: Math.min(outer.front, outer.left),
-        br: Math.min(outer.front, outer.right),
-        tr: Math.min(outer.rear, outer.right),
-        tl: Math.min(outer.rear, outer.left),
-    })
+    buildRoundedRectPath(shape, outerBounds, outerRadii)
 
     const hole = new THREE.Path()
-    buildRoundedRectPath(hole, innerBounds, {
-        bl: Math.min(inner.front, inner.left),
-        br: Math.min(inner.front, inner.right),
-        tr: Math.min(inner.rear, inner.right),
-        tl: Math.min(inner.rear, inner.left),
-    })
+    buildRoundedRectPath(hole, innerBounds, innerRadii)
     shape.holes.push(hole)
 
     return shape
@@ -131,13 +140,34 @@ const UnifiedRoadNetwork = ({
     const bandShapes = useMemo(() => {
         const edges = ['front', 'right', 'rear', 'left']
         const boundariesByEdge = {}
+        const profilesByEdge = {}
+
+        const getCurbDepth = (profile) => (profile?.sidewalk || 0) + (profile?.verge || 0)
 
         for (const edge of edges) {
             if (!enabledDirections?.[edge]) {
                 boundariesByEdge[edge] = [0, 0, 0, 0, 0, 0]
+                profilesByEdge[edge] = null
                 continue
             }
-            boundariesByEdge[edge] = getBandBoundaries(getProfileForDirection(edge))
+            const profile = getProfileForDirection(edge)
+            profilesByEdge[edge] = profile
+            boundariesByEdge[edge] = getBandBoundaries(profile)
+        }
+
+        const cornerLimits = {
+            bl: (profilesByEdge.front && profilesByEdge.left)
+                ? Math.min(getCurbDepth(profilesByEdge.front), getCurbDepth(profilesByEdge.left))
+                : 0,
+            br: (profilesByEdge.front && profilesByEdge.right)
+                ? Math.min(getCurbDepth(profilesByEdge.front), getCurbDepth(profilesByEdge.right))
+                : 0,
+            tr: (profilesByEdge.rear && profilesByEdge.right)
+                ? Math.min(getCurbDepth(profilesByEdge.rear), getCurbDepth(profilesByEdge.right))
+                : 0,
+            tl: (profilesByEdge.rear && profilesByEdge.left)
+                ? Math.min(getCurbDepth(profilesByEdge.rear), getCurbDepth(profilesByEdge.left))
+                : 0,
         }
 
         const bandToZone = ['sidewalk', 'verge', 'pavement', 'verge', 'sidewalk']
@@ -157,7 +187,7 @@ const UnifiedRoadNetwork = ({
                 left: boundariesByEdge.left[bandIndex + 1],
             }
 
-            const shape = createBandShape(lotBounds, inner, outer)
+            const shape = createBandShape(lotBounds, inner, outer, cornerLimits)
             if (!shape) continue
 
             shapes.push({
