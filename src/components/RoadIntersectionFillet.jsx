@@ -70,12 +70,33 @@ const RoadIntersectionFillet = ({
                         const strokeDashed = isOutermost ? (roadWidthStyle?.lineDashed ?? zone.stroke.dashed) : zone.stroke.dashed
                         const strokeOpacity = (isOutermost && roadWidthStyle?.lineOpacity != null) ? roadWidthStyle.lineOpacity : zone.stroke.opacity
 
-                        // Use original points without sub-sampling. 
-                        // To avoid miter thickening from Line2 polylines, we render each segment 
-                        // as a separate 2-point Line. This matches RoadModule's straight edges.
-                        const points = zone.outerArcPoints
+                        // For the outermost arc (Curb), use a single polyline with a width correction factor.
+                        // REASON: 
+                        // 1. User reported that segmented lines caused "gap artifacts" at the junction where curved fillet meets straight road.
+                        //    A single polyline ensures a continuous line start-to-finish, reducing junction gaps.
+                        // 2. User reported the curb looked "thicker" than straight lines. This is due to miter joins in the polyline.
+                        //    We apply a 0.75x correction factor to the linewidth to visually compensate for this thickening.
+                        // 3. Inner arcs (back of sidewalk) were confirmed "FIXED" with segmentation, so we leave them segmented below.
 
-                        // Create array of segments from points
+                        if (isOutermost) {
+                            return (
+                                <Line
+                                    points={zone.outerArcPoints}
+                                    color={strokeColor}
+                                    lineWidth={strokeWidth * lineScale * 0.75} // Apply correction factor
+                                    dashed={strokeDashed}
+                                    dashSize={strokeDashed ? 1 : undefined}
+                                    gapSize={strokeDashed ? 0.5 : undefined}
+                                    transparent
+                                    opacity={strokeOpacity}
+                                    renderOrder={3}
+                                />
+                            )
+                        }
+
+                        // For non-outermost outer arcs (e.g. intermediate zones), keep segmented approach
+                        // as users reported inner arcs looked fine.
+                        const points = zone.outerArcPoints
                         const segments = []
                         for (let i = 0; i < points.length - 1; i++) {
                             segments.push([points[i], points[i + 1]])
