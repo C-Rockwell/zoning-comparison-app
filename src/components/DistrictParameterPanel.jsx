@@ -598,6 +598,7 @@ const ModelSetupSection = () => {
     const entityCount = useEntityCount()
     const setStreetEdge = useStore((s) => s.setStreetEdge)
     const setStreetType = useStore((s) => s.setStreetType)
+    const unifiedRoadPreview = useStore((s) => s.viewSettings?.layers?.unifiedRoadPreview === true)
     const addLot = useStore((s) => s.addLot)
     const removeLot = useStore((s) => s.removeLot)
     const lotIds = useLotIds()
@@ -615,6 +616,7 @@ const ModelSetupSection = () => {
 
     const streetEdges = modelSetup.streetEdges ?? { front: true, left: false, right: false, rear: false }
     const streetTypes = modelSetup.streetTypes ?? { front: 'S1', left: 'S1', right: 'S2', rear: 'S3' }
+    const fixedTypeLabel = (edge) => (edge === 'rear' ? 'Rear Alley (Fixed)' : 'Main Street (Fixed)')
 
     return (
         <Section title="Model Setup" icon={<Settings className="w-4 h-4" />} defaultOpen={true}>
@@ -645,6 +647,20 @@ const ModelSetupSection = () => {
             {/* Street Edges */}
             <div className="mb-3">
                 <label className="text-xs block mb-1" style={{ color: 'var(--ui-text-secondary)' }}>Street Edges</label>
+                {unifiedRoadPreview && (
+                    <div
+                        className="text-[10px] rounded px-2 py-1 mb-2"
+                        style={{
+                            color: 'var(--ui-text-muted)',
+                            backgroundColor: 'var(--ui-bg-secondary)',
+                            border: '1px solid var(--ui-border)',
+                        }}
+                    >
+                        Unified road preview uses fixed dimensions:
+                        {' '}main streets 50&apos; ROW / 24&apos; pavement / 7&apos; verge / 6&apos; sidewalk,
+                        {' '}rear alley 30&apos; ROW / 20&apos; pavement / 5&apos; verge.
+                    </div>
+                )}
                 <div className="space-y-1.5">
                     {['front', 'left', 'right', 'rear'].map((edge) => (
                         <div key={edge} className="flex items-center justify-between">
@@ -660,7 +676,7 @@ const ModelSetupSection = () => {
                                 />
                                 <span className="text-xs capitalize" style={{ color: 'var(--ui-text-secondary)' }}>{edge}</span>
                             </label>
-                            {streetEdges[edge] && (
+                            {streetEdges[edge] && !unifiedRoadPreview && (
                                 <select
                                     value={streetTypes[edge] || 'S1'}
                                     onChange={(e) => setStreetType(edge, e.target.value)}
@@ -678,6 +694,18 @@ const ModelSetupSection = () => {
                                     <option value="S2">S2</option>
                                     <option value="S3">S3</option>
                                 </select>
+                            )}
+                            {streetEdges[edge] && unifiedRoadPreview && (
+                                <span
+                                    className="text-[10px] px-1.5 py-0.5 rounded"
+                                    style={{
+                                        color: 'var(--ui-text-muted)',
+                                        backgroundColor: 'var(--ui-bg-secondary)',
+                                        border: '1px solid var(--ui-border)',
+                                    }}
+                                >
+                                    {fixedTypeLabel(edge)}
+                                </span>
                             )}
                         </div>
                     ))}
@@ -1332,6 +1360,102 @@ const RoadModuleStylesSection = () => {
     )
 }
 
+const UnifiedRoadStylesSection = () => {
+    const roadModuleStyles = useStore((s) => s.roadModuleStyles)
+    const setRoadModuleStyle = useStore((s) => s.setRoadModuleStyle)
+
+    if (!roadModuleStyles) return null
+
+    const setBothSides = (baseKey, property, value) => {
+        setRoadModuleStyle(`left${baseKey}`, property, value)
+        setRoadModuleStyle(`right${baseKey}`, property, value)
+    }
+
+    const vergeStyle = roadModuleStyles.rightVerge || roadModuleStyles.leftVerge
+    const sidewalkStyle = roadModuleStyles.rightSidewalk || roadModuleStyles.leftSidewalk
+
+    return (
+        <Section title="Road Network Styles" icon={<Palette className="w-4 h-4" />} defaultOpen={false}>
+            <p className="text-[10px] mb-2" style={{ color: 'var(--ui-text-muted)' }}>
+                Unified preview styling applies globally to all enabled road edges.
+                Fixed corner radii: 13&apos; road edge, 6&apos; sidewalk edge.
+            </p>
+
+            <div style={{ marginBottom: '12px' }}>
+                <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '4px', color: 'var(--ui-text-muted)' }}>Right-of-Way Lines</span>
+                <ControlRow label="Color">
+                    <ColorPicker value={roadModuleStyles.rightOfWay?.color ?? '#000000'} onChange={(c) => setRoadModuleStyle('rightOfWay', 'color', c)} />
+                </ControlRow>
+                <ControlRow label="Width">
+                    <SliderInput value={roadModuleStyles.rightOfWay?.width ?? 1} onChange={(v) => setRoadModuleStyle('rightOfWay', 'width', v)} min={0.5} max={5} step={0.5} />
+                </ControlRow>
+                <ControlRow label="Opacity">
+                    <SliderInput value={roadModuleStyles.rightOfWay?.opacity ?? 1} onChange={(v) => setRoadModuleStyle('rightOfWay', 'opacity', v)} min={0} max={1} step={0.05} />
+                </ControlRow>
+                <div style={{ paddingTop: '4px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer', color: 'var(--ui-text-muted)' }}>
+                        <input
+                            type="checkbox"
+                            checked={roadModuleStyles.rightOfWay?.dashed ?? true}
+                            onChange={(e) => setRoadModuleStyle('rightOfWay', 'dashed', e.target.checked)}
+                            style={{ borderColor: 'var(--ui-border)' }}
+                        />
+                        Dashed
+                    </label>
+                </div>
+            </div>
+
+            <div style={{ paddingTop: '8px', marginBottom: '12px', borderTop: '1px solid var(--ui-bg-primary)' }}>
+                <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '4px', color: 'var(--ui-text-muted)' }}>Pavement</span>
+                <ControlRow label="Line Color">
+                    <ColorPicker value={roadModuleStyles.roadWidth?.lineColor ?? '#000000'} onChange={(c) => setRoadModuleStyle('roadWidth', 'lineColor', c)} />
+                </ControlRow>
+                <ControlRow label="Line Width">
+                    <SliderInput value={roadModuleStyles.roadWidth?.lineWidth ?? 1} onChange={(v) => setRoadModuleStyle('roadWidth', 'lineWidth', v)} min={0.5} max={5} step={0.5} />
+                </ControlRow>
+                <ControlRow label="Fill Color">
+                    <ColorPicker value={roadModuleStyles.roadWidth?.fillColor ?? '#666666'} onChange={(c) => setRoadModuleStyle('roadWidth', 'fillColor', c)} />
+                </ControlRow>
+                <ControlRow label="Fill Opacity">
+                    <SliderInput value={roadModuleStyles.roadWidth?.fillOpacity ?? 1} onChange={(v) => setRoadModuleStyle('roadWidth', 'fillOpacity', v)} min={0} max={1} step={0.05} />
+                </ControlRow>
+            </div>
+
+            <div style={{ paddingTop: '8px', marginBottom: '12px', borderTop: '1px solid var(--ui-bg-primary)' }}>
+                <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '4px', color: 'var(--ui-text-muted)' }}>Verge (Universal)</span>
+                <ControlRow label="Line Color">
+                    <ColorPicker value={vergeStyle?.lineColor ?? '#000000'} onChange={(c) => setBothSides('Verge', 'lineColor', c)} />
+                </ControlRow>
+                <ControlRow label="Line Width">
+                    <SliderInput value={vergeStyle?.lineWidth ?? 1} onChange={(v) => setBothSides('Verge', 'lineWidth', v)} min={0.5} max={5} step={0.5} />
+                </ControlRow>
+                <ControlRow label="Fill Color">
+                    <ColorPicker value={vergeStyle?.fillColor ?? '#c4a77d'} onChange={(c) => setBothSides('Verge', 'fillColor', c)} />
+                </ControlRow>
+                <ControlRow label="Fill Opacity">
+                    <SliderInput value={vergeStyle?.fillOpacity ?? 1} onChange={(v) => setBothSides('Verge', 'fillOpacity', v)} min={0} max={1} step={0.05} />
+                </ControlRow>
+            </div>
+
+            <div style={{ paddingTop: '8px', borderTop: '1px solid var(--ui-bg-primary)' }}>
+                <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '4px', color: 'var(--ui-text-muted)' }}>Sidewalk (Universal)</span>
+                <ControlRow label="Line Color">
+                    <ColorPicker value={sidewalkStyle?.lineColor ?? '#000000'} onChange={(c) => setBothSides('Sidewalk', 'lineColor', c)} />
+                </ControlRow>
+                <ControlRow label="Line Width">
+                    <SliderInput value={sidewalkStyle?.lineWidth ?? 1} onChange={(v) => setBothSides('Sidewalk', 'lineWidth', v)} min={0.5} max={5} step={0.5} />
+                </ControlRow>
+                <ControlRow label="Fill Color">
+                    <ColorPicker value={sidewalkStyle?.fillColor ?? '#90EE90'} onChange={(c) => setBothSides('Sidewalk', 'fillColor', c)} />
+                </ControlRow>
+                <ControlRow label="Fill Opacity">
+                    <SliderInput value={sidewalkStyle?.fillOpacity ?? 1} onChange={(v) => setBothSides('Sidewalk', 'fillOpacity', v)} min={0} max={1} step={0.05} />
+                </ControlRow>
+            </div>
+        </Section>
+    )
+}
+
 const RoadModuleCard = ({ road, onRemove, onUpdate, onChangeType }) => {
     const [isOpen, setIsOpen] = useState(true)
 
@@ -1925,6 +2049,8 @@ const AnnotationSettingsSection = () => {
 }
 
 const DistrictParameterPanel = () => {
+    const unifiedRoadPreview = useStore((s) => s.viewSettings?.layers?.unifiedRoadPreview === true)
+
     return (
         <div
             className="w-full md:w-[480px] flex-shrink-0 overflow-y-auto h-full
@@ -1952,8 +2078,9 @@ const DistrictParameterPanel = () => {
                 <DistrictParametersSection />
                 <ModelParametersSection />
                 <BuildingRoofSection />
-                <RoadModulesSection />
-                <RoadModuleStylesSection />
+                {!unifiedRoadPreview && <RoadModulesSection />}
+                {!unifiedRoadPreview && <RoadModuleStylesSection />}
+                {unifiedRoadPreview && <UnifiedRoadStylesSection />}
                 <ViewsSection />
             </div>
         </div>
