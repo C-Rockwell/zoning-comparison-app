@@ -132,6 +132,24 @@ const getUnifiedStyle = (zoneType, styles) => {
     }
 }
 
+const createQuarterDisk = (cx, cy, radius, startAngle, endAngle) => {
+    const shape = new THREE.Shape()
+    shape.moveTo(cx, cy)
+    shape.absarc(cx, cy, radius, startAngle, endAngle, false)
+    shape.closePath()
+    return shape
+}
+
+const createQuarterAnnulus = (cx, cy, innerRadius, outerRadius, startAngle, endAngle) => {
+    const shape = new THREE.Shape()
+    shape.moveTo(cx + Math.cos(startAngle) * outerRadius, cy + Math.sin(startAngle) * outerRadius)
+    shape.absarc(cx, cy, outerRadius, startAngle, endAngle, false)
+    shape.lineTo(cx + Math.cos(endAngle) * innerRadius, cy + Math.sin(endAngle) * innerRadius)
+    shape.absarc(cx, cy, innerRadius, endAngle, startAngle, true)
+    shape.closePath()
+    return shape
+}
+
 const UnifiedRoadNetwork = ({
     lotBounds,
     enabledDirections,
@@ -201,7 +219,47 @@ const UnifiedRoadNetwork = ({
         return shapes
     }, [lotBounds, enabledDirections])
 
+    const frontRightFix = useMemo(() => {
+        if (!enabledDirections?.front || !enabledDirections?.right) return null
+
+        const front = getProfileForDirection('front')
+        const right = getProfileForDirection('right')
+        const frontCurb = (front.sidewalk || 0) + (front.verge || 0) // 13
+        const frontWalk = front.sidewalk || 0 // 6
+        const rightROW = right.rightOfWay || 50
+
+        const x0 = lotBounds.xMax
+        const y0 = lotBounds.yMin
+        const nearCx = x0
+        const farCx = x0 + rightROW
+        const cy = y0
+
+        // Continue front near-side strips across the right-road intersection width.
+        const sidewalkRect = { cx: x0 + rightROW / 2, cy: y0 - frontWalk / 2, w: rightROW, h: frontWalk }
+        const vergeRect = { cx: x0 + rightROW / 2, cy: y0 - ((frontWalk + frontCurb) / 2), w: rightROW, h: frontCurb - frontWalk }
+        const throatRect = {
+            cx: x0 + rightROW / 2,
+            cy: y0 - frontCurb / 2,
+            w: rightROW - (2 * frontCurb), // 24 for S1/S1
+            h: frontCurb,
+        }
+
+        return {
+            sidewalkRect,
+            vergeRect,
+            throatRect,
+            nearSidewalkArc: createQuarterDisk(nearCx, cy, frontWalk, -Math.PI / 2, 0),
+            nearVergeArc: createQuarterAnnulus(nearCx, cy, frontWalk, frontCurb, -Math.PI / 2, 0),
+            farSidewalkArc: createQuarterDisk(farCx, cy, frontWalk, -Math.PI, -Math.PI / 2),
+            farVergeArc: createQuarterAnnulus(farCx, cy, frontWalk, frontCurb, -Math.PI, -Math.PI / 2),
+        }
+    }, [enabledDirections, lotBounds])
+
     if (!bandShapes.length) return null
+
+    const pavementStyle = getUnifiedStyle('pavement', roadModuleStyles)
+    const vergeStyle = getUnifiedStyle('verge', roadModuleStyles)
+    const sidewalkStyle = getUnifiedStyle('sidewalk', roadModuleStyles)
 
     return (
         <group>
@@ -223,6 +281,65 @@ const UnifiedRoadNetwork = ({
                     </mesh>
                 )
             })}
+
+            {/* Targeted front-right T-intersection correction (phase 1) */}
+            {frontRightFix && (
+                <group>
+                    <mesh position={[frontRightFix.sidewalkRect.cx, frontRightFix.sidewalkRect.cy, 0.060]} renderOrder={3}>
+                        <planeGeometry args={[frontRightFix.sidewalkRect.w, frontRightFix.sidewalkRect.h]} />
+                        <meshStandardMaterial
+                            color={sidewalkStyle?.fillColor || '#90EE90'}
+                            opacity={sidewalkStyle?.fillOpacity ?? 1.0}
+                            transparent={(sidewalkStyle?.fillOpacity ?? 1.0) < 1}
+                            side={THREE.DoubleSide}
+                            depthWrite={(sidewalkStyle?.fillOpacity ?? 1.0) >= 0.95}
+                            roughness={1}
+                            metalness={0}
+                        />
+                    </mesh>
+                    <mesh position={[frontRightFix.vergeRect.cx, frontRightFix.vergeRect.cy, 0.061]} renderOrder={3}>
+                        <planeGeometry args={[frontRightFix.vergeRect.w, frontRightFix.vergeRect.h]} />
+                        <meshStandardMaterial
+                            color={vergeStyle?.fillColor || '#c4a77d'}
+                            opacity={vergeStyle?.fillOpacity ?? 1.0}
+                            transparent={(vergeStyle?.fillOpacity ?? 1.0) < 1}
+                            side={THREE.DoubleSide}
+                            depthWrite={(vergeStyle?.fillOpacity ?? 1.0) >= 0.95}
+                            roughness={1}
+                            metalness={0}
+                        />
+                    </mesh>
+                    <mesh position={[frontRightFix.throatRect.cx, frontRightFix.throatRect.cy, 0.062]} renderOrder={3}>
+                        <planeGeometry args={[Math.max(frontRightFix.throatRect.w, 0), frontRightFix.throatRect.h]} />
+                        <meshStandardMaterial
+                            color={pavementStyle?.fillColor || '#666666'}
+                            opacity={pavementStyle?.fillOpacity ?? 1.0}
+                            transparent={(pavementStyle?.fillOpacity ?? 1.0) < 1}
+                            side={THREE.DoubleSide}
+                            depthWrite={(pavementStyle?.fillOpacity ?? 1.0) >= 0.95}
+                            roughness={1}
+                            metalness={0}
+                        />
+                    </mesh>
+
+                    <mesh position={[0, 0, 0.063]} renderOrder={3}>
+                        <shapeGeometry args={[frontRightFix.nearSidewalkArc]} />
+                        <meshStandardMaterial color={sidewalkStyle?.fillColor || '#90EE90'} opacity={sidewalkStyle?.fillOpacity ?? 1.0} transparent={(sidewalkStyle?.fillOpacity ?? 1.0) < 1} side={THREE.DoubleSide} depthWrite={(sidewalkStyle?.fillOpacity ?? 1.0) >= 0.95} roughness={1} metalness={0} />
+                    </mesh>
+                    <mesh position={[0, 0, 0.064]} renderOrder={3}>
+                        <shapeGeometry args={[frontRightFix.nearVergeArc]} />
+                        <meshStandardMaterial color={vergeStyle?.fillColor || '#c4a77d'} opacity={vergeStyle?.fillOpacity ?? 1.0} transparent={(vergeStyle?.fillOpacity ?? 1.0) < 1} side={THREE.DoubleSide} depthWrite={(vergeStyle?.fillOpacity ?? 1.0) >= 0.95} roughness={1} metalness={0} />
+                    </mesh>
+                    <mesh position={[0, 0, 0.063]} renderOrder={3}>
+                        <shapeGeometry args={[frontRightFix.farSidewalkArc]} />
+                        <meshStandardMaterial color={sidewalkStyle?.fillColor || '#90EE90'} opacity={sidewalkStyle?.fillOpacity ?? 1.0} transparent={(sidewalkStyle?.fillOpacity ?? 1.0) < 1} side={THREE.DoubleSide} depthWrite={(sidewalkStyle?.fillOpacity ?? 1.0) >= 0.95} roughness={1} metalness={0} />
+                    </mesh>
+                    <mesh position={[0, 0, 0.064]} renderOrder={3}>
+                        <shapeGeometry args={[frontRightFix.farVergeArc]} />
+                        <meshStandardMaterial color={vergeStyle?.fillColor || '#c4a77d'} opacity={vergeStyle?.fillOpacity ?? 1.0} transparent={(vergeStyle?.fillOpacity ?? 1.0) < 1} side={THREE.DoubleSide} depthWrite={(vergeStyle?.fillOpacity ?? 1.0) >= 0.95} roughness={1} metalness={0} />
+                    </mesh>
+                </group>
+            )}
         </group>
     )
 }
