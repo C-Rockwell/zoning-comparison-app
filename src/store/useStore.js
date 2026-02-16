@@ -3238,7 +3238,7 @@ export const useStore = create(
             partialize: (state) => {
                 const { existing, proposed, viewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, comparisonRoads, entities, entityOrder, entityStyles, lotVisibility, annotationSettings, annotationPositions } = state
                 // Exclude export triggers from undo history
-                const { exportRequested, ...trackedViewSettings } = viewSettings
+                const { exportRequested: _exportRequested, ...trackedViewSettings } = viewSettings
                 return { existing, proposed, viewSettings: trackedViewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, comparisonRoads, entities, entityOrder, entityStyles, lotVisibility, annotationSettings, annotationPositions }
             }
         }
