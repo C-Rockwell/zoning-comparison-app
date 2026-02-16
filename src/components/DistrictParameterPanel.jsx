@@ -708,6 +708,7 @@ const LayersSection = () => {
         { key: 'grid', label: 'Grid' },
         { key: 'roadModule', label: 'Road Module' },
         { key: 'roadIntersections', label: 'Road Intersections' },
+        { key: 'unifiedRoadPreview', label: 'Road: Unified Preview' },
         { key: 'annotationLabels', label: 'Annotation Labels' },
         { key: 'labelLotNames', label: '  Lot Names' },
         { key: 'labelLotEdges', label: '  Lot Edges' },
@@ -1154,6 +1155,7 @@ const RoadModulesSection = () => {
     const removeEntityRoadModule = useStore((s) => s.removeEntityRoadModule)
     const updateEntityRoadModule = useStore((s) => s.updateEntityRoadModule)
     const changeEntityRoadModuleType = useStore((s) => s.changeEntityRoadModuleType)
+    const unifiedRoadPreview = useStore((s) => s.viewSettings?.layers?.unifiedRoadPreview === true)
     const modelSetup = useModelSetup()
     const streetEdges = modelSetup.streetEdges ?? { front: true, left: false, right: false, rear: false }
 
@@ -1166,6 +1168,11 @@ const RoadModulesSection = () => {
 
     return (
         <Section title="Road Module(s)" icon={<Route className="w-4 h-4" />} defaultOpen={true}>
+            {unifiedRoadPreview && (
+                <p className="text-[10px] mb-2" style={{ color: 'var(--ui-text-muted)' }}>
+                    Unified preview is ON. Road modules are still editable, but rendering uses the fixed pre-built scenario profile.
+                </p>
+            )}
             {/* Add road module button */}
             <div className="flex items-center gap-2 mb-2">
                 <span className="text-xs" style={{ color: 'var(--ui-text-secondary)' }}>Add road for:</span>

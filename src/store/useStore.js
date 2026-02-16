@@ -475,6 +475,7 @@ export const useStore = create(
                         labelRoadZones: true,    // "Right of Way", "Sidewalk" etc.
                         labelBuildings: true,    // "Principal Building", "Accessory Building"
                         roadIntersections: true, // Road intersection fillet geometry
+                        unifiedRoadPreview: false, // Experimental pre-built road network renderer
                     },
                     exportRequested: false,
                     exportFormat: 'obj', // 'obj' | 'glb' | 'dae' | 'dxf' | 'png' | 'jpg' | 'svg'
@@ -2742,7 +2743,7 @@ export const useStore = create(
             }),
             {
                 name: 'zoning-app-storage',
-                version: 17, // Updated to 17 for fillOpacity 1.0 defaults (opacity convention fix)
+                version: 18, // Updated to 18 for unifiedRoadPreview layer flag
                 migrate: (persistedState, version) => {
                     // Split dimensionsLot into dimensionsLotWidth and dimensionsLotDepth
                     if (persistedState.viewSettings && persistedState.viewSettings.layers && persistedState.viewSettings.layers.dimensionsLot !== undefined) {
@@ -3191,9 +3192,16 @@ export const useStore = create(
                         }
                     }
 
+                    if (version < 18) {
+                        const lyrsV18 = persistedState.viewSettings?.layers;
+                        if (lyrsV18 && lyrsV18.unifiedRoadPreview === undefined) {
+                            lyrsV18.unifiedRoadPreview = false;
+                        }
+                    }
+
                     return {
                         ...persistedState,
-                        version: 17 // Update verified version
+                        version: 18 // Update verified version
                     };
                 },
                 partialize: (state) => ({

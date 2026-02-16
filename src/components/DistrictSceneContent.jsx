@@ -7,6 +7,7 @@ import LotEntity from './LotEntity'
 import RoadModule from './RoadModule'
 import RoadAnnotations from './RoadAnnotations'
 import RoadIntersectionFillet from './RoadIntersectionFillet'
+import UnifiedRoadNetwork from './UnifiedRoadNetwork'
 
 // Direction rotation for annotation labels (matches RoadModule.jsx DIRECTION_ROTATION)
 const DIRECTION_ROTATION = {
@@ -61,6 +62,7 @@ const EntityRoadModules = ({ lotPositions }) => {
     const roadModuleStyles = useStore(state => state.roadModuleStyles)
     const exportLineScale = useStore(state => state.viewSettings.exportLineScale) || 1
     const layers = useStore(state => state.viewSettings.layers)
+    const unifiedRoadPreview = layers?.unifiedRoadPreview === true
 
     // Calculate lot row extents and per-direction ROW widths for road connections
     const { totalExtentLeft, totalExtentRight, totalWidth, maxLotDepth, frontROW, rearROW, leftROW, rightROW } = useMemo(() => {
@@ -184,6 +186,28 @@ const EntityRoadModules = ({ lotPositions }) => {
 
     const roadEntries = Object.entries(roadModules)
     if (roadEntries.length === 0) return null
+
+    if (unifiedRoadPreview) {
+        return (
+            <group>
+                <UnifiedRoadNetwork
+                    lotBounds={{
+                        xMin: totalExtentLeft,
+                        xMax: totalExtentRight,
+                        yMin: 0,
+                        yMax: maxLotDepth,
+                    }}
+                    enabledDirections={{
+                        front: !!roadsByDir.front,
+                        left: !!roadsByDir.left,
+                        right: !!roadsByDir.right,
+                        rear: !!roadsByDir.rear,
+                    }}
+                    roadModuleStyles={roadModuleStyles}
+                />
+            </group>
+        )
+    }
 
     return (
         <group>
