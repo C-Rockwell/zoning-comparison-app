@@ -667,9 +667,9 @@ const ModelSetupSection = () => {
                             <label className="flex items-center gap-2 cursor-pointer">
                                 <input
                                     type="checkbox"
-                                    checked={streetEdges[edge] || false}
+                                    checked={unifiedRoadPreview ? true : (streetEdges[edge] || false)}
                                     onChange={(e) => setStreetEdge(edge, e.target.checked)}
-                                    disabled={edge === 'front'}
+                                    disabled={edge === 'front' || unifiedRoadPreview}
                                     className="rounded accent-theme
                                                disabled:opacity-50 disabled:cursor-not-allowed"
                                     style={{ backgroundColor: 'var(--ui-bg-secondary)', borderColor: 'var(--ui-border)' }}
@@ -695,7 +695,7 @@ const ModelSetupSection = () => {
                                     <option value="S3">S3</option>
                                 </select>
                             )}
-                            {streetEdges[edge] && unifiedRoadPreview && (
+                            {unifiedRoadPreview && (
                                 <span
                                     className="text-[10px] px-1.5 py-0.5 rounded"
                                     style={{

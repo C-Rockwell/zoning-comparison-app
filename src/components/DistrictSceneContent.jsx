@@ -184,9 +184,6 @@ const EntityRoadModules = ({ lotPositions }) => {
 
     if (!roadModuleStyles) return null
 
-    const roadEntries = Object.entries(roadModules)
-    if (roadEntries.length === 0) return null
-
     if (unifiedRoadPreview) {
         return (
             <group>
@@ -198,16 +195,20 @@ const EntityRoadModules = ({ lotPositions }) => {
                         yMax: maxLotDepth,
                     }}
                     enabledDirections={{
-                        front: !!roadsByDir.front,
-                        left: !!roadsByDir.left,
-                        right: !!roadsByDir.right,
-                        rear: !!roadsByDir.rear,
+                        // Fixed pre-built scenario: all road edges active.
+                        front: true,
+                        left: true,
+                        right: true,
+                        rear: true,
                     }}
                     roadModuleStyles={roadModuleStyles}
                 />
             </group>
         )
     }
+
+    const roadEntries = Object.entries(roadModules)
+    if (roadEntries.length === 0) return null
 
     return (
         <group>
