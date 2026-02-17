@@ -237,38 +237,61 @@ const UnifiedRoadNetwork = ({
         const right = getProfileForDirection('right')
         const frontCurb = (front.sidewalk || 0) + (front.verge || 0) // 13
         const frontWalk = front.sidewalk || 0 // 6
+        const vergeDepth = Math.max(0, frontCurb - frontWalk) // 7
+        const frontROW = front.rightOfWay || 50
         const rightROW = right.rightOfWay || 50
 
         const x0 = lotBounds.xMax
         const y0 = lotBounds.yMin
-        const farCx = x0 + rightROW
-        const cy = y0
-
-        // Continue front near-side strips across the right-road intersection width.
-        const sidewalkRect = { cx: x0 + rightROW / 2, cy: y0 - frontWalk / 2, w: rightROW, h: frontWalk }
-        const vergeRect = { cx: x0 + rightROW / 2, cy: y0 - ((frontWalk + frontCurb) / 2), w: rightROW, h: frontCurb - frontWalk }
-        const throatRect = {
-            cx: x0 + rightROW / 2,
-            cy: y0 - frontCurb / 2,
-            w: rightROW - (2 * frontCurb), // 24 for S1/S1
-            h: frontCurb,
-        }
         const clearRect = {
             cx: x0 + rightROW / 2,
-            cy: y0 - frontCurb / 2,
+            cy: y0 - frontROW / 2,
             w: rightROW,
-            h: frontCurb,
+            h: frontROW,
         }
 
         return {
             clearRect,
-            sidewalkRect,
-            vergeRect,
-            throatRect,
-            nearSidewalkArc: createQuarterDisk(x0, cy, frontWalk, -Math.PI / 2, 0),
-            nearVergeArc: createQuarterAnnulus(x0, cy, frontWalk, frontCurb, -Math.PI / 2, 0),
-            farSidewalkArc: createQuarterDisk(farCx, cy, frontWalk, -Math.PI, -Math.PI / 2),
-            farVergeArc: createQuarterAnnulus(farCx, cy, frontWalk, frontCurb, -Math.PI, -Math.PI / 2),
+            sidewalkTopRect: {
+                cx: x0 + rightROW / 2,
+                cy: y0 - frontWalk / 2,
+                w: Math.max(0, rightROW - (2 * frontWalk)),
+                h: frontWalk,
+            },
+            sidewalkNearRect: {
+                cx: x0 + (frontWalk / 2),
+                cy: y0 - ((frontROW + frontWalk) / 2),
+                w: frontWalk,
+                h: Math.max(0, frontROW - frontWalk),
+            },
+            sidewalkFarRect: {
+                cx: x0 + rightROW - (frontWalk / 2),
+                cy: y0 - ((frontROW + frontWalk) / 2),
+                w: frontWalk,
+                h: Math.max(0, frontROW - frontWalk),
+            },
+            vergeTopRect: {
+                cx: x0 + rightROW / 2,
+                cy: y0 - ((frontWalk + frontCurb) / 2),
+                w: Math.max(0, rightROW - (2 * frontCurb)),
+                h: vergeDepth,
+            },
+            vergeNearRect: {
+                cx: x0 + frontWalk + (vergeDepth / 2),
+                cy: y0 - ((frontROW + frontCurb) / 2),
+                w: vergeDepth,
+                h: Math.max(0, frontROW - frontCurb),
+            },
+            vergeFarRect: {
+                cx: x0 + rightROW - frontWalk - (vergeDepth / 2),
+                cy: y0 - ((frontROW + frontCurb) / 2),
+                w: vergeDepth,
+                h: Math.max(0, frontROW - frontCurb),
+            },
+            nearSidewalkArc: createQuarterDisk(x0, y0, frontWalk, -Math.PI / 2, 0),
+            nearVergeArc: createQuarterAnnulus(x0, y0, frontWalk, frontCurb, -Math.PI / 2, 0),
+            farSidewalkArc: createQuarterDisk(x0 + rightROW, y0, frontWalk, -Math.PI, -Math.PI / 2),
+            farVergeArc: createQuarterAnnulus(x0 + rightROW, y0, frontWalk, frontCurb, -Math.PI, -Math.PI / 2),
         }
     }, [enabledDirections, lotBounds])
 
@@ -314,58 +337,50 @@ const UnifiedRoadNetwork = ({
                             metalness={0}
                         />
                     </mesh>
-                    <mesh position={[frontRightFix.sidewalkRect.cx, frontRightFix.sidewalkRect.cy, 0.060]} renderOrder={3}>
-                        <planeGeometry args={[frontRightFix.sidewalkRect.w, frontRightFix.sidewalkRect.h]} />
-                        <meshStandardMaterial
-                            color={sidewalkStyle?.fillColor || '#90EE90'}
-                            opacity={sidewalkStyle?.fillOpacity ?? 1.0}
-                            transparent={(sidewalkStyle?.fillOpacity ?? 1.0) < 1}
-                            side={THREE.DoubleSide}
-                            depthWrite={(sidewalkStyle?.fillOpacity ?? 1.0) >= 0.95}
-                            roughness={1}
-                            metalness={0}
-                        />
+                    {[frontRightFix.vergeTopRect, frontRightFix.vergeNearRect, frontRightFix.vergeFarRect].map((r, i) => (
+                        <mesh key={`fr-verge-rect-${i}`} position={[r.cx, r.cy, 0.060]} renderOrder={3}>
+                            <planeGeometry args={[r.w, r.h]} />
+                            <meshStandardMaterial
+                                color={vergeStyle?.fillColor || '#c4a77d'}
+                                opacity={vergeStyle?.fillOpacity ?? 1.0}
+                                transparent={(vergeStyle?.fillOpacity ?? 1.0) < 1}
+                                side={THREE.DoubleSide}
+                                depthWrite={(vergeStyle?.fillOpacity ?? 1.0) >= 0.95}
+                                roughness={1}
+                                metalness={0}
+                            />
+                        </mesh>
+                    ))}
+                    <mesh position={[0, 0, 0.061]} renderOrder={3}>
+                        <shapeGeometry args={[frontRightFix.nearVergeArc]} />
+                        <meshStandardMaterial color={vergeStyle?.fillColor || '#c4a77d'} opacity={vergeStyle?.fillOpacity ?? 1.0} transparent={(vergeStyle?.fillOpacity ?? 1.0) < 1} side={THREE.DoubleSide} depthWrite={(vergeStyle?.fillOpacity ?? 1.0) >= 0.95} roughness={1} metalness={0} />
                     </mesh>
-                    <mesh position={[frontRightFix.vergeRect.cx, frontRightFix.vergeRect.cy, 0.061]} renderOrder={3}>
-                        <planeGeometry args={[frontRightFix.vergeRect.w, frontRightFix.vergeRect.h]} />
-                        <meshStandardMaterial
-                            color={vergeStyle?.fillColor || '#c4a77d'}
-                            opacity={vergeStyle?.fillOpacity ?? 1.0}
-                            transparent={(vergeStyle?.fillOpacity ?? 1.0) < 1}
-                            side={THREE.DoubleSide}
-                            depthWrite={(vergeStyle?.fillOpacity ?? 1.0) >= 0.95}
-                            roughness={1}
-                            metalness={0}
-                        />
-                    </mesh>
-                    <mesh position={[frontRightFix.throatRect.cx, frontRightFix.throatRect.cy, 0.062]} renderOrder={3}>
-                        <planeGeometry args={[Math.max(frontRightFix.throatRect.w, 0), frontRightFix.throatRect.h]} />
-                        <meshStandardMaterial
-                            color={pavementStyle?.fillColor || '#666666'}
-                            opacity={pavementStyle?.fillOpacity ?? 1.0}
-                            transparent={(pavementStyle?.fillOpacity ?? 1.0) < 1}
-                            side={THREE.DoubleSide}
-                            depthWrite={(pavementStyle?.fillOpacity ?? 1.0) >= 0.95}
-                            roughness={1}
-                            metalness={0}
-                        />
+                    <mesh position={[0, 0, 0.061]} renderOrder={3}>
+                        <shapeGeometry args={[frontRightFix.farVergeArc]} />
+                        <meshStandardMaterial color={vergeStyle?.fillColor || '#c4a77d'} opacity={vergeStyle?.fillOpacity ?? 1.0} transparent={(vergeStyle?.fillOpacity ?? 1.0) < 1} side={THREE.DoubleSide} depthWrite={(vergeStyle?.fillOpacity ?? 1.0) >= 0.95} roughness={1} metalness={0} />
                     </mesh>
 
+                    {[frontRightFix.sidewalkTopRect, frontRightFix.sidewalkNearRect, frontRightFix.sidewalkFarRect].map((r, i) => (
+                        <mesh key={`fr-sidewalk-rect-${i}`} position={[r.cx, r.cy, 0.062]} renderOrder={3}>
+                            <planeGeometry args={[r.w, r.h]} />
+                            <meshStandardMaterial
+                                color={sidewalkStyle?.fillColor || '#90EE90'}
+                                opacity={sidewalkStyle?.fillOpacity ?? 1.0}
+                                transparent={(sidewalkStyle?.fillOpacity ?? 1.0) < 1}
+                                side={THREE.DoubleSide}
+                                depthWrite={(sidewalkStyle?.fillOpacity ?? 1.0) >= 0.95}
+                                roughness={1}
+                                metalness={0}
+                            />
+                        </mesh>
+                    ))}
                     <mesh position={[0, 0, 0.063]} renderOrder={3}>
                         <shapeGeometry args={[frontRightFix.nearSidewalkArc]} />
                         <meshStandardMaterial color={sidewalkStyle?.fillColor || '#90EE90'} opacity={sidewalkStyle?.fillOpacity ?? 1.0} transparent={(sidewalkStyle?.fillOpacity ?? 1.0) < 1} side={THREE.DoubleSide} depthWrite={(sidewalkStyle?.fillOpacity ?? 1.0) >= 0.95} roughness={1} metalness={0} />
                     </mesh>
-                    <mesh position={[0, 0, 0.064]} renderOrder={3}>
-                        <shapeGeometry args={[frontRightFix.nearVergeArc]} />
-                        <meshStandardMaterial color={vergeStyle?.fillColor || '#c4a77d'} opacity={vergeStyle?.fillOpacity ?? 1.0} transparent={(vergeStyle?.fillOpacity ?? 1.0) < 1} side={THREE.DoubleSide} depthWrite={(vergeStyle?.fillOpacity ?? 1.0) >= 0.95} roughness={1} metalness={0} />
-                    </mesh>
                     <mesh position={[0, 0, 0.063]} renderOrder={3}>
                         <shapeGeometry args={[frontRightFix.farSidewalkArc]} />
                         <meshStandardMaterial color={sidewalkStyle?.fillColor || '#90EE90'} opacity={sidewalkStyle?.fillOpacity ?? 1.0} transparent={(sidewalkStyle?.fillOpacity ?? 1.0) < 1} side={THREE.DoubleSide} depthWrite={(sidewalkStyle?.fillOpacity ?? 1.0) >= 0.95} roughness={1} metalness={0} />
-                    </mesh>
-                    <mesh position={[0, 0, 0.064]} renderOrder={3}>
-                        <shapeGeometry args={[frontRightFix.farVergeArc]} />
-                        <meshStandardMaterial color={vergeStyle?.fillColor || '#c4a77d'} opacity={vergeStyle?.fillOpacity ?? 1.0} transparent={(vergeStyle?.fillOpacity ?? 1.0) < 1} side={THREE.DoubleSide} depthWrite={(vergeStyle?.fillOpacity ?? 1.0) >= 0.95} roughness={1} metalness={0} />
                     </mesh>
                 </group>
             )}
