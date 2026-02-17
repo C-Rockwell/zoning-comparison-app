@@ -325,6 +325,15 @@ Three.js `Line2` / drei's `<Line>` renders thick lines using screen-space geomet
   - macOS `screencapture -x` command failed in this execution environment.
   - Direct browser automation verification could therefore not be completed reliably.
 
+### Next Agent Starting Point
+
+- Start from branch `codex-fix` at commit `2887816` (latest docs handoff baseline before this note).
+- Reproduce in unified mode and focus only on the **front/right three-way intersection** until it matches the reference diagram.
+- Use the coordinate anchors supplied by user as hard constraints for termination points (not relative visual tweaking).
+- Build one deterministic geometry function for this corner first, validate, then mirror/adapt to other corners.
+- Prefer explicit polygon/strip construction over layered repaint/overlay patches to avoid cumulative artifacts.
+- Keep this file updated with each attempted geometry strategy and visual result to avoid repeated dead ends.
+
 ### Files Involved
 
 - **`src/components/RoadIntersectionFillet.jsx`** (~107 lines) — Renders curved fillet arcs. The outermost zone's outer arc line currently uses `roadWidthStyle` for color/width/dash/opacity (lines 66-89). Sub-sampling is applied to outermost arc points (lines 72-75).
