@@ -179,7 +179,7 @@ const ModelParametersTable = () => {
                 },
                 {
                     label: 'Max. Front (ft)',
-                    visKey: 'setbacks',
+                    visKey: 'maxSetbacks',
                     getValue: (lot) => lot.setbacks?.principal?.maxFront,
                     setValue: (lotId, v) => updateLotSetback(lotId, 'principal', 'maxFront', v),
                     type: 'number', min: 0,
@@ -214,7 +214,7 @@ const ModelParametersTable = () => {
                 },
                 {
                     label: 'Max. Side, Street (ft)',
-                    visKey: 'setbacks',
+                    visKey: 'maxSetbacks',
                     getValue: (lot) => lot.setbacks?.principal?.maxSideStreet,
                     setValue: (lotId, v) => updateLotSetback(lotId, 'principal', 'maxSideStreet', v),
                     type: 'number', min: 0,
@@ -275,6 +275,20 @@ const ModelParametersTable = () => {
                     type: 'computed',
                 },
                 {
+                    label: 'Width (ft)',
+                    visKey: 'buildings',
+                    getValue: (lot) => lot.buildings?.principal?.width,
+                    setValue: (lotId, v) => updateBuildingParam(lotId, 'principal', 'width', v),
+                    type: 'number', min: 1,
+                },
+                {
+                    label: 'Depth (ft)',
+                    visKey: 'buildings',
+                    getValue: (lot) => lot.buildings?.principal?.depth,
+                    setValue: (lotId, v) => updateBuildingParam(lotId, 'principal', 'depth', v),
+                    type: 'number', min: 1,
+                },
+                {
                     label: 'Stories',
                     visKey: 'buildings',
                     getValue: (lot) => lot.buildings?.principal?.stories,
@@ -323,11 +337,39 @@ const ModelParametersTable = () => {
                     type: 'computed',
                 },
                 {
+                    label: 'Width (ft)',
+                    visKey: 'accessoryBuilding',
+                    getValue: (lot) => lot.buildings?.accessory?.width,
+                    setValue: (lotId, v) => updateBuildingParam(lotId, 'accessory', 'width', v),
+                    type: 'number', min: 1,
+                },
+                {
+                    label: 'Depth (ft)',
+                    visKey: 'accessoryBuilding',
+                    getValue: (lot) => lot.buildings?.accessory?.depth,
+                    setValue: (lotId, v) => updateBuildingParam(lotId, 'accessory', 'depth', v),
+                    type: 'number', min: 1,
+                },
+                {
                     label: 'Stories',
                     visKey: 'accessoryBuilding',
                     getValue: (lot) => lot.buildings?.accessory?.stories,
                     setValue: (lotId, v) => updateBuildingParam(lotId, 'accessory', 'stories', v),
                     type: 'number', min: 1, step: 1,
+                },
+                {
+                    label: 'First Story Height',
+                    visKey: 'accessoryBuilding',
+                    getValue: (lot) => lot.buildings?.accessory?.firstFloorHeight,
+                    setValue: (lotId, v) => updateBuildingParam(lotId, 'accessory', 'firstFloorHeight', v),
+                    type: 'number', min: 1,
+                },
+                {
+                    label: 'Upper Floor Height',
+                    visKey: 'accessoryBuilding',
+                    getValue: (lot) => lot.buildings?.accessory?.upperFloorHeight,
+                    setValue: (lotId, v) => updateBuildingParam(lotId, 'accessory', 'upperFloorHeight', v),
+                    type: 'number', min: 1,
                 },
                 {
                     label: 'Show Roof',
@@ -698,6 +740,7 @@ const LayersSection = () => {
     const layerList = [
         { key: 'lotLines', label: 'Lot Lines' },
         { key: 'setbacks', label: 'Setbacks' },
+        { key: 'maxSetbacks', label: 'Max Setbacks' },
         { key: 'buildings', label: 'Buildings' },
         { key: 'roof', label: 'Roof' },
         { key: 'maxHeightPlane', label: 'Max Height Plane' },
@@ -712,6 +755,7 @@ const LayersSection = () => {
         { key: 'labelLotNames', label: '  Lot Names' },
         { key: 'labelLotEdges', label: '  Lot Edges' },
         { key: 'labelSetbacks', label: '  Setback Labels' },
+        { key: 'labelMaxSetbacks', label: '  Max Setback Labels' },
         { key: 'labelRoadNames', label: '  Road Names' },
         { key: 'labelRoadZones', label: '  Road Zones' },
         { key: 'labelBuildings', label: '  Building Labels' },
@@ -1221,13 +1265,25 @@ const ControlRow = ({ label, children }) => (
 const RoadModuleStylesSection = () => {
     const roadModuleStyles = useStore((s) => s.roadModuleStyles)
     const setRoadModuleStyle = useStore((s) => s.setRoadModuleStyle)
+    const setAllRoadLineWidths = useStore((s) => s.setAllRoadLineWidths)
 
     if (!roadModuleStyles) return null
 
+    // Use roadWidth lineWidth as the reference for the universal slider
+    const universalLineWidth = roadModuleStyles.roadWidth?.lineWidth ?? 1
+
     return (
         <Section title="Road Module Styles" icon={<Palette className="w-4 h-4" />} defaultOpen={false}>
-            {/* Right-of-Way Lines */}
+            {/* Universal Line Width */}
             <div style={{ marginBottom: '12px' }}>
+                <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '4px', color: 'var(--ui-text-muted)' }}>All Lines</span>
+                <ControlRow label="Line Width">
+                    <SliderInput value={universalLineWidth} onChange={(v) => setAllRoadLineWidths(v)} min={0.5} max={5} step={0.5} />
+                </ControlRow>
+            </div>
+
+            {/* Right-of-Way Lines */}
+            <div style={{ paddingTop: '8px', marginBottom: '12px', borderTop: '1px solid var(--ui-bg-primary)' }}>
                 <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '4px', color: 'var(--ui-text-muted)' }}>Right-of-Way Lines</span>
                 <ControlRow label="Color">
                     <ColorPicker value={roadModuleStyles.rightOfWay?.color ?? '#000000'} onChange={(c) => setRoadModuleStyle('rightOfWay', 'color', c)} />
@@ -1783,6 +1839,7 @@ const ModelParametersSection = () => {
     const styleCategories = [
         { key: 'lotLines', label: 'Lot Lines' },
         { key: 'setbacks', label: 'Setbacks' },
+        { key: 'maxSetbacks', label: 'Max Setbacks' },
         { key: 'buildingEdges', label: 'Building Edges' },
         { key: 'buildingFaces', label: 'Building Faces' },
         { key: 'roofFaces', label: 'Roof' },

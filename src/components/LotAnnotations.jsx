@@ -15,6 +15,7 @@ const LotAnnotations = ({
     lotWidth,
     lotDepth,
     setbacks = {},
+    maxSetbacks = {},
     buildings = {},
     lotIndex = 1,
     lotCenter = [0, 0],
@@ -119,6 +120,32 @@ const LotAnnotations = ({
         })
     }
 
+    // ---------- Max Setback Labels ----------
+    const maxSetbackLabels = []
+    const { front: maxFront = 0, sideStreet: maxSideStreet = 0, streetSides = {} } = maxSetbacks
+
+    if (maxFront > 0) {
+        maxSetbackLabels.push({
+            id: `lot-${lotId}-maxsetback-front`,
+            text: 'Max. Front Setback',
+            defaultPosition: [lotWidth / 2, maxFront / 2, 0.17],
+        })
+    }
+    if (maxSideStreet > 0 && streetSides.left) {
+        maxSetbackLabels.push({
+            id: `lot-${lotId}-maxsetback-left`,
+            text: 'Max. Side Setback',
+            defaultPosition: [maxSideStreet / 2, lotDepth / 2, 0.17],
+        })
+    }
+    if (maxSideStreet > 0 && streetSides.right) {
+        maxSetbackLabels.push({
+            id: `lot-${lotId}-maxsetback-right`,
+            text: 'Max. Side Setback',
+            defaultPosition: [lotWidth - maxSideStreet / 2, lotDepth / 2, 0.17],
+        })
+    }
+
     // ---------- Building Labels ----------
     const buildingLabels = []
     const principal = buildings?.principal
@@ -177,6 +204,20 @@ const LotAnnotations = ({
 
             {/* Setback Labels */}
             {layers.labelSetbacks && setbackLabels.map((label) => (
+                <DraggableLabel
+                    key={label.id}
+                    {...sharedProps}
+                    text={label.text}
+                    fontSize={baseFontSize}
+                    defaultPosition={label.defaultPosition}
+                    anchorPoint={label.defaultPosition}
+                    customPosition={annotationPositions[label.id] || null}
+                    onPositionChange={(pos) => setAnnotationPosition(label.id, pos)}
+                />
+            ))}
+
+            {/* Max Setback Labels */}
+            {layers.labelMaxSetbacks && maxSetbackLabels.map((label) => (
                 <DraggableLabel
                     key={label.id}
                     {...sharedProps}

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
-import { Line } from '@react-three/drei'
 import * as THREE from 'three'
+import { Line } from '@react-three/drei'
 
 /**
  * Direction-to-rotation mapping for multi-direction road rendering.
@@ -173,7 +173,7 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
     }, [roadTopY, rightParking, rightVerge, rightSidewalk, rightTransitionZone])
 
     // Render a polygon (filled rectangle with optional border)
-    const RoadPolygon = ({ xMin, xMax, yMin, yMax, style, zOffset = 0.01, lineScale: polyLineScale = 1, suppressLeftEnd: polyLeftEnd = false, suppressRightEnd: polyRightEnd = false }) => {
+    const RoadPolygon = ({ xMin, xMax, yMin, yMax, style, zOffset = 0.01, suppressLeftEnd: polyLeftEnd = false, suppressRightEnd: polyRightEnd = false }) => {
         const width = xMax - xMin
         const depth = yMax - yMin
         const centerX = (xMin + xMax) / 2
@@ -201,49 +201,49 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
                     />
                 </mesh>
 
-                {/* Border lines */}
+                {/* Border lines — drei Line2 with adjustable lineWidth */}
                 <Line
                     points={[p1, p2]}
                     color={style.lineColor}
-                    lineWidth={style.lineWidth * polyLineScale}
+                    lineWidth={(style.lineWidth || 1) * lineScale}
+                    opacity={style.lineOpacity}
+                    transparent={style.lineOpacity < 1}
                     dashed={style.lineDashed}
                     dashSize={style.lineDashed ? 1 : undefined}
                     gapSize={style.lineDashed ? 0.5 : undefined}
-                    transparent
-                    opacity={style.lineOpacity}
                 />
                 {!polyRightEnd && (
                     <Line
                         points={[p2, p3]}
                         color={style.lineColor}
-                        lineWidth={style.lineWidth * polyLineScale}
+                        lineWidth={(style.lineWidth || 1) * lineScale}
+                        opacity={style.lineOpacity}
+                        transparent={style.lineOpacity < 1}
                         dashed={style.lineDashed}
                         dashSize={style.lineDashed ? 1 : undefined}
                         gapSize={style.lineDashed ? 0.5 : undefined}
-                        transparent
-                        opacity={style.lineOpacity}
                     />
                 )}
                 <Line
                     points={[p3, p4]}
                     color={style.lineColor}
-                    lineWidth={style.lineWidth * polyLineScale}
+                    lineWidth={(style.lineWidth || 1) * lineScale}
+                    opacity={style.lineOpacity}
+                    transparent={style.lineOpacity < 1}
                     dashed={style.lineDashed}
                     dashSize={style.lineDashed ? 1 : undefined}
                     gapSize={style.lineDashed ? 0.5 : undefined}
-                    transparent
-                    opacity={style.lineOpacity}
                 />
                 {!polyLeftEnd && (
                     <Line
                         points={[p4, p1]}
                         color={style.lineColor}
-                        lineWidth={style.lineWidth * polyLineScale}
+                        lineWidth={(style.lineWidth || 1) * lineScale}
+                        opacity={style.lineOpacity}
+                        transparent={style.lineOpacity < 1}
                         dashed={style.lineDashed}
                         dashSize={style.lineDashed ? 1 : undefined}
                         gapSize={style.lineDashed ? 0.5 : undefined}
-                        transparent
-                        opacity={style.lineOpacity}
                     />
                 )}
             </group>
@@ -264,25 +264,25 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
             <Line
                 points={[[xMin, 0, 0.03], [xMax, 0, 0.03]]}
                 color={rowStyle.color}
-                lineWidth={rowStyle.width * lineScale}
+                lineWidth={(rowStyle.width || 1) * lineScale}
+                opacity={rowStyle.opacity}
+                transparent={rowStyle.opacity < 1}
                 dashed={rowStyle.dashed}
-                dashScale={rowStyle.dashed ? 5 : 1}
                 dashSize={rowStyle.dashSize}
                 gapSize={rowStyle.gapSize}
-                transparent
-                opacity={rowStyle.opacity}
+                dashScale={rowStyle.dashed ? 5 : 1}
             />
             {/* Line 2: At Y=-rightOfWay (outer edge of right-of-way) */}
             <Line
                 points={[[xMin, -rightOfWay, 0.03], [xMax, -rightOfWay, 0.03]]}
                 color={rowStyle.color}
-                lineWidth={rowStyle.width * lineScale}
+                lineWidth={(rowStyle.width || 1) * lineScale}
+                opacity={rowStyle.opacity}
+                transparent={rowStyle.opacity < 1}
                 dashed={rowStyle.dashed}
-                dashScale={rowStyle.dashed ? 5 : 1}
                 dashSize={rowStyle.dashSize}
                 gapSize={rowStyle.gapSize}
-                transparent
-                opacity={rowStyle.opacity}
+                dashScale={rowStyle.dashed ? 5 : 1}
             />
 
             {/* Road Width Polygon (centered on centerline) */}
@@ -293,7 +293,6 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
                 yMax={roadTopY}
                 style={roadStyle}
                 zOffset={0.01}
-                lineScale={lineScale}
                 suppressLeftEnd={suppressLeftEnd}
                 suppressRightEnd={suppressRightEnd}
             />
@@ -312,7 +311,6 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
                         yMax={layer.topY}
                         style={layerStyle}
                         zOffset={0.01 + (index + 1) * 0.001}
-                        lineScale={lineScale}
                         suppressLeftEnd={suppressLeftEnd}
                         suppressRightEnd={suppressRightEnd}
                     />
@@ -333,7 +331,6 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
                         yMax={layer.topY}
                         style={layerStyle}
                         zOffset={0.01 + (index + 1) * 0.001}
-                        lineScale={lineScale}
                         suppressLeftEnd={suppressLeftEnd}
                         suppressRightEnd={suppressRightEnd}
                     />

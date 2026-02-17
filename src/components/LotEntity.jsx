@@ -11,9 +11,9 @@ import { formatDimension } from '../utils/formatUnits'
 // Helper: compute total building height from story data
 const computeTotalHeight = (building) => {
     if (!building) return 0
-    const stories = building.stories || 1
-    const firstFloor = building.firstFloorHeight || 12
-    const upperFloor = building.upperFloorHeight || 10
+    const stories = building.stories ?? 1
+    const firstFloor = building.firstFloorHeight ?? 12
+    const upperFloor = building.upperFloorHeight ?? 10
     if (stories <= 0) return 0
     if (stories === 1) return firstFloor
     return firstFloor + (stories - 1) * upperFloor
@@ -123,17 +123,26 @@ const RectLot = ({ width, depth, style, fillStyle, showWidthDimensions = false, 
 // ============================================
 // SetbackLines — setback rectangle inside lot
 // ============================================
-const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, showDimensions = false, dimensionSettings = {}, lineScale = 1 }) => {
-    const { front, rear, sideInterior } = setbacks
+const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, showDimensions = false, dimensionSettings = {}, lineScale = 1 }) => {
+    const { front, rear, sideInterior, minSideStreet } = setbacks
 
-    // Use sideInterior for both left and right in the entity system
-    const sideLeft = sideInterior || 5
-    const sideRight = sideInterior || 5
+    // Street-facing sides use minSideStreet; interior sides use sideInterior
+    const leftValue = streetSides.left ? minSideStreet : sideInterior
+    const rightValue = streetSides.right ? minSideStreet : sideInterior
 
-    const y1 = -lotDepth / 2 + front
-    const y2 = lotDepth / 2 - rear
-    const x1 = -lotWidth / 2 + sideLeft
-    const x2 = lotWidth / 2 - sideRight
+    // Only render lines for sides with actual positive values
+    const hasFront = front != null && front > 0
+    const hasRear = rear != null && rear > 0
+    const hasSideLeft = leftValue != null && leftValue > 0
+    const hasSideRight = rightValue != null && rightValue > 0
+
+    if (!hasFront && !hasRear && !hasSideLeft && !hasSideRight) return null
+
+    // Positions: qualifying sides use their setback offset, others fall to lot edge
+    const y1 = hasFront ? -lotDepth / 2 + front : -lotDepth / 2
+    const y2 = hasRear ? lotDepth / 2 - rear : lotDepth / 2
+    const x1 = hasSideLeft ? -lotWidth / 2 + leftValue : -lotWidth / 2
+    const x2 = hasSideRight ? lotWidth / 2 - rightValue : lotWidth / 2
 
     const p1 = [x1, y1, 0.1]
     const p2 = [x2, y1, 0.1]
@@ -142,55 +151,103 @@ const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, showDimensions = fa
 
     return (
         <group>
-            <SingleLine start={p1} end={p2} style={style} side="front" lineScale={lineScale} />
-            <SingleLine start={p2} end={p3} style={style} side="right" lineScale={lineScale} />
-            <SingleLine start={p3} end={p4} style={style} side="rear" lineScale={lineScale} />
-            <SingleLine start={p4} end={p1} style={style} side="left" lineScale={lineScale} />
+            {hasFront && <SingleLine start={p1} end={p2} style={style} side="front" lineScale={lineScale} />}
+            {hasSideRight && <SingleLine start={p2} end={p3} style={style} side="right" lineScale={lineScale} />}
+            {hasRear && <SingleLine start={p3} end={p4} style={style} side="rear" lineScale={lineScale} />}
+            {hasSideLeft && <SingleLine start={p4} end={p1} style={style} side="left" lineScale={lineScale} />}
 
             {/* Front Setback dimension */}
-            <Dimension
-                start={[0, -lotDepth / 2, 0.1]}
-                end={[0, y1, 0.1]}
-                label={resolveDimensionLabel(front, 'setbackFront', dimensionSettings)}
-                offset={5}
-                color={style.color || 'red'}
-                visible={showDimensions}
-                settings={dimensionSettings}
-                lineScale={lineScale}
-            />
+            {hasFront && (
+                <Dimension
+                    start={[0, -lotDepth / 2, 0.1]}
+                    end={[0, y1, 0.1]}
+                    label={resolveDimensionLabel(front, 'setbackFront', dimensionSettings)}
+                    offset={5}
+                    color={style.color || 'red'}
+                    visible={showDimensions}
+                    settings={dimensionSettings}
+                    lineScale={lineScale}
+                />
+            )}
             {/* Rear Setback dimension */}
-            <Dimension
-                start={[0, y2, 0.1]}
-                end={[0, lotDepth / 2, 0.1]}
-                label={resolveDimensionLabel(rear, 'setbackRear', dimensionSettings)}
-                offset={5}
-                color={style.color || 'red'}
-                visible={showDimensions}
-                settings={dimensionSettings}
-                lineScale={lineScale}
-            />
+            {hasRear && (
+                <Dimension
+                    start={[0, y2, 0.1]}
+                    end={[0, lotDepth / 2, 0.1]}
+                    label={resolveDimensionLabel(rear, 'setbackRear', dimensionSettings)}
+                    offset={5}
+                    color={style.color || 'red'}
+                    visible={showDimensions}
+                    settings={dimensionSettings}
+                    lineScale={lineScale}
+                />
+            )}
             {/* Left Setback dimension */}
-            <Dimension
-                start={[-lotWidth / 2, 0, 0.1]}
-                end={[x1, 0, 0.1]}
-                label={resolveDimensionLabel(sideLeft, 'setbackLeft', dimensionSettings)}
-                offset={5}
-                color={style.color || 'red'}
-                visible={showDimensions}
-                settings={dimensionSettings}
-                lineScale={lineScale}
-            />
+            {hasSideLeft && (
+                <Dimension
+                    start={[-lotWidth / 2, 0, 0.1]}
+                    end={[x1, 0, 0.1]}
+                    label={resolveDimensionLabel(leftValue, 'setbackLeft', dimensionSettings)}
+                    offset={5}
+                    color={style.color || 'red'}
+                    visible={showDimensions}
+                    settings={dimensionSettings}
+                    lineScale={lineScale}
+                />
+            )}
             {/* Right Setback dimension */}
-            <Dimension
-                start={[x2, 0, 0.1]}
-                end={[lotWidth / 2, 0, 0.1]}
-                label={resolveDimensionLabel(sideRight, 'setbackRight', dimensionSettings)}
-                offset={5}
-                color={style.color || 'red'}
-                visible={showDimensions}
-                settings={dimensionSettings}
-                lineScale={lineScale}
-            />
+            {hasSideRight && (
+                <Dimension
+                    start={[x2, 0, 0.1]}
+                    end={[lotWidth / 2, 0, 0.1]}
+                    label={resolveDimensionLabel(rightValue, 'setbackRight', dimensionSettings)}
+                    offset={5}
+                    color={style.color || 'red'}
+                    visible={showDimensions}
+                    settings={dimensionSettings}
+                    lineScale={lineScale}
+                />
+            )}
+        </group>
+    )
+}
+
+// ============================================
+// MaxSetbackLines — individual max setback lines
+// Only renders lines for sides where a max value is set.
+// Front uses maxFront; street-facing sides use maxSideStreet.
+// ============================================
+const MaxSetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, lineScale = 1 }) => {
+    const { maxFront, maxSideStreet } = setbacks
+    const z = 0.12 // Above min setback lines at z=0.1
+
+    const lines = []
+
+    // Max front setback line (horizontal, spans full lot width)
+    if (maxFront != null && maxFront > 0) {
+        const y = -lotDepth / 2 + maxFront
+        lines.push({ start: [-lotWidth / 2, y, z], end: [lotWidth / 2, y, z], side: 'front' })
+    }
+
+    // Max side street setback lines (vertical, on street-facing side(s))
+    if (maxSideStreet != null && maxSideStreet > 0) {
+        if (streetSides.left) {
+            const x = -lotWidth / 2 + maxSideStreet
+            lines.push({ start: [x, -lotDepth / 2, z], end: [x, lotDepth / 2, z], side: 'left' })
+        }
+        if (streetSides.right) {
+            const x = lotWidth / 2 - maxSideStreet
+            lines.push({ start: [x, -lotDepth / 2, z], end: [x, lotDepth / 2, z], side: 'right' })
+        }
+    }
+
+    if (lines.length === 0) return null
+
+    return (
+        <group>
+            {lines.map((line, i) => (
+                <SingleLine key={i} start={line.start} end={line.end} style={style} side={line.side} lineScale={lineScale} />
+            ))}
         </group>
     )
 }
@@ -200,7 +257,7 @@ const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, showDimensions = fa
 // from the entity system.
 // Props: lotId, offset (x position)
 // ============================================
-const LotEntity = ({ lotId, offset = 0, lotIndex = 1 }) => {
+const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
     const lot = useLot(lotId)
     const style = useLotStyle(lotId)
     const visibility = useLotVisibility(lotId)
@@ -285,8 +342,23 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1 }) => {
                     lotDepth={lotDepth}
                     setbacks={setbacks.principal}
                     style={style.setbacks}
+                    streetSides={streetSides}
                     showDimensions={showSetbackDim}
                     dimensionSettings={dimensionSettings}
+                    lineScale={exportLineScale}
+                />
+            )}
+
+            {/* ============================================ */}
+            {/* Max Setback Lines (maxFront, maxSideStreet) */}
+            {/* ============================================ */}
+            {layers.maxSetbacks && visibility.maxSetbacks && setbacks?.principal && style?.maxSetbacks && (
+                <MaxSetbackLines
+                    lotWidth={lotWidth}
+                    lotDepth={lotDepth}
+                    setbacks={setbacks.principal}
+                    style={style.maxSetbacks}
+                    streetSides={streetSides}
                     lineScale={exportLineScale}
                 />
             )}
@@ -308,10 +380,10 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1 }) => {
                     onSelect={() => selectEntityBuilding(lotId, 'principal')}
                     onPositionChange={(x, y) => setEntityBuildingPosition(lotId, 'principal', x, y)}
                     offsetGroupX={offset + lotWidth / 2}
-                    stories={principal.stories || 1}
-                    firstFloorHeight={principal.firstFloorHeight || 12}
-                    upperFloorHeight={principal.upperFloorHeight || 10}
-                    maxHeight={principal.maxHeight || 30}
+                    stories={principal.stories ?? 1}
+                    firstFloorHeight={principal.firstFloorHeight ?? 12}
+                    upperFloorHeight={principal.upperFloorHeight ?? 10}
+                    maxHeight={principal.maxHeight ?? 30}
                     showMaxHeightPlane={layers.maxHeightPlane && visibility.maxHeightPlane}
                     maxHeightPlaneStyle={style.maxHeightPlane}
                     roof={principal.roof}
@@ -345,10 +417,10 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1 }) => {
                     onSelect={() => selectEntityBuilding(lotId, 'accessory')}
                     onPositionChange={(x, y) => setEntityBuildingPosition(lotId, 'accessory', x, y)}
                     offsetGroupX={offset + lotWidth / 2}
-                    stories={accessory.stories || 1}
-                    firstFloorHeight={accessory.firstFloorHeight || 10}
-                    upperFloorHeight={accessory.upperFloorHeight || 10}
-                    maxHeight={accessory.maxHeight || 15}
+                    stories={accessory.stories ?? 1}
+                    firstFloorHeight={accessory.firstFloorHeight ?? 10}
+                    upperFloorHeight={accessory.upperFloorHeight ?? 10}
+                    maxHeight={accessory.maxHeight ?? 15}
                     showMaxHeightPlane={layers.maxHeightPlane && visibility.maxHeightPlane}
                     maxHeightPlaneStyle={style.maxHeightPlane}
                     roof={accessory.roof}
@@ -376,8 +448,8 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1 }) => {
                     setbacks={{
                         front: setbacks?.principal?.front || 0,
                         rear: setbacks?.principal?.rear || 0,
-                        left: setbacks?.principal?.sideInterior || 0,
-                        right: setbacks?.principal?.sideInterior || 0,
+                        left: (streetSides.left ? setbacks?.principal?.minSideStreet : setbacks?.principal?.sideInterior) || 0,
+                        right: (streetSides.right ? setbacks?.principal?.minSideStreet : setbacks?.principal?.sideInterior) || 0,
                     }}
                     buildings={{
                         principal: principal ? {
@@ -394,6 +466,11 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1 }) => {
                             depth: accessory.depth,
                             totalHeight: computeTotalHeight(accessory),
                         } : undefined,
+                    }}
+                    maxSetbacks={{
+                        front: setbacks?.principal?.maxFront || 0,
+                        sideStreet: setbacks?.principal?.maxSideStreet || 0,
+                        streetSides,
                     }}
                     lotIndex={lotIndex}
                     lineScale={exportLineScale}

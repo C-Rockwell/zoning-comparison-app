@@ -13,9 +13,9 @@ import { formatDimension } from '../utils/formatUnits'
 
 // Helper: compute total building height from story data
 const computeTotalHeight = (stories, firstFloorHeight, upperFloorHeight) => {
-    const s = stories || 1
-    const ff = firstFloorHeight || 12
-    const uf = upperFloorHeight || 10
+    const s = stories ?? 1
+    const ff = firstFloorHeight ?? 12
+    const uf = upperFloorHeight ?? 10
     if (s <= 0) return 0
     if (s === 1) return ff
     return ff + (s - 1) * uf
@@ -169,68 +169,83 @@ const Lot = ({ width, depth, x, y, style, fillStyle, scaleFactor = 1, showWidthD
 const SetbackLayer = ({ lotWidth, lotDepth, setbacks, x, y, style, scaleFactor = 1, showDimensions = false, dimensionSettings = {}, setbackDimensionKeys = {}, lineScale = 1 }) => {
     const { setbackFront, setbackRear, setbackSideLeft, setbackSideRight } = setbacks
 
-    const y1 = -lotDepth / 2 + setbackFront
-    const y2 = lotDepth / 2 - setbackRear
-    const x1 = -lotWidth / 2 + setbackSideLeft
-    const x2 = lotWidth / 2 - setbackSideRight
+    // Only render lines for sides with actual positive values
+    const hasFront = setbackFront != null && setbackFront > 0
+    const hasRear = setbackRear != null && setbackRear > 0
+    const hasLeft = setbackSideLeft != null && setbackSideLeft > 0
+    const hasRight = setbackSideRight != null && setbackSideRight > 0
 
-    const p1 = [x1, y1, 0.1] // Bottom Left
-    const p2 = [x2, y1, 0.1] // Bottom Right
-    const p3 = [x2, y2, 0.1] // Top Right
-    const p4 = [x1, y2, 0.1] // Top Left
+    if (!hasFront && !hasRear && !hasLeft && !hasRight) return null
+
+    const y1 = hasFront ? -lotDepth / 2 + setbackFront : -lotDepth / 2
+    const y2 = hasRear ? lotDepth / 2 - setbackRear : lotDepth / 2
+    const x1 = hasLeft ? -lotWidth / 2 + setbackSideLeft : -lotWidth / 2
+    const x2 = hasRight ? lotWidth / 2 - setbackSideRight : lotWidth / 2
+
+    const p1 = [x1, y1, 0.1]
+    const p2 = [x2, y1, 0.1]
+    const p3 = [x2, y2, 0.1]
+    const p4 = [x1, y2, 0.1]
 
     return (
         <group position={[x, y, 0]}>
-            <SingleLine start={p1} end={p2} style={style} side="front" lineScale={lineScale} />
-            <SingleLine start={p2} end={p3} style={style} side="right" lineScale={lineScale} />
-            <SingleLine start={p3} end={p4} style={style} side="rear" lineScale={lineScale} />
-            <SingleLine start={p4} end={p1} style={style} side="left" lineScale={lineScale} />
+            {hasFront && <SingleLine start={p1} end={p2} style={style} side="front" lineScale={lineScale} />}
+            {hasRight && <SingleLine start={p2} end={p3} style={style} side="right" lineScale={lineScale} />}
+            {hasRear && <SingleLine start={p3} end={p4} style={style} side="rear" lineScale={lineScale} />}
+            {hasLeft && <SingleLine start={p4} end={p1} style={style} side="left" lineScale={lineScale} />}
 
-            {/* Setback Dimensions - Measuring the gap from Lot Line to Setback Line */}
             {/* Front Setback */}
-            <Dimension
-                start={[0, -lotDepth / 2, 0.1]}
-                end={[0, y1, 0.1]}
-                label={resolveDimensionLabel(setbackFront, setbackDimensionKeys.front || 'setbackFront', dimensionSettings)}
-                offset={5} // Offset to the right
-                color={style.color || "red"}
-                visible={showDimensions}
-                settings={dimensionSettings}
-                lineScale={lineScale}
-            />
+            {hasFront && (
+                <Dimension
+                    start={[0, -lotDepth / 2, 0.1]}
+                    end={[0, y1, 0.1]}
+                    label={resolveDimensionLabel(setbackFront, setbackDimensionKeys.front || 'setbackFront', dimensionSettings)}
+                    offset={5}
+                    color={style.color || "red"}
+                    visible={showDimensions}
+                    settings={dimensionSettings}
+                    lineScale={lineScale}
+                />
+            )}
             {/* Rear Setback */}
-            <Dimension
-                start={[0, y2, 0.1]}
-                end={[0, lotDepth / 2, 0.1]}
-                label={resolveDimensionLabel(setbackRear, setbackDimensionKeys.rear || 'setbackRear', dimensionSettings)}
-                offset={5}
-                color={style.color || "red"}
-                visible={showDimensions}
-                settings={dimensionSettings}
-                lineScale={lineScale}
-            />
+            {hasRear && (
+                <Dimension
+                    start={[0, y2, 0.1]}
+                    end={[0, lotDepth / 2, 0.1]}
+                    label={resolveDimensionLabel(setbackRear, setbackDimensionKeys.rear || 'setbackRear', dimensionSettings)}
+                    offset={5}
+                    color={style.color || "red"}
+                    visible={showDimensions}
+                    settings={dimensionSettings}
+                    lineScale={lineScale}
+                />
+            )}
             {/* Left Setback */}
-            <Dimension
-                start={[-lotWidth / 2, 0, 0.1]}
-                end={[x1, 0, 0.1]}
-                label={resolveDimensionLabel(setbackSideLeft, setbackDimensionKeys.left || 'setbackLeft', dimensionSettings)}
-                offset={5} // Offset "up" in Y
-                color={style.color || "red"}
-                visible={showDimensions}
-                settings={dimensionSettings}
-                lineScale={lineScale}
-            />
+            {hasLeft && (
+                <Dimension
+                    start={[-lotWidth / 2, 0, 0.1]}
+                    end={[x1, 0, 0.1]}
+                    label={resolveDimensionLabel(setbackSideLeft, setbackDimensionKeys.left || 'setbackLeft', dimensionSettings)}
+                    offset={5}
+                    color={style.color || "red"}
+                    visible={showDimensions}
+                    settings={dimensionSettings}
+                    lineScale={lineScale}
+                />
+            )}
             {/* Right Setback */}
-            <Dimension
-                start={[x2, 0, 0.1]}
-                end={[lotWidth / 2, 0, 0.1]}
-                label={resolveDimensionLabel(setbackSideRight, setbackDimensionKeys.right || 'setbackRight', dimensionSettings)}
-                offset={5}
-                color={style.color || "red"}
-                visible={showDimensions}
-                settings={dimensionSettings}
-                lineScale={lineScale}
-            />
+            {hasRight && (
+                <Dimension
+                    start={[x2, 0, 0.1]}
+                    end={[lotWidth / 2, 0, 0.1]}
+                    label={resolveDimensionLabel(setbackSideRight, setbackDimensionKeys.right || 'setbackRight', dimensionSettings)}
+                    offset={5}
+                    color={style.color || "red"}
+                    visible={showDimensions}
+                    settings={dimensionSettings}
+                    lineScale={lineScale}
+                />
+            )}
         </group>
     )
 }
@@ -392,10 +407,10 @@ const SceneContent = () => {
                         onSelect={() => selectBuilding('existing', true)}
                         onPositionChange={(x, y) => setBuildingPosition('existing', x, y)}
                         offsetGroupX={-offset}
-                        stories={existing.buildingStories || 1}
-                        firstFloorHeight={existing.firstFloorHeight || 12}
-                        upperFloorHeight={existing.upperFloorHeight || 10}
-                        maxHeight={existing.maxHeight || 30}
+                        stories={existing.buildingStories ?? 1}
+                        firstFloorHeight={existing.firstFloorHeight ?? 12}
+                        upperFloorHeight={existing.upperFloorHeight ?? 10}
+                        maxHeight={existing.maxHeight ?? 30}
                         showMaxHeightPlane={layers.maxHeightPlane}
                         maxHeightPlaneStyle={existingStyles.maxHeightPlane}
                         roof={existing.roof}
@@ -426,10 +441,10 @@ const SceneContent = () => {
                         onSelect={() => selectAccessoryBuilding('existing', true)}
                         onPositionChange={(x, y) => setAccessoryBuildingPosition('existing', x, y)}
                         offsetGroupX={-offset}
-                        stories={existing.accessoryStories || 1}
-                        firstFloorHeight={existing.accessoryFirstFloorHeight || 10}
-                        upperFloorHeight={existing.accessoryUpperFloorHeight || 10}
-                        maxHeight={existing.accessoryMaxHeight || 15}
+                        stories={existing.accessoryStories ?? 1}
+                        firstFloorHeight={existing.accessoryFirstFloorHeight ?? 10}
+                        upperFloorHeight={existing.accessoryUpperFloorHeight ?? 10}
+                        maxHeight={existing.accessoryMaxHeight ?? 15}
                         showMaxHeightPlane={false}
                         maxHeightPlaneStyle={{}}
                         roof={existing.accessoryRoof}
@@ -635,10 +650,10 @@ const SceneContent = () => {
                         onSelect={() => selectBuilding('proposed', true)}
                         onPositionChange={(x, y) => setBuildingPosition('proposed', x, y)}
                         offsetGroupX={offset}
-                        stories={proposed.buildingStories || 1}
-                        firstFloorHeight={proposed.firstFloorHeight || 12}
-                        upperFloorHeight={proposed.upperFloorHeight || 10}
-                        maxHeight={proposed.maxHeight || 30}
+                        stories={proposed.buildingStories ?? 1}
+                        firstFloorHeight={proposed.firstFloorHeight ?? 12}
+                        upperFloorHeight={proposed.upperFloorHeight ?? 10}
+                        maxHeight={proposed.maxHeight ?? 30}
                         showMaxHeightPlane={layers.maxHeightPlane}
                         maxHeightPlaneStyle={proposedStyles.maxHeightPlane}
                         roof={proposed.roof}
@@ -669,10 +684,10 @@ const SceneContent = () => {
                         onSelect={() => selectAccessoryBuilding('proposed', true)}
                         onPositionChange={(x, y) => setAccessoryBuildingPosition('proposed', x, y)}
                         offsetGroupX={offset}
-                        stories={proposed.accessoryStories || 1}
-                        firstFloorHeight={proposed.accessoryFirstFloorHeight || 10}
-                        upperFloorHeight={proposed.accessoryUpperFloorHeight || 10}
-                        maxHeight={proposed.accessoryMaxHeight || 15}
+                        stories={proposed.accessoryStories ?? 1}
+                        firstFloorHeight={proposed.accessoryFirstFloorHeight ?? 10}
+                        upperFloorHeight={proposed.accessoryUpperFloorHeight ?? 10}
+                        maxHeight={proposed.accessoryMaxHeight ?? 15}
                         showMaxHeightPlane={false}
                         maxHeightPlaneStyle={{}}
                         roof={proposed.accessoryRoof}

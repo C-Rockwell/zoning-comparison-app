@@ -53,9 +53,9 @@ zoning-comparison-app/
 │   │   ├── StartScreen.jsx           # App entry: Sandbox / New Project / Open Existing (~380 lines)
 │   │   ├── DistrictViewer.jsx        # District 3D viewer with SharedCanvas (~200 lines)
 │   │   ├── DistrictSceneContent.jsx  # District 3D: multi-lot layout, roads, intersection fills, fillets (~345 lines)
-│   │   ├── DistrictParameterPanel.jsx # District sidebar: model setup, params, styles, road styles, annotations (~1,956 lines)
+│   │   ├── DistrictParameterPanel.jsx # District sidebar: model setup, params, styles, road styles, annotations (~2,000 lines)
 │   │   ├── SharedCanvas.jsx          # Shared R3F Canvas infra: lighting, post-processing (~230 lines)
-│   │   ├── LotEntity.jsx             # Single lot entity renderer with annotations (~420 lines)
+│   │   ├── LotEntity.jsx             # Single lot entity renderer with annotations (~480 lines)
 │   │   ├── ImportWizard.jsx          # 3-step CSV import wizard with field mapping (~710 lines)
 │   │   ├── AnnotationText.jsx        # Shared text component: billboard/follow-line/fixed modes (~130 lines)
 │   │   ├── DraggableLabel.jsx        # Drag-to-reposition label with leader lines (~155 lines)
@@ -75,7 +75,7 @@ zoning-comparison-app/
 │   │       ├── ColorPicker.jsx       # Color input with ring overlay
 │   │       ├── SliderInput.jsx       # Range + number input combo
 │   │       └── LineStyleSelector.jsx # Solid/dashed line style toggle
-│   ├── store/useStore.js             # Centralized Zustand store (~3,200 lines, v16)
+│   ├── store/useStore.js             # Centralized Zustand store (~3,200 lines, v18)
 │   ├── services/api.js               # REST API client for backend (151 lines)
 │   ├── hooks/
 │   │   ├── useSunPosition.js         # SunCalc-based sun position hook (122 lines)
@@ -162,7 +162,7 @@ Additional top-level state:
 - **sunSettings**: lat/long, date, time, animation, intensity
 - **Project state**: currentProject, projects list, snapshots, layerStates
 
-**Store version**: 17 (with migration system for backward compat from v1-v16; v15 added entity system, accessory buildings, comparison roads; v16 added annotation system, enhanced dimensions, road intersection fillets; v17 fixed fillOpacity defaults to 1.0 for all road zone and roadWidth styles)
+**Store version**: 18 (with migration system for backward compat from v1-v17; v15 added entity system, accessory buildings, comparison roads; v16 added annotation system, enhanced dimensions, road intersection fillets; v17 fixed fillOpacity defaults to 1.0 for all road zone and roadWidth styles; v18 added max setback lines with independent style/visibility/layer toggles)
 
 **Undo/redo via Zundo**: tracks existing, proposed, viewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, entities, entityOrder, entityStyles, lotVisibility, comparisonRoads, annotationSettings, annotationPositions. Excludes exportRequested flag.
 
@@ -229,7 +229,7 @@ const { undo, redo } = useStore.temporal.getState()
 - **Multi-Direction Roads**: Front/left/right/rear roads with S1/S2/S3 types per edge, roads extend to connect at corners
 - **Per-Lot Styles**: Independent style settings per lot with "Apply to all" option
 - **District Parameters**: Informational/reference fields (zoning data, not visualized in 3D)
-- **Model Parameters**: Functional parameters in per-lot columns with collapsible subsections (Lot Dimensions, Setbacks, etc.)
+- **Model Parameters**: Functional parameters in per-lot columns with collapsible subsections (Lot Dimensions, Setbacks Principal/Accessory, Structures Principal/Accessory with width/depth/stories/heights, Lot Access, Parking, Parking Setbacks)
 
 ### Shared Features
 - **Polygon Lot Editing**: Vertex manipulation, edge splitting/extrusion, perpendicular constraints, Shoelace area calc
@@ -260,53 +260,103 @@ const { undo, redo } = useStore.temporal.getState()
 - **Material opacity defaults to 1.0 (100%)**: All `fillOpacity`, `lineOpacity`, and material `opacity` values must default to 1.0 unless the user explicitly requests transparency. Sub-1.0 defaults cause color mismatches between overlapping geometry layers and complicate z-ordering with Three.js transparent object sorting.
 - **renderOrder for layered geometry**: When multiple transparent/overlapping meshes exist at different z-offsets, use Three.js `renderOrder` prop to control draw sequence (not just z-position). Road zones = 0, intersection fill = 1, fillet arc fills = 2, fillet arc lines = 3. **Note**: `renderOrder` does NOT reliably work on drei `<Line>` (Line2) components for transparent sorting — use z-offset separation instead (e.g., arc lines at zOffset+0.005 above fills).
 - **Road intersection system**: Roads stop at lot boundaries (no ROW extensions). Intersection fill rectangles (z=0.04, renderOrder=1) cover the ROW overlap area with conditional `transparent`/`depthWrite` based on fillOpacity (opaque when >= 0.95, ensuring correct render pass ordering). Fillet arcs (z=0.05, renderOrder=2) handle curved zone corners with arc border lines at z=0.055. Road module zone end-edge lines are suppressed at intersection boundaries via `suppressLeftEnd`/`suppressRightEnd` props on RoadModule (direction-to-end mapping computed in DistrictSceneContent). Road Module Style Editor in DistrictParameterPanel allows customizing all zone colors.
+- **Parameter-to-rendering integrity**: Every piece of visible geometry MUST correspond to a parameter the user can see and edit. If a parameter field is null/empty/cleared, the corresponding geometry must NOT render. Use `!= null && > 0` guards before rendering any line or dimension. Use `??` (nullish coalescing) instead of `||` for building prop fallbacks so that explicit `0` values are respected.
+- **Street-aware setback rendering**: `SetbackLines` and annotation labels use `streetSides` to determine which sides face streets. Street-facing sides use `minSideStreet`; interior sides use `sideInterior`. This is critical for corner lots where one side faces a street — that side's setback is a side street setback, not a side interior setback. The `streetSides` prop is computed in `DistrictSceneContent.jsx` from `modelSetup.streetEdges`.
 
-## Active Issue: Fillet Arc Line Width Mismatch at Road Intersections
+### Setback Line Rendering (District Module)
 
-**Status**: UNRESOLVED — needs a fix. Multiple approaches have been tried and failed.
+**`SetbackLines`** component in `LotEntity.jsx` renders individual min setback lines. Each of the 4 sides (front, rear, left, right) only renders if its value is `!= null && > 0`. Street-facing sides use `minSideStreet` from `setbacks.principal`; interior sides use `sideInterior`. The `streetSides` prop (passed from `DistrictSceneContent` → `LotEntity` → `SetbackLines`) determines which sides face streets. Dimension annotations are also per-side conditional.
+
+**`SetbackLayer`** in `SceneContent.jsx` (Comparison Module) follows the same conditional pattern — each side only renders when its setback value is `!= null && > 0`.
+
+### Max Setback Lines (added v18)
+
+**Status**: IMPLEMENTED — working correctly.
+
+Max setback lines visualize `maxFront` and `maxSideStreet` from `setbacks.principal` as individual dashed lines in the 3D scene (NOT a closed rectangle — only sides with values get lines).
+
+**Components & files**:
+
+- `MaxSetbackLines` component in `LotEntity.jsx` — renders individual lines at z=0.12, with `!= null && > 0` guards
+- `streetSides` prop computed in `DistrictSceneContent.jsx` — auto-detects which lot sides face streets from `modelSetup.streetEdges` (Lot 1 right edge → right road, last lot left edge → left road, interior lots → no street sides)
+- `maxSetbacks` style in `createDefaultLotStyle()` — own style category with shorter dash pattern (dashSize=0.5, gapSize=0.3) vs min setbacks (1/0.5)
+- `maxSetbacks` visibility in `createDefaultLotVisibility()` — per-lot toggle, defaults to `true`
+- `maxSetbacks` + `labelMaxSetbacks` layer toggles in `viewSettings.layers`
+- `visKey: 'maxSetbacks'` on the "Max. Front" and "Max. Side, Street" model parameter rows
+- Max setback annotation labels in `LotAnnotations.jsx` — "Max. Front Setback", "Max. Side Setback"
+- Style category "Max Setbacks" in `DistrictParameterPanel.jsx` styleCategories
+
+### Building Dimension Parameters (District Module)
+
+Both Structures Principal and Structures Accessory sections in `DistrictParameterPanel.jsx` expose full building parameters:
+
+- **Principal**: Height (computed, read-only), Width (ft), Depth (ft), Stories, First Story Height, Upper Floor Height, Show Roof, Show Max Height Plane
+- **Accessory**: Height (computed, read-only), Width (ft), Depth (ft), Stories, First Story Height, Upper Floor Height, Show Roof, Show Max Height Plane
+
+All editable fields use `updateBuildingParam(lotId, buildingType, key, value)`. Building rendering in `LotEntity.jsx` uses `??` (nullish coalescing) for fallback values to ensure `0` is treated as a valid user-entered value.
+
+## Active Issue: Road Intersection Line Rendering — ABANDON CURRENT APPROACH, USE PRE-BUILT ROAD SCENARIOS
+
+**Status**: Current per-road-module approach with separate fillet arcs CANNOT produce consistent line weights. After 6+ failed fix attempts across 3 AI agents, the user has decided to pursue a fundamentally new approach: **pre-built road scenarios using unified polygon geometry**.
 
 ### Problem Description
 
-When two perpendicular roads meet at an intersection in the District Module, the outermost fillet arc boundary line (the curved line where the road surface zone meets the first adjacent zone like parking/verge) should visually match the straight road module edge lines in color, width, and style. The color and style now match correctly (magenta, using `roadWidthStyle`), but **the curved fillet arc lines appear noticeably thicker than the equivalent straight road module edge lines**, despite using the identical `lineWidth` value from the same style object (`roadModuleStyles.roadWidth`).
+Curved fillet arc border lines at road intersections ALWAYS appear at a different thickness than straight road module edge lines, regardless of rendering method. This is a fundamental limitation of the current architecture where roads and intersections are rendered as separate geometric components.
 
-Additionally, there are **small gaps/artifacts at the junction points** where the curved fillet arc endpoints should seamlessly meet the straight road module edge line endpoints. These appear as tiny bumps or disconnections at the transition from straight to curved.
+### What Has Been Tried (ALL FAILED)
 
-### Visual Reference
+1. **Sub-sampling arc points** — Reduced arc from 25 to 13 points. Still thicker.
+2. **Gemini: Segmented Line2** — Split arc polyline into individual 2-point `<Line>` (Line2) segments. Adjacent segments' screen-space quads overlap at shared vertices, still causing thickening.
+3. **Gemini: Hybrid 0.75x correction** — Applied width reduction factor to arc lines. Did not produce consistent results across corners.
+4. **Claude: Native THREE.Line for arcs only** — Replaced Line2 with `gl.LINE_STRIP` native lines for arcs. Made arcs THINNER than straight edges (opposite problem).
+5. **Claude: Native THREE.Line for EVERYTHING** — Switched both RoadModule and RoadIntersectionFillet to native THREE.Line. Lines were consistent but locked at 1px with no lineWidth control (WebGL spec limitation). No good for export.
+6. **Claude: drei `<Line>` for straight + `<Line segments>` for arcs** — Used LineSegments2 (independent segments, no miter joins) for arcs and regular Line2 for straight edges. Arc lines STILL appear thicker than straight edges.
 
-- The straight road module edges are rendered in `RoadModule.jsx` as 2-point `<Line>` segments (p2→p3 and p4→p1 for end edges)
-- The curved fillet arcs are rendered in `RoadIntersectionFillet.jsx` as multi-point `<Line>` polylines (13 points after sub-sampling, originally 25 points)
-- Both use the same `roadModuleStyles.roadWidth.lineWidth` value (default: 1) and the same `lineScale` multiplier
-- The thickness difference is clearly visible when zoomed in — the curves look ~1.5-2x as thick as the straight lines
+### Current Code State (as of Feb 16 2026)
 
-### Root Cause
+The code currently has attempt #6 in place:
+- **`RoadModule.jsx`** — Uses drei's `<Line>` for all straight edge lines and ROW boundary lines. `lineWidth` wired from `roadModuleStyles` per zone. `lineScale` multiplier from `exportLineScale`.
+- **`RoadIntersectionFillet.jsx`** — Uses `<Line segments>` with `toSegmentPairs()` helper for arc lines. Also uses `lineWidth` from zone styles.
+- **`useStore.js`** — Has `setAllRoadLineWidths(width)` action that sets lineWidth on all zones at once.
+- **`DistrictParameterPanel.jsx`** — Has "All Lines > Line Width" universal slider at top of Road Module Styles section.
+- **Line width controls exist** (per-zone + universal) and technically work with drei's `<Line>`, but the arc thickness mismatch renders them unsatisfying.
 
-Three.js `Line2` / drei's `<Line>` renders thick lines using screen-space geometry shaders. Multi-point polylines generate miter geometry at each segment join, which causes cumulative visual thickening compared to simple 2-point straight lines. This is an inherent Line2 rendering characteristic, not a bug in our code. The more points in the polyline, the thicker it appears.
+### NEXT STEP: Pre-Built Road Scenarios (Unified Polygon Approach)
 
-### What Has Been Tried (and Failed)
+An exploration report is saved at **`docs/pre-built-road-scenario-exploration.md`** (created Feb 16 2026). Key points:
 
-1. **Sub-sampling arc points** (`RoadIntersectionFillet.jsx` lines 72-75): Reduced outermost arc from 25 points to 13 by filtering every other point. Result: still visibly thicker than straight lines, and may have introduced additional junction artifacts.
+**Concept**: Instead of rendering each road direction as separate rectangles + fillet arcs at intersections, compute ONE closed polygon per zone type that traces the complete perimeter (straight edges + quarter-circle arcs at corners). This eliminates ALL line junction artifacts because each zone is a single continuous polyline.
 
-2. **Straight intersection edge lines through fill rect center** (removed from `DistrictSceneContent.jsx`): Added 4 straight line segments forming a rectangle in the center of each intersection. Result: incorrect approach — user wanted the *curved fillet boundary lines* to match, not new straight lines in the center.
+**Feasibility**: 9/10 — Highly viable for rectangular lots with uniform road dimensions.
 
-### Files Involved
+**Key Simplifications**:
+- All roads share the same dimensions (no per-direction zone sizing)
+- All roads share the same styles (already effectively true)
+- Single polygon per zone type replaces ~100+ geometry objects per intersection
+- No need for `suppressLeftEnd`/`suppressRightEnd`, no separate fillet component
+- ~12-16 draw calls instead of 100+ per intersection
 
-- **`src/components/RoadIntersectionFillet.jsx`** (~107 lines) — Renders curved fillet arcs. The outermost zone's outer arc line currently uses `roadWidthStyle` for color/width/dash/opacity (lines 66-89). Sub-sampling is applied to outermost arc points (lines 72-75).
-- **`src/components/RoadModule.jsx`** (~347 lines) — Renders road module zones. The `RoadPolygon` inner component renders border lines as 2-point `<Line>` segments (lines 205-248). End-edge lines can be suppressed via `suppressLeftEnd`/`suppressRightEnd`.
-- **`src/components/DistrictSceneContent.jsx`** (~427 lines) — Orchestrates road modules, intersection fill rects, and fillet arcs. Passes `roadWidthStyle={roadModuleStyles.roadWidth}` to `RoadIntersectionFillet`.
-- **`src/utils/intersectionGeometry.js`** (~267 lines) — `computeCornerZoneStack()` generates arc geometry. `getArcPoints()` generates points along arcs (default 24 segments = 25 points). Arc line points are placed at `zOffset + 0.005` above fills.
-- **`src/store/useStore.js`** (~3,200 lines) — `roadModuleStyles.roadWidth` default: `{ lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1.0, fillColor: '#666666', fillOpacity: 1.0 }`
+**Tradeoffs**:
+- Per-direction zone sizing variability would be lost (or need averaging at corners)
+- Works best for rectangular lots (polygon lots need fallback)
+- Current left/right parking asymmetry per road would be lost
 
-### Possible Approaches Not Yet Tried
+**Implementation Strategy** (from exploration report):
+1. Create `src/utils/unifiedRoadGeometry.js` — polygon computation
+2. Create `src/components/UnifiedRoadModule.jsx` — parallel to RoadModule.jsx
+3. Add debug toggle to switch rendering modes
+4. Validate, then migrate (remove RoadIntersectionFillet.jsx, intersectionGeometry.js)
 
-- **LineWidth correction factor**: Multiply the `lineWidth` for curved arc lines by a reduction factor (e.g., 0.6-0.7x) to visually compensate for miter thickening
-- **Fewer arc segments**: Reduce arc resolution further (e.g., 6-8 segments instead of 12) — but risks making curves look faceted
-- **Alternative rendering**: Replace `<Line>` (Line2) with standard `THREE.Line` (1px hairline) for the outermost arc, or use `<mesh>` with tube/ribbon geometry
-- **Custom line rendering**: Build arc lines from individual 2-point `<Line>` segments (no miter joins) instead of a single polyline
-- **BufferGeometry line**: Use raw `THREE.BufferGeometry` + `THREE.LineBasicMaterial` instead of drei's `<Line>` to avoid Line2 miter behavior entirely
+### Files That Would Be Replaced/Removed
 
-### Key Constraint
+- `src/components/RoadModule.jsx` — replaced by UnifiedRoadModule.jsx
+- `src/components/RoadIntersectionFillet.jsx` — removed entirely
+- `src/utils/intersectionGeometry.js` — removed entirely
+- `src/components/DistrictSceneContent.jsx` — simplified (no intersection fill rects, no fillet sub-corners, no end-edge suppression)
 
-The fix must make the outermost fillet arc boundary lines appear the **same visual thickness** as the straight 2-point road module edge lines when using the same `lineWidth` value. The curve must remain smooth (no visible faceting). Junction points where curves meet straight lines should have no visible gaps or artifacts.
+### Current Branch
+
+Working on `gemini-fix` branch with uncommitted changes to RoadModule.jsx, RoadIntersectionFillet.jsx, useStore.js, DistrictParameterPanel.jsx. These changes add the universal line width control and the latest (failed) rendering approach. May want to commit these as-is before starting the pre-built road scenario work, or revert to main.
 
 ## Known Limitations
 
@@ -318,7 +368,7 @@ The fix must make the outermost fillet arc boundary lines appear the **same visu
 - District Module lots are positioned in a simple row layout (no arbitrary placement)
 - Road intersection fillet arc lines rely on z-offset separation (not renderOrder) for visibility above fills; transparent sorting edge cases may still occur with non-default opacity values
 - Comparison Module road intersections don't yet have end-edge suppression (District Module only)
-- See "Active Issue" section above for fillet arc line width mismatch details
+- **Fillet arc line width mismatch is UNSOLVABLE with current architecture** — see "Active Issue" section. Next step: pre-built road scenarios (unified polygon approach). Exploration report at `docs/pre-built-road-scenario-exploration.md`
 
 ## Git
 
