@@ -751,6 +751,7 @@ const LayersSection = () => {
         { key: 'grid', label: 'Grid' },
         { key: 'roadModule', label: 'Road Module' },
         { key: 'roadIntersections', label: 'Road Intersections' },
+        { key: 'unifiedRoadPreview', label: 'Road: Unified Preview' },
         { key: 'annotationLabels', label: 'Annotation Labels' },
         { key: 'labelLotNames', label: '  Lot Names' },
         { key: 'labelLotEdges', label: '  Lot Edges' },

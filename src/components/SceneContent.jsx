@@ -32,6 +32,8 @@ const DIRECTION_ROTATION = {
 // Generate all 4 fillet sub-corners for a pair of perpendicular roads at an intersection
 function generateFilletCorners(roadA, dirA, roadB, dirB, lotPos) {
     if (!roadA?.enabled || !roadB?.enabled) return []
+    // Suppress fillets at alley (S3) intersections
+    if ((roadA.type || 'S1') === 'S3' || (roadB.type || 'S1') === 'S3') return []
     const flipA = d => d === 'front' ? 'rear' : d === 'rear' ? 'front' : d
     const flipB = d => d === 'left' ? 'right' : d === 'right' ? 'left' : d
     const getOffset = (dir, road) => {

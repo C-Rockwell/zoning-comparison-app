@@ -7,6 +7,7 @@ import LotEntity from './LotEntity'
 import RoadModule from './RoadModule'
 import RoadAnnotations from './RoadAnnotations'
 import RoadIntersectionFillet from './RoadIntersectionFillet'
+import UnifiedRoadNetwork from './UnifiedRoadNetwork'
 
 // Direction rotation for annotation labels (matches RoadModule.jsx DIRECTION_ROTATION)
 const DIRECTION_ROTATION = {
@@ -127,6 +128,13 @@ const EntityRoadModules = ({ lotPositions }) => {
         const corners = []
         for (const { dirA, dirB, lotPos } of pairs) {
             if (!roadsByDir[dirA] || !roadsByDir[dirB]) continue
+
+            // Suppress fillets at alley (S3) intersections — alleys meet cross
+            // streets at 90-degree angles with no curb returns
+            const typeA = roadsByDir[dirA].type || 'S1'
+            const typeB = roadsByDir[dirB].type || 'S1'
+            if (typeA === 'S3' || typeB === 'S3') continue
+
             const oA = getOffset(dirA)
             const oB = getOffset(dirB)
             const pairName = `${dirA}-${dirB}`
@@ -156,6 +164,9 @@ const EntityRoadModules = ({ lotPositions }) => {
         const rects = []
         for (const { dirA, dirB, corner } of pairs) {
             if (!roadsByDir[dirA] || !roadsByDir[dirB]) continue
+            // Suppress intersection fill at S3 (alley) corners — the dominant
+            // road's extended zone bands cover the corner area instead
+            if ((roadsByDir[dirA].type || 'S1') === 'S3' || (roadsByDir[dirB].type || 'S1') === 'S3') continue
             const rowA = roadsByDir[dirA].rightOfWay || 0
             const rowB = roadsByDir[dirB].rightOfWay || 0
             let x, y, w, h
@@ -180,74 +191,267 @@ const EntityRoadModules = ({ lotPositions }) => {
         return rects
     }, [totalExtentLeft, totalExtentRight, maxLotDepth, roadsByDir])
 
+    // Alley fill rects — small connector rectangles at S3 corners, spanning only
+    // the perpendicular road's sidewalk+verge strip (lot boundary to curb line).
+    const alleyFillRects = useMemo(() => {
+        const pairs = [
+            { dirA: 'front', dirB: 'left',  corner: [totalExtentLeft, 0] },
+            { dirA: 'front', dirB: 'right', corner: [totalExtentRight, 0] },
+            { dirA: 'rear',  dirB: 'left',  corner: [totalExtentLeft, maxLotDepth] },
+            { dirA: 'rear',  dirB: 'right', corner: [totalExtentRight, maxLotDepth] },
+        ]
+        const rects = []
+        for (const { dirA, dirB, corner } of pairs) {
+            if (!roadsByDir[dirA] || !roadsByDir[dirB]) continue
+            const typeA = roadsByDir[dirA].type || 'S1'
+            const typeB = roadsByDir[dirB].type || 'S1'
+            const s3Road = typeA === 'S3' ? roadsByDir[dirA] : typeB === 'S3' ? roadsByDir[dirB] : null
+            const perpRoad = typeA === 'S3' ? roadsByDir[dirB] : typeB === 'S3' ? roadsByDir[dirA] : null
+            const s3Dir = typeA === 'S3' ? dirA : typeB === 'S3' ? dirB : null
+            const perpDir = typeA === 'S3' ? dirB : typeB === 'S3' ? dirA : null
+            if (!s3Road || !perpRoad) continue
+
+            const sROW = s3Road.rightOfWay || 20
+            const sRW = s3Road.roadWidth || 16
+            const inset = (sROW - sRW) / 2
+            const perpROW = perpRoad.rightOfWay || 50
+            const perpRW = perpRoad.roadWidth || 24
+            const perpInset = (perpROW - perpRW) / 2 // sidewalk+verge width (13' for S1)
+
+            let cx, cy, w, h
+            if (s3Dir === 'rear' && perpDir === 'left') {
+                cx = corner[0] - perpInset / 2
+                cy = corner[1] + inset + sRW / 2
+                w = perpInset; h = sRW
+            } else if (s3Dir === 'rear' && perpDir === 'right') {
+                cx = corner[0] + perpInset / 2
+                cy = corner[1] + inset + sRW / 2
+                w = perpInset; h = sRW
+            } else if (s3Dir === 'front' && perpDir === 'left') {
+                cx = corner[0] - perpInset / 2
+                cy = corner[1] - inset - sRW / 2
+                w = perpInset; h = sRW
+            } else if (s3Dir === 'front' && perpDir === 'right') {
+                cx = corner[0] + perpInset / 2
+                cy = corner[1] - inset - sRW / 2
+                w = perpInset; h = sRW
+            } else if (s3Dir === 'left' && perpDir === 'front') {
+                cx = corner[0] - inset - sRW / 2
+                cy = corner[1] - perpInset / 2
+                w = sRW; h = perpInset
+            } else if (s3Dir === 'left' && perpDir === 'rear') {
+                cx = corner[0] - inset - sRW / 2
+                cy = corner[1] + perpInset / 2
+                w = sRW; h = perpInset
+            } else if (s3Dir === 'right' && perpDir === 'front') {
+                cx = corner[0] + inset + sRW / 2
+                cy = corner[1] - perpInset / 2
+                w = sRW; h = perpInset
+            } else if (s3Dir === 'right' && perpDir === 'rear') {
+                cx = corner[0] + inset + sRW / 2
+                cy = corner[1] + perpInset / 2
+                w = sRW; h = perpInset
+            }
+            if (w > 0 && h > 0) {
+                rects.push({ key: `alley-fill-${dirA}-${dirB}`, cx, cy, w, h })
+            }
+        }
+        return rects
+    }, [totalExtentLeft, totalExtentRight, maxLotDepth, roadsByDir])
+
+    // Compute lotBounds and enabledDirs for unified road rendering
+    const lotBounds = useMemo(() => ({
+        xMin: totalExtentLeft,
+        xMax: totalExtentRight,
+        yMin: 0,
+        yMax: maxLotDepth,
+    }), [totalExtentLeft, totalExtentRight, maxLotDepth])
+
+    const enabledDirs = useMemo(() => ({
+        front: !!roadsByDir.front,
+        left: !!roadsByDir.left,
+        right: !!roadsByDir.right,
+        rear: !!roadsByDir.rear,
+    }), [roadsByDir])
+
     if (!roadModuleStyles) return null
 
     const roadEntries = Object.entries(roadModules)
     if (roadEntries.length === 0) return null
 
+    const useUnified = layers.unifiedRoadPreview === true
+
     return (
         <group>
+            {useUnified ? (
+                /* Unified road rendering — single polyline per zone */
+                <UnifiedRoadNetwork
+                    lotBounds={lotBounds}
+                    enabledDirections={enabledDirs}
+                    roadsByDirection={roadsByDir}
+                    roadModuleStyles={roadModuleStyles}
+                    exportLineScale={exportLineScale}
+                />
+            ) : (
+                /* Legacy road rendering — separate road modules + fillets */
+                <>
+                    {roadEntries.map(([roadId, road]) => {
+                        if (!road.enabled) return null
+
+                        const dir = road.direction || 'front'
+
+                        let spanWidth, posX, posY
+                        if (dir === 'front') {
+                            spanWidth = totalWidth
+                            posX = totalExtentLeft
+                            posY = 0
+                        } else if (dir === 'rear') {
+                            spanWidth = totalWidth
+                            posX = totalExtentRight
+                            posY = maxLotDepth
+                        } else if (dir === 'left') {
+                            spanWidth = maxLotDepth
+                            posX = totalExtentLeft
+                            posY = maxLotDepth
+                        } else if (dir === 'right') {
+                            spanWidth = maxLotDepth
+                            posX = totalExtentRight
+                            posY = 0
+                        } else {
+                            spanWidth = totalWidth
+                            posX = totalExtentLeft
+                            posY = 0
+                        }
+
+                        // Extend non-S3 roads through perpendicular S3 (alley) roads
+                        // so the dominant road's zone bands continue through the alley area
+                        const ownType = road.type || 'S1'
+                        const _isS3 = (r) => (r?.type || 'S1') === 'S3'
+                        if (ownType !== 'S3') {
+                            // perpLeft/perpRight = the perpendicular road at each end of this road
+                            const perpLeft = dir === 'front' ? roadsByDir.left
+                                           : dir === 'rear' ? roadsByDir.right
+                                           : dir === 'left' ? roadsByDir.rear
+                                           : roadsByDir.front
+                            const perpRight = dir === 'front' ? roadsByDir.right
+                                            : dir === 'rear' ? roadsByDir.left
+                                            : dir === 'left' ? roadsByDir.front
+                                            : roadsByDir.rear
+                            if (perpLeft && _isS3(perpLeft)) {
+                                const perpROW = perpLeft.rightOfWay || 0
+                                spanWidth += perpROW
+                                if (dir === 'front') posX -= perpROW
+                                else if (dir === 'rear') posX += perpROW
+                                else if (dir === 'left') posY += perpROW
+                                else if (dir === 'right') posY -= perpROW
+                            }
+                            if (perpRight && _isS3(perpRight)) {
+                                spanWidth += (perpRight.rightOfWay || 0)
+                            }
+                        }
+
+                        // Suppress end lines at perpendicular road intersections.
+                        // At S3 corners, non-S3 roads extend through (keep end lines);
+                        // S3 roads always suppress ends at cross-streets.
+                        const isOwnS3 = ownType === 'S3'
+                        let suppressLeftEnd = false, suppressRightEnd = false
+                        if (dir === 'front') {
+                            suppressLeftEnd = !!roadsByDir.left && (isOwnS3 || !_isS3(roadsByDir.left))
+                            suppressRightEnd = !!roadsByDir.right && (isOwnS3 || !_isS3(roadsByDir.right))
+                        } else if (dir === 'rear') {
+                            suppressLeftEnd = !!roadsByDir.right && (isOwnS3 || !_isS3(roadsByDir.right))
+                            suppressRightEnd = !!roadsByDir.left && (isOwnS3 || !_isS3(roadsByDir.left))
+                        } else if (dir === 'left') {
+                            suppressLeftEnd = !!roadsByDir.rear && (isOwnS3 || !_isS3(roadsByDir.rear))
+                            suppressRightEnd = !!roadsByDir.front && (isOwnS3 || !_isS3(roadsByDir.front))
+                        } else if (dir === 'right') {
+                            suppressLeftEnd = !!roadsByDir.front && (isOwnS3 || !_isS3(roadsByDir.front))
+                            suppressRightEnd = !!roadsByDir.rear && (isOwnS3 || !_isS3(roadsByDir.rear))
+                        }
+
+                        return (
+                            <group key={roadId} position={[posX, posY, 0]}>
+                                <RoadModule
+                                    lotWidth={spanWidth}
+                                    roadModule={road}
+                                    styles={roadModuleStyles}
+                                    model="proposed"
+                                    direction={dir}
+                                    lineScale={exportLineScale}
+                                    suppressLeftEnd={suppressLeftEnd}
+                                    suppressRightEnd={suppressRightEnd}
+                                />
+                            </group>
+                        )
+                    })}
+
+                    {(layers.roadIntersections !== false) && intersectionRects.map(rect => (
+                        <mesh key={rect.key} position={[rect.cx, rect.cy, 0.04]} receiveShadow renderOrder={1}>
+                            <planeGeometry args={[rect.w, rect.h]} />
+                            <meshStandardMaterial
+                                color={roadModuleStyles.roadWidth?.fillColor || '#666666'}
+                                opacity={roadModuleStyles.roadWidth?.fillOpacity ?? 1.0}
+                                transparent={(roadModuleStyles.roadWidth?.fillOpacity ?? 1.0) < 1}
+                                side={THREE.DoubleSide}
+                                depthWrite={(roadModuleStyles.roadWidth?.fillOpacity ?? 1.0) >= 0.95}
+                                roughness={1}
+                                metalness={0}
+                            />
+                        </mesh>
+                    ))}
+
+                    {(layers.roadIntersections !== false) && alleyFillRects.map(rect => (
+                        <mesh key={rect.key} position={[rect.cx, rect.cy, 0.03]} receiveShadow>
+                            <planeGeometry args={[rect.w, rect.h]} />
+                            <meshStandardMaterial
+                                color={roadModuleStyles.roadWidth?.fillColor || '#666666'}
+                                opacity={roadModuleStyles.roadWidth?.fillOpacity ?? 1.0}
+                                transparent={(roadModuleStyles.roadWidth?.fillOpacity ?? 1.0) < 1}
+                                side={THREE.DoubleSide}
+                                depthWrite={(roadModuleStyles.roadWidth?.fillOpacity ?? 1.0) >= 0.95}
+                                roughness={1}
+                                metalness={0}
+                            />
+                        </mesh>
+                    ))}
+
+                    {(layers.roadIntersections !== false) && allFilletCorners.map(({ key, corner, dirA, dirB, pos, sideA, sideB }) => (
+                        <RoadIntersectionFillet
+                            key={key}
+                            roadA={roadsByDir[dirA]}
+                            roadB={roadsByDir[dirB]}
+                            corner={corner}
+                            cornerPosition={pos}
+                            styles={roadModuleStyles}
+                            lineScale={exportLineScale}
+                            sideA={sideA}
+                            sideB={sideB}
+                            roadWidthStyle={roadModuleStyles.roadWidth}
+                        />
+                    ))}
+                </>
+            )}
+
+            {/* Road annotation labels — render in both modes */}
             {roadEntries.map(([roadId, road]) => {
                 if (!road.enabled) return null
-
                 const dir = road.direction || 'front'
 
-                // Determine the span and group position for each direction.
-                // Roads stop at lot boundaries; intersection fillets handle corners.
-                // Lots extend in negative X: totalExtentLeft is negative, totalExtentRight is 0.
                 let spanWidth, posX, posY
                 if (dir === 'front') {
-                    spanWidth = totalWidth
-                    posX = totalExtentLeft
-                    posY = 0
+                    spanWidth = totalWidth; posX = totalExtentLeft; posY = 0
                 } else if (dir === 'rear') {
-                    spanWidth = totalWidth
-                    posX = totalExtentRight
-                    posY = maxLotDepth
+                    spanWidth = totalWidth; posX = totalExtentRight; posY = maxLotDepth
                 } else if (dir === 'left') {
-                    spanWidth = maxLotDepth
-                    posX = totalExtentLeft
-                    posY = maxLotDepth
+                    spanWidth = maxLotDepth; posX = totalExtentLeft; posY = maxLotDepth
                 } else if (dir === 'right') {
-                    spanWidth = maxLotDepth
-                    posX = totalExtentRight
-                    posY = 0
+                    spanWidth = maxLotDepth; posX = totalExtentRight; posY = 0
                 } else {
-                    spanWidth = totalWidth
-                    posX = totalExtentLeft
-                    posY = 0
-                }
-
-                // Suppress end-edge lines where perpendicular roads create intersections.
-                // After DIRECTION_ROTATION, canonical xMin/xMax map to different world edges.
-                let suppressLeftEnd = false, suppressRightEnd = false
-                if (dir === 'front') {
-                    suppressLeftEnd = !!roadsByDir.left
-                    suppressRightEnd = !!roadsByDir.right
-                } else if (dir === 'rear') {
-                    suppressLeftEnd = !!roadsByDir.right
-                    suppressRightEnd = !!roadsByDir.left
-                } else if (dir === 'left') {
-                    suppressLeftEnd = !!roadsByDir.rear
-                    suppressRightEnd = !!roadsByDir.front
-                } else if (dir === 'right') {
-                    suppressLeftEnd = !!roadsByDir.front
-                    suppressRightEnd = !!roadsByDir.rear
+                    spanWidth = totalWidth; posX = totalExtentLeft; posY = 0
                 }
 
                 return (
-                    <group key={roadId} position={[posX, posY, 0]}>
-                        <RoadModule
-                            lotWidth={spanWidth}
-                            roadModule={road}
-                            styles={roadModuleStyles}
-                            model="proposed"
-                            direction={dir}
-                            lineScale={exportLineScale}
-                            suppressLeftEnd={suppressLeftEnd}
-                            suppressRightEnd={suppressRightEnd}
-                        />
-                        {/* Road annotation labels (rotated to match road direction) */}
+                    <group key={`annot-${roadId}`} position={[posX, posY, 0]}>
                         <group rotation={DIRECTION_ROTATION[dir]}>
                             <RoadAnnotations
                                 roadId={roadId}
@@ -259,38 +463,6 @@ const EntityRoadModules = ({ lotPositions }) => {
                     </group>
                 )
             })}
-
-            {/* Intersection fill rectangles — road surface covering ROW overlap areas */}
-            {(layers.roadIntersections !== false) && intersectionRects.map(rect => (
-                <mesh key={rect.key} position={[rect.cx, rect.cy, 0.04]} receiveShadow renderOrder={1}>
-                    <planeGeometry args={[rect.w, rect.h]} />
-                    <meshStandardMaterial
-                        color={roadModuleStyles.roadWidth?.fillColor || '#666666'}
-                        opacity={roadModuleStyles.roadWidth?.fillOpacity ?? 1.0}
-                        transparent={(roadModuleStyles.roadWidth?.fillOpacity ?? 1.0) < 1}
-                        side={THREE.DoubleSide}
-                        depthWrite={(roadModuleStyles.roadWidth?.fillOpacity ?? 1.0) >= 0.95}
-                        roughness={1}
-                        metalness={0}
-                    />
-                </mesh>
-            ))}
-
-            {/* Road Intersection Fillets — all 4 sub-corners per intersection */}
-            {(layers.roadIntersections !== false) && allFilletCorners.map(({ key, corner, dirA, dirB, pos, sideA, sideB }) => (
-                <RoadIntersectionFillet
-                    key={key}
-                    roadA={roadsByDir[dirA]}
-                    roadB={roadsByDir[dirB]}
-                    corner={corner}
-                    cornerPosition={pos}
-                    styles={roadModuleStyles}
-                    lineScale={exportLineScale}
-                    sideA={sideA}
-                    sideB={sideB}
-                    roadWidthStyle={roadModuleStyles.roadWidth}
-                />
-            ))}
         </group>
     )
 }

@@ -52,7 +52,7 @@ zoning-comparison-app/
 │   │   ├── SunControls.jsx           # Sun simulation UI (260 lines)
 │   │   ├── StartScreen.jsx           # App entry: Sandbox / New Project / Open Existing (~380 lines)
 │   │   ├── DistrictViewer.jsx        # District 3D viewer with SharedCanvas (~200 lines)
-│   │   ├── DistrictSceneContent.jsx  # District 3D: multi-lot layout, roads, intersection fills, fillets (~345 lines)
+│   │   ├── DistrictSceneContent.jsx  # District 3D: multi-lot layout, roads, intersection fills, fillets, S3 T-junctions (~460 lines)
 │   │   ├── DistrictParameterPanel.jsx # District sidebar: model setup, params, styles, road styles, annotations (~2,000 lines)
 │   │   ├── SharedCanvas.jsx          # Shared R3F Canvas infra: lighting, post-processing (~230 lines)
 │   │   ├── LotEntity.jsx             # Single lot entity renderer with annotations (~480 lines)
@@ -172,10 +172,12 @@ Additional top-level state:
 
 RoadModule.jsx accepts a `direction` prop: `'front'` (default), `'left'`, `'right'`, `'rear'`. Direction changes are implemented via group rotation (DIRECTION_ROTATION constant). Also accepts `suppressLeftEnd` / `suppressRightEnd` boolean props to hide end-edge border lines at intersection boundaries (computed per-direction in DistrictSceneContent based on perpendicular road existence). In the District Module, roads stop at lot boundaries; intersection fill rectangles (z=0.04, renderOrder=1) cover the ROW overlap area, and fillet arcs (z=0.05, renderOrder=2) handle curved zone corners. Road Module Styles are editable via `RoadModuleStylesSection` in DistrictParameterPanel using `setRoadModuleStyle(layerType, property, value)`. Fillets generate 4 sub-corners per perpendicular pair using `computeCornerZoneStack(roadA, roadB, corner, styles, sideA, sideB)` from `intersectionGeometry.js`.
 
+**S3 (Alley) T-Junction Behavior**: When an S3 road intersects a non-S3 road, fillets and intersection fill rects are suppressed (alleys meet cross-streets at 90-degree angles with no curb returns). Non-S3 roads extend their span through perpendicular S3 road ROW so their zone bands continue through the alley area. Small alley fill rects (width = perpendicular road's `(ROW - roadWidth) / 2` = sidewalk+verge inset) connect alley pavement to the cross-street at each corner. Suppress-end logic: non-S3 roads keep end lines at S3 corners; S3 roads suppress ends at cross-streets.
+
 Road types with distinct defaults:
 - **S1** (Primary Street): ROW 50', road 24' — full zones (parking, verge, sidewalk, transition)
 - **S2** (Secondary Street): ROW 40', road 24' — narrower variant
-- **S3** (Alley/Rear): ROW 20', road 16' — minimal, no sidewalk/verge
+- **S3** (Alley/Rear): ROW 20', road 16' — minimal, no sidewalk/verge. At intersections with S1/S2 roads, uses T-junction behavior (no fillets, road extension through alley area)
 
 ### Backend API
 
@@ -260,6 +262,7 @@ const { undo, redo } = useStore.temporal.getState()
 - **Material opacity defaults to 1.0 (100%)**: All `fillOpacity`, `lineOpacity`, and material `opacity` values must default to 1.0 unless the user explicitly requests transparency. Sub-1.0 defaults cause color mismatches between overlapping geometry layers and complicate z-ordering with Three.js transparent object sorting.
 - **renderOrder for layered geometry**: When multiple transparent/overlapping meshes exist at different z-offsets, use Three.js `renderOrder` prop to control draw sequence (not just z-position). Road zones = 0, intersection fill = 1, fillet arc fills = 2, fillet arc lines = 3. **Note**: `renderOrder` does NOT reliably work on drei `<Line>` (Line2) components for transparent sorting — use z-offset separation instead (e.g., arc lines at zOffset+0.005 above fills).
 - **Road intersection system**: Roads stop at lot boundaries (no ROW extensions). Intersection fill rectangles (z=0.04, renderOrder=1) cover the ROW overlap area with conditional `transparent`/`depthWrite` based on fillOpacity (opaque when >= 0.95, ensuring correct render pass ordering). Fillet arcs (z=0.05, renderOrder=2) handle curved zone corners with arc border lines at z=0.055. Road module zone end-edge lines are suppressed at intersection boundaries via `suppressLeftEnd`/`suppressRightEnd` props on RoadModule (direction-to-end mapping computed in DistrictSceneContent). Road Module Style Editor in DistrictParameterPanel allows customizing all zone colors.
+- **S3 (alley) T-junctions**: When an S3 road meets a non-S3 road at a corner, fillets and intersection fill rects are suppressed. Instead, the non-S3 road extends its span through the S3 road's ROW so its zone bands (sidewalk, verge, pavement) continue through the alley area. Small alley fill rectangles (z=0.03, width = perpendicular road's sidewalk+verge inset) connect the alley pavement to the cross-street at each corner. **Known limitation**: the cross-street sidewalk is not yet rendered on top of the alley fill rects (future TODO).
 - **Parameter-to-rendering integrity**: Every piece of visible geometry MUST correspond to a parameter the user can see and edit. If a parameter field is null/empty/cleared, the corresponding geometry must NOT render. Use `!= null && > 0` guards before rendering any line or dimension. Use `??` (nullish coalescing) instead of `||` for building prop fallbacks so that explicit `0` values are respected.
 - **Street-aware setback rendering**: `SetbackLines` and annotation labels use `streetSides` to determine which sides face streets. Street-facing sides use `minSideStreet`; interior sides use `sideInterior`. This is critical for corner lots where one side faces a street — that side's setback is a side street setback, not a side interior setback. The `streetSides` prop is computed in `DistrictSceneContent.jsx` from `modelSetup.streetEdges`.
 
@@ -356,7 +359,7 @@ An exploration report is saved at **`docs/pre-built-road-scenario-exploration.md
 
 ### Current Branch
 
-Working on `gemini-fix` branch with uncommitted changes to RoadModule.jsx, RoadIntersectionFillet.jsx, useStore.js, DistrictParameterPanel.jsx. These changes add the universal line width control and the latest (failed) rendering approach. May want to commit these as-is before starting the pre-built road scenario work, or revert to main.
+Working on `gemini-fix` branch. Latest work: S3 (alley) T-junction support — fillet suppression, non-S3 road extension through S3 ROW, alley fill rects, updated suppress-end logic. Also has universal line width control and unified road preview toggle.
 
 ## Known Limitations
 

@@ -487,6 +487,7 @@ export const useStore = create(
                         labelBuildings: true,    // "Principal Building", "Accessory Building"
                         maxSetbacks: true,       // Max setback lines
                         roadIntersections: true, // Road intersection fillet geometry
+                        unifiedRoadPreview: false, // Unified road polygon rendering (replaces separate roads + fillets)
                     },
                     exportRequested: false,
                     exportFormat: 'obj', // 'obj' | 'glb' | 'dae' | 'dxf' | 'png' | 'jpg' | 'svg'
@@ -2765,7 +2766,7 @@ export const useStore = create(
             }),
             {
                 name: 'zoning-app-storage',
-                version: 18, // Updated to 18 for max setback lines (style, visibility, layer toggles)
+                version: 19, // Updated to 19 for unified road preview layer toggle
                 migrate: (persistedState, version) => {
                     // Split dimensionsLot into dimensionsLotWidth and dimensionsLotDepth
                     if (persistedState.viewSettings && persistedState.viewSettings.layers && persistedState.viewSettings.layers.dimensionsLot !== undefined) {
@@ -3245,9 +3246,18 @@ export const useStore = create(
                         }
                     }
 
+                    if (version < 19) {
+                        // Migration to 19 — add unifiedRoadPreview layer toggle
+                        if (persistedState.viewSettings?.layers) {
+                            if (persistedState.viewSettings.layers.unifiedRoadPreview === undefined) {
+                                persistedState.viewSettings.layers.unifiedRoadPreview = false;
+                            }
+                        }
+                    }
+
                     return {
                         ...persistedState,
-                        version: 18
+                        version: 19
                     };
                 },
                 partialize: (state) => ({
