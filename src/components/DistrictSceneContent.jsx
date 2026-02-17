@@ -304,6 +304,7 @@ const DistrictSceneContent = () => {
     const lotIds = useLotIds()
     const layers = useStore(useShallow(state => state.viewSettings.layers))
     const groundStyle = useStore(useShallow(state => state.viewSettings.styleSettings?.ground))
+    const roadModulesState = useStore(state => state.entities?.roadModules ?? {})
 
     // Calculate lot positions: Lot 1 extends in positive X from origin,
     // Lots 2+ extend in negative X from origin. Origin (0,0) = front-left corner of Lot 1.
@@ -341,6 +342,31 @@ const DistrictSceneContent = () => {
         return positions
     }, [lotIds])
 
+    // Derive active road directions from actual enabled road modules
+    // (not from modelSetup.streetEdges, which can desync during undo/redo)
+    const activeRoadDirs = useMemo(() => {
+        const dirs = { front: false, left: false, right: false, rear: false }
+        for (const road of Object.values(roadModulesState)) {
+            if (road.enabled) dirs[road.direction] = true
+        }
+        return dirs
+    }, [roadModulesState])
+
+    // Compute per-lot street sides for setback line placement.
+    // Street-facing sides use minSideStreet; interior sides use sideInterior.
+    // Lot 1 (index 0, rightmost) may face a right road; last lot (leftmost) may face a left road.
+    const lotStreetSides = useMemo(() => {
+        return lotPositions.map((_, index) => {
+            const isFirst = index === 0
+            const isLast = index === lotPositions.length - 1
+            const isOnly = lotPositions.length === 1
+            return {
+                left: isOnly ? activeRoadDirs.left : isLast ? activeRoadDirs.left : false,
+                right: isOnly ? activeRoadDirs.right : isFirst ? activeRoadDirs.right : false,
+            }
+        })
+    }, [lotPositions, activeRoadDirs])
+
     return (
         <group>
             {/* Ground plane */}
@@ -351,7 +377,7 @@ const DistrictSceneContent = () => {
 
             {/* Lot entities */}
             {lotPositions.map(({ lotId, offset }, index) => (
-                <LotEntity key={lotId} lotId={lotId} offset={offset} lotIndex={index + 1} />
+                <LotEntity key={lotId} lotId={lotId} offset={offset} lotIndex={index + 1} streetSides={lotStreetSides[index]} />
             ))}
 
             {/* Road modules from entity system */}

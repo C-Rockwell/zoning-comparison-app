@@ -176,6 +176,15 @@ export const createDefaultLotStyle = (overrides = {}) => ({
     buildingEdges: { color: '#000000', width: 1.5, visible: true, dashed: false, opacity: 1.0 },
     buildingFaces: { color: '#D5D5D5', opacity: 1.0, transparent: true },
     maxHeightPlane: { color: '#FF6B6B', opacity: 0.3, lineColor: '#FF0000', lineWidth: 2, lineDashed: true },
+    maxSetbacks: {
+        color: '#000000', width: 1, dashed: true, dashSize: 0.5, gapSize: 0.3, dashScale: 1, opacity: 1.0,
+        overrides: {
+            front: { enabled: false, color: '#000000', width: 1, dashed: true },
+            rear: { enabled: false, color: '#000000', width: 1, dashed: true },
+            left: { enabled: false, color: '#000000', width: 1, dashed: true },
+            right: { enabled: false, color: '#000000', width: 1, dashed: true },
+        }
+    },
     roofFaces: { color: '#B8A088', opacity: 0.85, transparent: true },
     roofEdges: { color: '#000000', width: 1.5, visible: true, opacity: 1.0 },
     ...overrides,
@@ -210,6 +219,7 @@ export const createDefaultLotVisibility = () => ({
     maxHeightPlane: true,
     dimensions: true,
     accessoryBuilding: true,
+    maxSetbacks: true,
     parkingSetbacks: false,
 });
 
@@ -471,9 +481,11 @@ export const useStore = create(
                         labelLotNames: true,     // "Lot 1", "Lot 2" etc.
                         labelLotEdges: true,     // "Front of Lot", "Rear of Lot" etc.
                         labelSetbacks: true,     // "Front Setback" etc.
+                        labelMaxSetbacks: true,  // "Max. Front Setback" etc.
                         labelRoadNames: true,    // "S1 - Primary Street" etc.
                         labelRoadZones: true,    // "Right of Way", "Sidewalk" etc.
                         labelBuildings: true,    // "Principal Building", "Accessory Building"
+                        maxSetbacks: true,       // Max setback lines
                         roadIntersections: true, // Road intersection fillet geometry
                     },
                     exportRequested: false,
@@ -2445,6 +2457,17 @@ export const useStore = create(
                         }
                     }
                 })),
+                setAllRoadLineWidths: (width) => set((state) => {
+                    const updated = { ...state.roadModuleStyles }
+                    // Update rightOfWay width
+                    if (updated.rightOfWay) updated.rightOfWay = { ...updated.rightOfWay, width }
+                    // Update all zone lineWidths
+                    const zoneKeys = ['roadWidth', 'leftParking', 'leftVerge', 'leftSidewalk', 'leftTransitionZone', 'rightParking', 'rightVerge', 'rightSidewalk', 'rightTransitionZone']
+                    for (const key of zoneKeys) {
+                        if (updated[key]) updated[key] = { ...updated[key], lineWidth: width }
+                    }
+                    return { roadModuleStyles: updated }
+                }),
                 // Comparison Roads Actions
                 setComparisonRoadSetting: (direction, key, value) => set((state) => ({
                     comparisonRoads: {
@@ -2742,7 +2765,7 @@ export const useStore = create(
             }),
             {
                 name: 'zoning-app-storage',
-                version: 17, // Updated to 17 for fillOpacity 1.0 defaults (opacity convention fix)
+                version: 18, // Updated to 18 for max setback lines (style, visibility, layer toggles)
                 migrate: (persistedState, version) => {
                     // Split dimensionsLot into dimensionsLotWidth and dimensionsLotDepth
                     if (persistedState.viewSettings && persistedState.viewSettings.layers && persistedState.viewSettings.layers.dimensionsLot !== undefined) {
@@ -3191,9 +3214,40 @@ export const useStore = create(
                         }
                     }
 
+                    if (version < 18) {
+                        // Migration to 18 — add max setback style, visibility, and layer toggles
+                        if (persistedState.entityStyles) {
+                            for (const lotId of Object.keys(persistedState.entityStyles)) {
+                                const s = persistedState.entityStyles[lotId];
+                                if (!s.maxSetbacks) {
+                                    s.maxSetbacks = {
+                                        color: '#000000', width: 1, dashed: true, dashSize: 0.5, gapSize: 0.3, dashScale: 1, opacity: 1.0,
+                                        overrides: {
+                                            front: { enabled: false, color: '#000000', width: 1, dashed: true },
+                                            rear: { enabled: false, color: '#000000', width: 1, dashed: true },
+                                            left: { enabled: false, color: '#000000', width: 1, dashed: true },
+                                            right: { enabled: false, color: '#000000', width: 1, dashed: true },
+                                        }
+                                    };
+                                }
+                            }
+                        }
+                        if (persistedState.lotVisibility) {
+                            for (const lotId of Object.keys(persistedState.lotVisibility)) {
+                                if (persistedState.lotVisibility[lotId].maxSetbacks === undefined) {
+                                    persistedState.lotVisibility[lotId].maxSetbacks = true;
+                                }
+                            }
+                        }
+                        if (persistedState.viewSettings?.layers) {
+                            if (persistedState.viewSettings.layers.maxSetbacks === undefined) persistedState.viewSettings.layers.maxSetbacks = true;
+                            if (persistedState.viewSettings.layers.labelMaxSetbacks === undefined) persistedState.viewSettings.layers.labelMaxSetbacks = true;
+                        }
+                    }
+
                     return {
                         ...persistedState,
-                        version: 17 // Update verified version
+                        version: 18
                     };
                 },
                 partialize: (state) => ({
@@ -3228,10 +3282,10 @@ export const useStore = create(
         {
             limit: 50,
             partialize: (state) => {
-                const { existing, proposed, viewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, comparisonRoads, entities, entityOrder, entityStyles, lotVisibility, annotationSettings, annotationPositions } = state
+                const { existing, proposed, viewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, comparisonRoads, entities, entityOrder, entityStyles, lotVisibility, modelSetup, annotationSettings, annotationPositions } = state
                 // Exclude export triggers from undo history
                 const { exportRequested, ...trackedViewSettings } = viewSettings
-                return { existing, proposed, viewSettings: trackedViewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, comparisonRoads, entities, entityOrder, entityStyles, lotVisibility, annotationSettings, annotationPositions }
+                return { existing, proposed, viewSettings: trackedViewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, comparisonRoads, entities, entityOrder, entityStyles, lotVisibility, modelSetup, annotationSettings, annotationPositions }
             }
         }
     )
