@@ -298,68 +298,28 @@ Both Structures Principal and Structures Accessory sections in `DistrictParamete
 
 All editable fields use `updateBuildingParam(lotId, buildingType, key, value)`. Building rendering in `LotEntity.jsx` uses `??` (nullish coalescing) for fallback values to ensure `0` is treated as a valid user-entered value.
 
-## Active Issue: Road Intersection Line Rendering — ABANDON CURRENT APPROACH, USE PRE-BUILT ROAD SCENARIOS
+## Road Intersection System — WORKING (All 4 Directions)
 
-**Status**: Current per-road-module approach with separate fillet arcs CANNOT produce consistent line weights. After 6+ failed fix attempts across 3 AI agents, the user has decided to pursue a fundamentally new approach: **pre-built road scenarios using unified polygon geometry**.
+**Status**: COMPLETE — All 4 road directions (front/left/right/rear) render correctly with the original fillet-based system. S3 (alley) T-junctions are fully supported.
 
-### Problem Description
+### Road Rendering Architecture
 
-Curved fillet arc border lines at road intersections ALWAYS appear at a different thickness than straight road module edge lines, regardless of rendering method. This is a fundamental limitation of the current architecture where roads and intersections are rendered as separate geometric components.
+Roads are rendered as separate per-direction `RoadModule` components, with `RoadIntersectionFillet` handling curved corners where perpendicular roads meet. Intersection fill rectangles cover the ROW overlap area between roads.
 
-### What Has Been Tried (ALL FAILED)
+- **`RoadModule.jsx`** — Uses drei's `<Line>` (Line2) for all straight edge lines and ROW boundary lines. `lineWidth` wired from `roadModuleStyles` per zone. `lineScale` multiplier from `exportLineScale`. Accepts `suppressLeftEnd`/`suppressRightEnd` props to hide end-edge border lines at intersection boundaries.
+- **`RoadIntersectionFillet.jsx`** — Uses `<Line segments>` (LineSegments2) with `toSegmentPairs()` helper for arc border lines. Annular arc sector fills via THREE.Shape `absarc()`.
+- **`DistrictSceneContent.jsx`** — Computes intersection fill rects, fillet sub-corners, end-edge suppression, S3 T-junction road extensions, and alley fill rects.
+- **`intersectionGeometry.js`** — `computeCornerZoneStack()` generates 4 sub-corners per perpendicular road pair.
+- **`useStore.js`** — `setAllRoadLineWidths(width)` action for universal line width control.
+- **`DistrictParameterPanel.jsx`** — "All Lines > Line Width" universal slider + per-zone style editing.
 
-1. **Sub-sampling arc points** — Reduced arc from 25 to 13 points. Still thicker.
-2. **Gemini: Segmented Line2** — Split arc polyline into individual 2-point `<Line>` (Line2) segments. Adjacent segments' screen-space quads overlap at shared vertices, still causing thickening.
-3. **Gemini: Hybrid 0.75x correction** — Applied width reduction factor to arc lines. Did not produce consistent results across corners.
-4. **Claude: Native THREE.Line for arcs only** — Replaced Line2 with `gl.LINE_STRIP` native lines for arcs. Made arcs THINNER than straight edges (opposite problem).
-5. **Claude: Native THREE.Line for EVERYTHING** — Switched both RoadModule and RoadIntersectionFillet to native THREE.Line. Lines were consistent but locked at 1px with no lineWidth control (WebGL spec limitation). No good for export.
-6. **Claude: drei `<Line>` for straight + `<Line segments>` for arcs** — Used LineSegments2 (independent segments, no miter joins) for arcs and regular Line2 for straight edges. Arc lines STILL appear thicker than straight edges.
+### Previous Exploration: Unified Polygon Approach (ABANDONED)
 
-### Current Code State (as of Feb 16 2026)
+A unified polygon approach was explored on the `origin/codex-fix` branch (15 commits) to replace per-road rendering with single closed polygons per zone type. This approach **did not work** — it could not reliably handle all corner cases. The original fillet-based system was retained and refined instead. Leftover untracked files (`UnifiedRoadNetwork.jsx`, `unifiedRoadGeometry.js`) and exploration report (`docs/pre-built-road-scenario-exploration.md`) remain as reference but are NOT part of the active codebase.
 
-The code currently has attempt #6 in place:
-- **`RoadModule.jsx`** — Uses drei's `<Line>` for all straight edge lines and ROW boundary lines. `lineWidth` wired from `roadModuleStyles` per zone. `lineScale` multiplier from `exportLineScale`.
-- **`RoadIntersectionFillet.jsx`** — Uses `<Line segments>` with `toSegmentPairs()` helper for arc lines. Also uses `lineWidth` from zone styles.
-- **`useStore.js`** — Has `setAllRoadLineWidths(width)` action that sets lineWidth on all zones at once.
-- **`DistrictParameterPanel.jsx`** — Has "All Lines > Line Width" universal slider at top of Road Module Styles section.
-- **Line width controls exist** (per-zone + universal) and technically work with drei's `<Line>`, but the arc thickness mismatch renders them unsatisfying.
+### Known Cosmetic Issue
 
-### NEXT STEP: Pre-Built Road Scenarios (Unified Polygon Approach)
-
-An exploration report is saved at **`docs/pre-built-road-scenario-exploration.md`** (created Feb 16 2026). Key points:
-
-**Concept**: Instead of rendering each road direction as separate rectangles + fillet arcs at intersections, compute ONE closed polygon per zone type that traces the complete perimeter (straight edges + quarter-circle arcs at corners). This eliminates ALL line junction artifacts because each zone is a single continuous polyline.
-
-**Feasibility**: 9/10 — Highly viable for rectangular lots with uniform road dimensions.
-
-**Key Simplifications**:
-- All roads share the same dimensions (no per-direction zone sizing)
-- All roads share the same styles (already effectively true)
-- Single polygon per zone type replaces ~100+ geometry objects per intersection
-- No need for `suppressLeftEnd`/`suppressRightEnd`, no separate fillet component
-- ~12-16 draw calls instead of 100+ per intersection
-
-**Tradeoffs**:
-- Per-direction zone sizing variability would be lost (or need averaging at corners)
-- Works best for rectangular lots (polygon lots need fallback)
-- Current left/right parking asymmetry per road would be lost
-
-**Implementation Strategy** (from exploration report):
-1. Create `src/utils/unifiedRoadGeometry.js` — polygon computation
-2. Create `src/components/UnifiedRoadModule.jsx` — parallel to RoadModule.jsx
-3. Add debug toggle to switch rendering modes
-4. Validate, then migrate (remove RoadIntersectionFillet.jsx, intersectionGeometry.js)
-
-### Files That Would Be Replaced/Removed
-
-- `src/components/RoadModule.jsx` — replaced by UnifiedRoadModule.jsx
-- `src/components/RoadIntersectionFillet.jsx` — removed entirely
-- `src/utils/intersectionGeometry.js` — removed entirely
-- `src/components/DistrictSceneContent.jsx` — simplified (no intersection fill rects, no fillet sub-corners, no end-edge suppression)
-
-### Current Branch
-
-Working on `gemini-fix` branch. Latest work: S3 (alley) T-junction support — fillet suppression, non-S3 road extension through S3 ROW, alley fill rects, updated suppress-end logic. Also has universal line width control and unified road preview toggle.
+Fillet arc border lines may appear slightly thicker than straight road edges due to how drei's Line2 renders multi-point curves vs 2-point straight lines. This is a minor visual artifact that does not affect functionality.
 
 ## Known Limitations
 
@@ -371,9 +331,10 @@ Working on `gemini-fix` branch. Latest work: S3 (alley) T-junction support — f
 - District Module lots are positioned in a simple row layout (no arbitrary placement)
 - Road intersection fillet arc lines rely on z-offset separation (not renderOrder) for visibility above fills; transparent sorting edge cases may still occur with non-default opacity values
 - Comparison Module road intersections don't yet have end-edge suppression (District Module only)
-- **Fillet arc line width mismatch is UNSOLVABLE with current architecture** — see "Active Issue" section. Next step: pre-built road scenarios (unified polygon approach). Exploration report at `docs/pre-built-road-scenario-exploration.md`
+- Fillet arc border lines may appear slightly thicker than straight road edges (cosmetic; drei Line2 multi-point curve rendering artifact)
 
 ## Git
 
 - **Remote**: https://github.com/C-Rockwell/zoning-comparison-app.git
-- **Branch**: main
+- **Branches**: `gemini-fix` (active development), `main` (stable)
+- **Abandoned branch**: `origin/codex-fix` (failed unified road polygon approach, 15 commits — do not use)
