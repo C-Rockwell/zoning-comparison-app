@@ -288,6 +288,43 @@ Three.js `Line2` / drei's `<Line>` renders thick lines using screen-space geomet
 
 2. **Straight intersection edge lines through fill rect center** (removed from `DistrictSceneContent.jsx`): Added 4 straight line segments forming a rectangle in the center of each intersection. Result: incorrect approach — user wanted the *curved fillet boundary lines* to match, not new straight lines in the center.
 
+3. **Render arc as many 2-point segments instead of one polyline** (`09f120f`, `src/components/RoadIntersectionFillet.jsx`): Replaced one multi-point `<Line>` with many tiny 2-point `<Line>` segments for the outer arc to remove Line2 join/miter thickening. Result: did not resolve visual mismatch/gap artifacts to acceptable level.
+
+4. **Pivot to unified pre-built road network preview (feature flagged)** (`882a781`, `src/components/UnifiedRoadNetwork.jsx`, `src/components/DistrictSceneContent.jsx`, `src/store/useStore.js`, `src/components/DistrictParameterPanel.jsx`): Introduced fixed road scenario renderer and universal styling controls to reduce per-side complexity. Result: architectural pivot worked, but did not solve the critical front/right intersection geometry target.
+
+5. **UI simplification for unified mode** (`f271d0e`, `src/components/DistrictParameterPanel.jsx`): Hid per-direction road module controls and exposed only universal road-network styling in unified mode. Result: UX simplification only; geometry issue remained unresolved.
+
+6. **Fix for missing left/right/rear roads in unified mode** (`841f861`, `src/components/DistrictSceneContent.jsx`, `src/components/DistrictParameterPanel.jsx`): Corrected edge-enable logic so fixed scenario roads render in all directions. Result: rendering completeness fixed, but corner termination geometry still incorrect.
+
+7. **Front-right intersection geometry iteration 1 (curb-depth constrained fillets)** (`bc02e5c`, `src/components/UnifiedRoadNetwork.jsx`): Limited corner fillet extents to curb-return depth. Result: still produced incorrect corner behavior relative to target diagram.
+
+8. **Front-right intersection geometry iteration 2 (targeted overlay strips + arcs + throat)** (`48b3b1f`, `src/components/UnifiedRoadNetwork.jsx`): Added explicit front-right overlay geometry pieces. Result: still incorrect visual termination and transition behavior.
+
+9. **Front-right intersection geometry iteration 3 (disable base front-right auto-rounding)** (`226b8e0`, `src/components/UnifiedRoadNetwork.jsx`): Suppressed inherited corner rounding in that quadrant to avoid double-curvature interference. Result: still not matching required shape/terminations.
+
+10. **Front-right intersection geometry iteration 4 (quadrant repaint before overlay)** (`e140787`, `src/components/UnifiedRoadNetwork.jsx`): Repainted front-right area before reconstructing return elements. Result: introduced/left artifacts and still failed to match expected intersection.
+
+11. **Front-right intersection geometry iteration 5 (repaint depth reduced 50 -> 13)** (`4b5ec48`, `src/components/UnifiedRoadNetwork.jsx`): Narrowed repaint scope to curb-return zone. Result: still did not produce required corner termination.
+
+12. **Front-right intersection geometry iteration 6 (recenter return arcs)** (`13baaec`, `src/components/UnifiedRoadNetwork.jsx`): Shifted arc center assumptions toward coordinate-driven offsets. Result: mismatch persisted.
+
+13. **Front-right intersection geometry iteration 7 (explicit strip/arc reconstruction)** (`a28c375`, `src/components/UnifiedRoadNetwork.jsx`): Rebuilt the front-right block from explicit linear strips plus return elements. Result: still incorrect against provided coordinate diagram.
+
+14. **Front-right intersection geometry iteration 8 (restore far-side front strips)** (`1c96086`, `src/components/UnifiedRoadNetwork.jsx`): Reintroduced missing front-side strip pieces after explicit reconstruction. Result: still failed target geometry.
+
+15. **Front-right intersection geometry iteration 9 (re-anchor return centers at corner points)** (`3dbef77`, `src/components/UnifiedRoadNetwork.jsx`): Re-based arc centers at corner anchors. Result: still not matching expected intersection.
+
+16. **Front-right intersection geometry iteration 10 (model as T-intersection without vertical side carry-through)** (`e25d99b`, `src/components/UnifiedRoadNetwork.jsx`): Changed front-right block logic to T-style handling. Result: still reported incorrect by user.
+
+### Additional Validation Notes (Current State)
+
+- `npm run build` passes on branch `codex-fix`.
+- `npm run lint` fails due to many pre-existing repo-wide lint issues not introduced by these changes.
+- Local automated screenshot verification was attempted but constrained by environment:
+  - Playwright package download was blocked by network restrictions.
+  - macOS `screencapture -x` command failed in this execution environment.
+  - Direct browser automation verification could therefore not be completed reliably.
+
 ### Files Involved
 
 - **`src/components/RoadIntersectionFillet.jsx`** (~107 lines) — Renders curved fillet arcs. The outermost zone's outer arc line currently uses `roadWidthStyle` for color/width/dash/opacity (lines 66-89). Sub-sampling is applied to outermost arc points (lines 72-75).
