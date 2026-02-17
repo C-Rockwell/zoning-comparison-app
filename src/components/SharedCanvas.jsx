@@ -5,6 +5,7 @@ import { EffectComposer, N8AO, ToneMapping, SMAA, Outline, Selection } from '@re
 import { ToneMappingMode } from 'postprocessing'
 import * as THREE from 'three'
 import { useStore } from '../store/useStore'
+import { useShallow } from 'zustand/react/shallow'
 import CameraHandler from './CameraHandler'
 import Exporter from './Exporter'
 
@@ -179,7 +180,7 @@ const SharedCanvas = forwardRef(({ children, onPointerMissed }, ref) => {
     const gimbalLayer = useStore(state => state.viewSettings.layers.gimbal)
     const gridLayer = useStore(state => state.viewSettings.layers.grid)
     const gridSettings = useStore(state => state.viewSettings.styleSettings?.grid)
-    const renderSettings = useStore(state => state.renderSettings)
+    const renderSettings = useStore(useShallow(state => state.renderSettings))
 
     // Expose cameraControlsRef and contentRef to parent
     useImperativeHandle(ref, () => ({

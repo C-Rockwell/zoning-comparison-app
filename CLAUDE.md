@@ -10,6 +10,9 @@ A React Three Fiber application with two working modules:
 
 Features real-time 3D styling, enhanced dimension annotations (multi-plane, billboard text, angular dimensions), annotation labels (lot/road/building labels with drag-to-reposition), road intersection fillets (curved corner geometry), sun simulation, multi-format export (PNG/JPG/SVG/OBJ/GLB/DAE/DXF/IFC), CSV import, and keyboard shortcuts. Includes an Express.js backend for project persistence with snapshots and layer states.
 
+## Navigation Reference
+See `CODEBASE_NAV.md` for a complete file/function/action index. Consult it BEFORE searching the codebase. If you make significant structural changes (new files, renamed components, new store actions, moved utilities), update CODEBASE_NAV.md to reflect those changes.
+
 ## Commands
 
 All commands run from `zoning-comparison-app/`.
@@ -53,14 +56,15 @@ zoning-comparison-app/
 │   │   ├── StartScreen.jsx           # App entry: Sandbox / New Project / Open Existing (~380 lines)
 │   │   ├── DistrictViewer.jsx        # District 3D viewer with SharedCanvas (~200 lines)
 │   │   ├── DistrictSceneContent.jsx  # District 3D: multi-lot layout, roads, intersection fills, fillets, S3 T-junctions (~460 lines)
-│   │   ├── DistrictParameterPanel.jsx # District sidebar: model setup, params, styles, road styles, annotations (~2,000 lines)
+│   │   ├── DistrictParameterPanel.jsx # District sidebar: model setup, params, styles, road styles, annotations (~2,020 lines)
 │   │   ├── SharedCanvas.jsx          # Shared R3F Canvas infra: lighting, post-processing (~230 lines)
-│   │   ├── LotEntity.jsx             # Single lot entity renderer with annotations (~480 lines)
+│   │   ├── LotEntity.jsx             # Single lot entity renderer with annotations (~730 lines)
 │   │   ├── ImportWizard.jsx          # 3-step CSV import wizard with field mapping (~710 lines)
 │   │   ├── AnnotationText.jsx        # Shared text component: billboard/follow-line/fixed modes (~130 lines)
 │   │   ├── DraggableLabel.jsx        # Drag-to-reposition label with leader lines (~155 lines)
 │   │   ├── LotAnnotations.jsx        # Lot/setback/building annotation labels (~210 lines)
 │   │   ├── RoadAnnotations.jsx       # Road name and zone annotation labels (~230 lines)
+│   │   ├── LotAccessArrow.jsx         # Draggable 2D arrow for lot access directions (~186 lines)
 │   │   ├── RoadIntersectionFillet.jsx # Curved corner geometry at road intersections (~100 lines)
 │   │   ├── LeaderCallout.jsx         # Leader line with arrow pointing to feature (~100 lines)
 │   │   ├── AngularDimension.jsx      # Arc dimension for angles/pitch (~145 lines)
@@ -75,7 +79,7 @@ zoning-comparison-app/
 │   │       ├── ColorPicker.jsx       # Color input with ring overlay
 │   │       ├── SliderInput.jsx       # Range + number input combo
 │   │       └── LineStyleSelector.jsx # Solid/dashed line style toggle
-│   ├── store/useStore.js             # Centralized Zustand store (~3,200 lines, v18)
+│   ├── store/useStore.js             # Centralized Zustand store (~3,400 lines, v21)
 │   ├── services/api.js               # REST API client for backend (151 lines)
 │   ├── hooks/
 │   │   ├── useSunPosition.js         # SunCalc-based sun position hook (122 lines)
@@ -152,7 +156,7 @@ Additional top-level state:
 - **activeModule**: `'comparison'` | `'district'`
 - **autoSave**: `{ enabled, intervalMs, lastSavedAt, isDirty }` — with `setAutoSaveEnabled`, `markDirty`, `markSaved` actions
 - **viewSettings**: camera mode, projection (ortho/perspective), export format/resolution
-- **layerVisibility**: 23+ toggleable layers (lotLines, setbacks, buildings, roof, grid, roadModule, origin, ground, roadIntersections, annotationLabels, labelLotNames, labelLotEdges, labelSetbacks, labelRoadNames, labelRoadZones, labelBuildings, etc.) — global layers act as master override via `&&` with per-lot visibility
+- **layerVisibility**: 26+ toggleable layers (lotLines, setbacks, buildings, roof, grid, roadModule, origin, ground, roadIntersections, annotationLabels, labelLotNames, labelLotEdges, labelSetbacks, labelRoadNames, labelRoadZones, labelBuildings, btzPlanes, accessorySetbacks, lotAccessArrows, etc.) — global layers act as master override via `&&` with per-lot visibility
 - **dimensionSettings**: text/line colors, font, custom labels per dimension, textMode (follow-line/billboard), textBackground, autoStack, unitFormat
 - **annotationSettings**: textRotation (billboard/fixed), fontSize, colors, background, leader line settings, unitFormat
 - **annotationPositions**: `{ [annotationId]: [x,y,z] | null }` — persisted custom label positions for dragged annotations
@@ -162,7 +166,7 @@ Additional top-level state:
 - **sunSettings**: lat/long, date, time, animation, intensity
 - **Project state**: currentProject, projects list, snapshots, layerStates
 
-**Store version**: 18 (with migration system for backward compat from v1-v17; v15 added entity system, accessory buildings, comparison roads; v16 added annotation system, enhanced dimensions, road intersection fillets; v17 fixed fillOpacity defaults to 1.0 for all road zone and roadWidth styles; v18 added max setback lines with independent style/visibility/layer toggles)
+**Store version**: 21 (with migration system for backward compat from v1-v20; v15 added entity system, accessory buildings, comparison roads; v16 added annotation system, enhanced dimensions, road intersection fillets; v17 fixed fillOpacity defaults to 1.0 for all road zone and roadWidth styles; v18 added max setback lines with independent style/visibility/layer toggles; v19 internal; v20 added BTZ planes, accessory setback lines, lot access arrows — new style categories, visibility keys, layer toggles, accessory defaults to zero/null; v21 backfill migration for v20 keys that were added after version bump). Persist config includes a custom `merge` function that patches missing `entityStyles`, `lotVisibility`, and `viewSettings.layers` keys on every hydration — ensures forward compatibility without relying solely on version-gated migrations.
 
 **Undo/redo via Zundo**: tracks existing, proposed, viewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, entities, entityOrder, entityStyles, lotVisibility, comparisonRoads, annotationSettings, annotationPositions. Excludes exportRequested flag.
 
@@ -231,7 +235,7 @@ const { undo, redo } = useStore.temporal.getState()
 - **Multi-Direction Roads**: Front/left/right/rear roads with S1/S2/S3 types per edge, roads extend to connect at corners
 - **Per-Lot Styles**: Independent style settings per lot with "Apply to all" option
 - **District Parameters**: Informational/reference fields (zoning data, not visualized in 3D)
-- **Model Parameters**: Functional parameters in per-lot columns with collapsible subsections (Lot Dimensions, Setbacks Principal/Accessory, Structures Principal/Accessory with width/depth/stories/heights, Lot Access, Parking, Parking Setbacks)
+- **Model Parameters**: Functional parameters in per-lot columns with collapsible subsections (Lot Dimensions, Setbacks Principal/Accessory, BTZ Front/Side Street, Structures Principal/Accessory with width/depth/stories/heights, Lot Access with draggable arrows, Parking, Parking Setbacks)
 
 ### Shared Features
 - **Polygon Lot Editing**: Vertex manipulation, edge splitting/extrusion, perpendicular constraints, Shoelace area calc
@@ -264,7 +268,10 @@ const { undo, redo } = useStore.temporal.getState()
 - **Road intersection system**: Roads stop at lot boundaries (no ROW extensions). Intersection fill rectangles (z=0.04, renderOrder=1) cover the ROW overlap area with conditional `transparent`/`depthWrite` based on fillOpacity (opaque when >= 0.95, ensuring correct render pass ordering). Fillet arcs (z=0.05, renderOrder=2) handle curved zone corners with arc border lines at z=0.055. Road module zone end-edge lines are suppressed at intersection boundaries via `suppressLeftEnd`/`suppressRightEnd` props on RoadModule (direction-to-end mapping computed in DistrictSceneContent). Road Module Style Editor in DistrictParameterPanel allows customizing all zone colors.
 - **S3 (alley) T-junctions**: When an S3 road meets a non-S3 road at a corner, fillets and intersection fill rects are suppressed. Instead, the non-S3 road extends its span through the S3 road's ROW so its zone bands (sidewalk, verge, pavement) continue through the alley area. Small alley fill rectangles (z=0.03, width = perpendicular road's sidewalk+verge inset) connect the alley pavement to the cross-street at each corner. **Known limitation**: the cross-street sidewalk is not yet rendered on top of the alley fill rects (future TODO).
 - **Parameter-to-rendering integrity**: Every piece of visible geometry MUST correspond to a parameter the user can see and edit. If a parameter field is null/empty/cleared, the corresponding geometry must NOT render. Use `!= null && > 0` guards before rendering any line or dimension. Use `??` (nullish coalescing) instead of `||` for building prop fallbacks so that explicit `0` values are respected.
-- **Street-aware setback rendering**: `SetbackLines` and annotation labels use `streetSides` to determine which sides face streets. Street-facing sides use `minSideStreet`; interior sides use `sideInterior`. This is critical for corner lots where one side faces a street — that side's setback is a side street setback, not a side interior setback. The `streetSides` prop is computed in `DistrictSceneContent.jsx` from `modelSetup.streetEdges`.
+- **Street-aware setback rendering**: `SetbackLines`, `AccessorySetbackLines`, `MaxSetbackLines`, and annotation labels use `streetSides` to determine which sides face streets. Street-facing sides use `minSideStreet`; interior sides use `sideInterior`. This is critical for corner lots where one side faces a street — that side's setback is a side street setback, not a side interior setback. The `streetSides` prop is computed in `DistrictSceneContent.jsx` from `modelSetup.streetEdges`.
+- **Z-layer map for lot geometry**: Lot fill (z=0.02) → lot lines (z=0.03) → min setback lines (z=0.1) → accessory setback lines (z=0.11) → max setback lines (z=0.12) → lot access arrows (z=0.15) → BTZ planes (vertical, z=0 to firstFloorHeight).
+- **useShallow for object selectors**: When selecting an object from the Zustand store (e.g., `state.renderSettings`, `state.viewSettings`), always use `useShallow` from `zustand/react/shallow` to prevent infinite re-renders. Without it, every store change creates a new object reference, triggering unnecessary re-renders. Scalar selectors (`state.someNumber`) don't need it.
+- **Persist merge function**: The store's persist config has a custom `merge` function that patches missing `entityStyles`, `lotVisibility`, and `viewSettings.layers` keys from defaults on every hydration. When adding new style categories, visibility keys, or layer toggles, add them to: (1) `createDefaultLotStyle()`, (2) `createDefaultLotVisibility()`, (3) `viewSettings.layers` initial state, (4) the `merge` function's layer defaults object. This ensures both new and existing lots always have the keys.
 
 ### Setback Line Rendering (District Module)
 
@@ -272,9 +279,9 @@ const { undo, redo } = useStore.temporal.getState()
 
 **`SetbackLayer`** in `SceneContent.jsx` (Comparison Module) follows the same conditional pattern — each side only renders when its setback value is `!= null && > 0`.
 
-### Max Setback Lines (added v18)
+### Max Setback Lines (added v18, fixed v21)
 
-**Status**: IMPLEMENTED — working correctly.
+**Status**: IMPLEMENTED — working correctly. Required v21 migration to backfill `maxSetbacks` style key into existing lots' `entityStyles`.
 
 Max setback lines visualize `maxFront` and `maxSideStreet` from `setbacks.principal` as individual dashed lines in the 3D scene (NOT a closed rectangle — only sides with values get lines).
 
@@ -288,6 +295,61 @@ Max setback lines visualize `maxFront` and `maxSideStreet` from `setbacks.princi
 - `visKey: 'maxSetbacks'` on the "Max. Front" and "Max. Side, Street" model parameter rows
 - Max setback annotation labels in `LotAnnotations.jsx` — "Max. Front Setback", "Max. Side Setback"
 - Style category "Max Setbacks" in `DistrictParameterPanel.jsx` styleCategories
+
+### BTZ Planes (added v20, fixed v21)
+
+**Status**: IMPLEMENTED — rendering correctly. Required v21 migration + merge to backfill `btzPlanes` style/layer/visibility keys.
+
+BTZ (Build-To Zone) planes are vertical `THREE.PlaneGeometry` meshes on building facades showing the required build-to percentage.
+
+**Components & files**:
+
+- `BTZPlanes` component in `LotEntity.jsx` — renders vertical planes at 0.25" (0.021 ft) offset from building face
+- **BTZ Front**: left-aligned on front face, width = `(btzFront / 100) * buildingWidth`, height = `firstFloorHeight`
+- **BTZ Side Street**: corner lots only (when `streetSides.left` or `streetSides.right`), left-aligned from front corner of side face, width = `(btzSideStreet / 100) * buildingDepth`
+- `btzPlanes` style in `createDefaultLotStyle()` — `{ color: '#AA00FF', opacity: 1.0 }` (magenta)
+- `btzPlanes` visibility in `createDefaultLotVisibility()` — per-lot toggle, defaults to `true`
+- `btzPlanes` layer toggle in `viewSettings.layers`
+- `visKey: 'btzPlanes'` on the BTZ parameter rows in `DistrictParameterPanel.jsx`
+- Style category "BTZ Planes" in `DistrictParameterPanel.jsx` styleCategories
+- Guard: `btzFront != null && btzFront > 0` (no plane renders when value is null/0)
+
+### Accessory Setback Lines (added v20, fixed v21)
+
+**Status**: IMPLEMENTED — rendering correctly. Required v21 migration + merge to backfill `accessorySetbacks` style/layer/visibility keys.
+
+Accessory setback lines render per-side conditional lines for accessory buildings. Renders whenever the accessory setback has a positive value (blue lines are visually distinct from black principal setback lines).
+
+**Components & files**:
+
+- `AccessorySetbackLines` component in `LotEntity.jsx` — renders at z=0.11 (between min setbacks at 0.1 and max setbacks at 0.12)
+- Street-aware: uses `streetSides` to pick `sideStreet` for street-facing sides, `sideInterior` for interior sides (same logic as principal setbacks)
+- Guard per side: `aValue != null && aValue > 0`
+- `accessorySetbacks` style in `createDefaultLotStyle()` — `{ color: '#2196F3', width: 1, dashed: true, dashSize: 0.8, gapSize: 0.4, dashScale: 1, opacity: 1.0, overrides: { front/rear/left/right } }` (blue)
+- `accessorySetbacks` visibility in `createDefaultLotVisibility()` — per-lot toggle, defaults to `true`
+- `accessorySetbacks` layer toggle in `viewSettings.layers`
+- `visKey: 'accessorySetbacks'` on the accessory setback model parameter rows (eye toggle controls accessory setback visibility independently from principal)
+- Style category "Accessory Setbacks" in `DistrictParameterPanel.jsx` styleCategories
+- **Accessory defaults**: width=0, depth=0, stories=0, all setbacks=null — no accessory building or setback lines render by default
+
+### Lot Access Arrows (added v20, fixed v21)
+
+**Status**: IMPLEMENTED — rendering correctly. Required v21 migration + merge to backfill `lotAccessArrows` style/layer/visibility keys. Style prop wired from `entityStyles[lotId].lotAccessArrows` with `visKey: 'lotAccessArrows'` on parameter rows.
+
+Lot access arrows are flat 2D arrow shapes on the ground plane indicating vehicular/pedestrian access directions.
+
+**Components & files**:
+
+- `LotAccessArrow.jsx` — standalone component using `THREE.ShapeGeometry` (shaft + triangular arrowhead)
+- Direction-based rotation: front (+Y), rear (-Y/PI), sideStreet (±PI/2 based on `streetSides`), sharedDrive (toward interior side)
+- **Bidirectional**: `sideInterior` / "Shared Drive" renders two arrows back-to-back
+- **Draggable**: pointer capture + ray-plane intersection pattern (same as `DraggableLabel`), position persistence via `annotationPositions`
+- Z-offset: 0.15, color: `#FF00FF` (magenta), `meshBasicMaterial` with `THREE.DoubleSide`
+- Default positions computed from lot geometry (e.g., front: `[0, -lotDepth/2 + 5, 0]`)
+- Wired into `LotEntity.jsx` — conditional on `layers.lotAccessArrows && visibility.lotAccessArrows && lot.lotAccess`
+- `lotAccessArrows` visibility in `createDefaultLotVisibility()` — per-lot toggle, defaults to `true`
+- `lotAccessArrows` layer toggle in `viewSettings.layers`
+- Label rename: "Side, Interior" → "Shared Drive" in `DistrictParameterPanel.jsx` (internal key `sideInterior` unchanged)
 
 ### Building Dimension Parameters (District Module)
 
@@ -326,7 +388,7 @@ Fillet arc border lines may appear slightly thicker than straight road edges due
 - Setback visualization only works with rectangular lots, not polygon lots
 - No 3D model import
 - No test suite
-- Store is ~3,200 lines — large but functional; entity system, annotation system, and legacy state coexist
+- Store is ~3,400 lines — large but functional; entity system, annotation system, and legacy state coexist
 - ImportWizard supports CSV only (no Excel/XLSX — would need external library)
 - District Module lots are positioned in a simple row layout (no arbitrary placement)
 - Road intersection fillet arc lines rely on z-offset separation (not renderOrder) for visibility above fills; transparent sorting edge cases may still occur with non-default opacity values

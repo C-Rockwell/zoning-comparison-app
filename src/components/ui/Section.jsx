@@ -15,9 +15,12 @@ const Section = ({ title, icon, defaultOpen = true, children, headerRight }) => 
 
     return (
         <div className="mb-3">
-            <button
+            <div
+                role="button"
+                tabIndex={0}
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full flex items-center justify-between p-2 rounded font-bold uppercase tracking-wide hover-bg-secondary transition-colors"
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsOpen(!isOpen); } }}
+                className="w-full flex items-center justify-between p-2 rounded font-bold uppercase tracking-wide hover-bg-secondary transition-colors cursor-pointer"
                 style={{ backgroundColor: 'var(--ui-bg-secondary)', color: 'var(--ui-text-primary)', borderLeft: '3px solid var(--ui-accent)', fontSize: '11px', letterSpacing: '0.08em' }}
             >
                 <div className="flex items-center gap-2">
@@ -28,7 +31,7 @@ const Section = ({ title, icon, defaultOpen = true, children, headerRight }) => 
                     {headerRight}
                     {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </div>
-            </button>
+            </div>
             {isOpen && (
                 <div className="p-2 space-y-2">
                     {children}

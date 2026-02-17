@@ -122,7 +122,7 @@ export const createDefaultLot = (overrides = {}) => ({
             minSideStreet: null, maxSideStreet: null, btzSideStreet: null,
         },
         accessory: {
-            front: null, rear: 5, sideInterior: 3, sideStreet: null,
+            front: null, rear: null, sideInterior: null, sideStreet: null,
         },
     },
     lotGeometry: { mode: 'rectangle', editing: false, vertices: null },
@@ -136,7 +136,7 @@ export const createDefaultLot = (overrides = {}) => ({
             roof: { type: 'flat', overrideHeight: false, ridgeHeight: null, ridgeDirection: 'x', shedDirection: '+y' },
         },
         accessory: {
-            width: 12, depth: 16, stories: 1,
+            width: 0, depth: 0, stories: 0,
             firstFloorHeight: 10, upperFloorHeight: 10,
             x: 0, y: 0, maxHeight: 15,
             geometry: { mode: 'rectangle', vertices: null },
@@ -187,6 +187,17 @@ export const createDefaultLotStyle = (overrides = {}) => ({
     },
     roofFaces: { color: '#B8A088', opacity: 0.85, transparent: true },
     roofEdges: { color: '#000000', width: 1.5, visible: true, opacity: 1.0 },
+    btzPlanes: { color: '#AA00FF', opacity: 1.0 },
+    accessorySetbacks: {
+        color: '#2196F3', width: 1, dashed: true, dashSize: 0.8, gapSize: 0.4, dashScale: 1, opacity: 1.0,
+        overrides: {
+            front: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+            rear: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+            left: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+            right: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+        }
+    },
+    lotAccessArrows: { color: '#FF00FF', opacity: 1.0 },
     ...overrides,
 });
 
@@ -221,6 +232,9 @@ export const createDefaultLotVisibility = () => ({
     accessoryBuilding: true,
     maxSetbacks: true,
     parkingSetbacks: false,
+    btzPlanes: true,
+    accessorySetbacks: true,
+    lotAccessArrows: true,
 });
 
 export const useStore = create(
@@ -359,6 +373,7 @@ export const useStore = create(
                     streetEdges: { front: true, left: false, right: false, rear: false },
                     streetTypes: { front: 'S1', left: 'S1', right: 'S2', rear: 'S3' },
                 },
+                stashedRoadModules: {}, // { [direction]: roadModuleData } — preserved when street edge unchecked
                 // Annotation system — shared text labels for lots, setbacks, roads, buildings
                 annotationSettings: {
                     textRotation: 'billboard',   // 'follow-line' | 'billboard' | 'fixed'
@@ -486,6 +501,9 @@ export const useStore = create(
                         labelRoadZones: true,    // "Right of Way", "Sidewalk" etc.
                         labelBuildings: true,    // "Principal Building", "Accessory Building"
                         maxSetbacks: true,       // Max setback lines
+                        btzPlanes: true,         // BTZ front + side street planes
+                        accessorySetbacks: true, // Accessory setback lines
+                        lotAccessArrows: true,   // Lot access directional arrows
                         roadIntersections: true, // Road intersection fillet geometry
                         unifiedRoadPreview: false, // Unified road polygon rendering (replaces separate roads + fillets)
                     },
@@ -1399,12 +1417,44 @@ export const useStore = create(
                 setModelSetup: (key, value) => set((state) => ({
                     modelSetup: { ...state.modelSetup, [key]: value }
                 })),
-                setStreetEdge: (edge, enabled) => set((state) => ({
-                    modelSetup: {
+                setStreetEdge: (edge, enabled) => set((state) => {
+                    const updatedSetup = {
                         ...state.modelSetup,
                         streetEdges: { ...state.modelSetup.streetEdges, [edge]: enabled }
                     }
-                })),
+
+                    if (!enabled) {
+                        // Unchecking: stash road modules for this direction, then remove them
+                        const toStash = Object.entries(state.entities.roadModules)
+                            .find(([, road]) => road.direction === edge)
+                        const remainingRoads = {}
+                        for (const [id, road] of Object.entries(state.entities.roadModules)) {
+                            if (road.direction !== edge) remainingRoads[id] = road
+                        }
+                        return {
+                            modelSetup: updatedSetup,
+                            stashedRoadModules: {
+                                ...state.stashedRoadModules,
+                                [edge]: toStash ? toStash[1] : state.stashedRoadModules[edge],
+                            },
+                            entities: { ...state.entities, roadModules: remainingRoads },
+                        }
+                    } else {
+                        // Checking: restore from stash or create default
+                        const stashed = state.stashedRoadModules[edge]
+                        const roadId = `road-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+                        const roadData = stashed || createDefaultRoadModule(edge, state.modelSetup.streetTypes?.[edge] || 'S1')
+                        const { [edge]: _, ...remainingStash } = state.stashedRoadModules
+                        return {
+                            modelSetup: updatedSetup,
+                            stashedRoadModules: remainingStash,
+                            entities: {
+                                ...state.entities,
+                                roadModules: { ...state.entities.roadModules, [roadId]: roadData },
+                            },
+                        }
+                    }
+                }),
                 setStreetType: (edge, type) => set((state) => ({
                     modelSetup: {
                         ...state.modelSetup,
@@ -2766,7 +2816,7 @@ export const useStore = create(
             }),
             {
                 name: 'zoning-app-storage',
-                version: 19, // Updated to 19 for unified road preview layer toggle
+                version: 21, // v21: backfill missing style/visibility/layer keys for v20 lots
                 migrate: (persistedState, version) => {
                     // Split dimensionsLot into dimensionsLotWidth and dimensionsLotDepth
                     if (persistedState.viewSettings && persistedState.viewSettings.layers && persistedState.viewSettings.layers.dimensionsLot !== undefined) {
@@ -3255,9 +3305,118 @@ export const useStore = create(
                         }
                     }
 
+                    if (version < 20) {
+                        // Migration to 20 — add btzPlanes, accessorySetbacks styles/visibility, layer toggles
+                        if (persistedState.entityStyles) {
+                            for (const lotId of Object.keys(persistedState.entityStyles)) {
+                                const s = persistedState.entityStyles[lotId];
+                                if (!s.btzPlanes) {
+                                    s.btzPlanes = { color: '#AA00FF', opacity: 1.0 };
+                                }
+                                if (!s.accessorySetbacks) {
+                                    s.accessorySetbacks = {
+                                        color: '#2196F3', width: 1, dashed: true, dashSize: 0.8, gapSize: 0.4, dashScale: 1, opacity: 1.0,
+                                        overrides: {
+                                            front: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+                                            rear: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+                                            left: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+                                            right: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+                                        }
+                                    };
+                                }
+                                if (!s.lotAccessArrows) {
+                                    s.lotAccessArrows = { color: '#FF00FF', opacity: 1.0 };
+                                }
+                                // Fix accessory setback colors for users who already migrated to v20 with black
+                                if (s.accessorySetbacks && s.accessorySetbacks.color === '#000000') {
+                                    s.accessorySetbacks.color = '#2196F3';
+                                    if (s.accessorySetbacks.overrides) {
+                                        for (const side of ['front', 'rear', 'left', 'right']) {
+                                            if (s.accessorySetbacks.overrides[side] && s.accessorySetbacks.overrides[side].color === '#000000') {
+                                                s.accessorySetbacks.overrides[side].color = '#2196F3';
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (persistedState.lotVisibility) {
+                            for (const lotId of Object.keys(persistedState.lotVisibility)) {
+                                if (persistedState.lotVisibility[lotId].btzPlanes === undefined) {
+                                    persistedState.lotVisibility[lotId].btzPlanes = true;
+                                }
+                                if (persistedState.lotVisibility[lotId].accessorySetbacks === undefined) {
+                                    persistedState.lotVisibility[lotId].accessorySetbacks = true;
+                                }
+                                if (persistedState.lotVisibility[lotId].lotAccessArrows === undefined) {
+                                    persistedState.lotVisibility[lotId].lotAccessArrows = true;
+                                }
+                            }
+                        }
+                        if (persistedState.viewSettings?.layers) {
+                            if (persistedState.viewSettings.layers.btzPlanes === undefined) persistedState.viewSettings.layers.btzPlanes = true;
+                            if (persistedState.viewSettings.layers.accessorySetbacks === undefined) persistedState.viewSettings.layers.accessorySetbacks = true;
+                            if (persistedState.viewSettings.layers.lotAccessArrows === undefined) persistedState.viewSettings.layers.lotAccessArrows = true;
+                        }
+                    }
+
+                    if (version < 21) {
+                        // v21: Backfill keys that were added to v20 defaults AFTER
+                        // the version was already bumped to 20 in persisted state
+                        if (persistedState.entityStyles) {
+                            for (const lotId of Object.keys(persistedState.entityStyles)) {
+                                const s = persistedState.entityStyles[lotId];
+                                if (!s.maxSetbacks) {
+                                    s.maxSetbacks = {
+                                        color: '#000000', width: 1, dashed: true, dashSize: 0.5, gapSize: 0.3, dashScale: 1, opacity: 1.0,
+                                        overrides: {
+                                            front: { enabled: false, color: '#000000', width: 1, dashed: true },
+                                            rear: { enabled: false, color: '#000000', width: 1, dashed: true },
+                                            left: { enabled: false, color: '#000000', width: 1, dashed: true },
+                                            right: { enabled: false, color: '#000000', width: 1, dashed: true },
+                                        }
+                                    };
+                                }
+                                if (!s.btzPlanes) {
+                                    s.btzPlanes = { color: '#AA00FF', opacity: 1.0 };
+                                }
+                                if (!s.accessorySetbacks) {
+                                    s.accessorySetbacks = {
+                                        color: '#2196F3', width: 1, dashed: true, dashSize: 0.8, gapSize: 0.4, dashScale: 1, opacity: 1.0,
+                                        overrides: {
+                                            front: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+                                            rear: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+                                            left: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+                                            right: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+                                        }
+                                    };
+                                }
+                                if (!s.lotAccessArrows) {
+                                    s.lotAccessArrows = { color: '#FF00FF', opacity: 1.0 };
+                                }
+                            }
+                        }
+                        if (persistedState.lotVisibility) {
+                            for (const lotId of Object.keys(persistedState.lotVisibility)) {
+                                const v = persistedState.lotVisibility[lotId];
+                                if (v.maxSetbacks === undefined) v.maxSetbacks = true;
+                                if (v.btzPlanes === undefined) v.btzPlanes = true;
+                                if (v.accessorySetbacks === undefined) v.accessorySetbacks = true;
+                                if (v.lotAccessArrows === undefined) v.lotAccessArrows = true;
+                            }
+                        }
+                        if (persistedState.viewSettings?.layers) {
+                            const l = persistedState.viewSettings.layers;
+                            if (l.maxSetbacks === undefined) l.maxSetbacks = true;
+                            if (l.btzPlanes === undefined) l.btzPlanes = true;
+                            if (l.accessorySetbacks === undefined) l.accessorySetbacks = true;
+                            if (l.lotAccessArrows === undefined) l.lotAccessArrows = true;
+                        }
+                    }
+
                     return {
                         ...persistedState,
-                        version: 19
+                        version: 21
                     };
                 },
                 partialize: (state) => ({
@@ -3287,6 +3446,41 @@ export const useStore = create(
                     annotationSettings: state.annotationSettings,
                     annotationPositions: state.annotationPositions,
                 }),
+                merge: (persistedState, currentState) => {
+                    const merged = { ...currentState, ...persistedState };
+                    // Patch missing entityStyles keys for all lots
+                    if (merged.entityStyles) {
+                        const styleDefaults = createDefaultLotStyle();
+                        for (const lotId of Object.keys(merged.entityStyles)) {
+                            for (const [key, val] of Object.entries(styleDefaults)) {
+                                if (!merged.entityStyles[lotId][key]) {
+                                    merged.entityStyles[lotId][key] = JSON.parse(JSON.stringify(val));
+                                }
+                            }
+                        }
+                    }
+                    // Patch missing lotVisibility keys for all lots
+                    if (merged.lotVisibility) {
+                        const visDefaults = createDefaultLotVisibility();
+                        for (const lotId of Object.keys(merged.lotVisibility)) {
+                            for (const [key, val] of Object.entries(visDefaults)) {
+                                if (merged.lotVisibility[lotId][key] === undefined) {
+                                    merged.lotVisibility[lotId][key] = val;
+                                }
+                            }
+                        }
+                    }
+                    // Patch missing viewSettings.layers keys
+                    if (merged.viewSettings?.layers) {
+                        const layerDefaults = { maxSetbacks: true, btzPlanes: true, accessorySetbacks: true, lotAccessArrows: true };
+                        for (const [key, val] of Object.entries(layerDefaults)) {
+                            if (merged.viewSettings.layers[key] === undefined) {
+                                merged.viewSettings.layers[key] = val;
+                            }
+                        }
+                    }
+                    return merged;
+                },
             }
         ),
         {

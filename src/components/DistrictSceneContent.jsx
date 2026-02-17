@@ -7,7 +7,6 @@ import LotEntity from './LotEntity'
 import RoadModule from './RoadModule'
 import RoadAnnotations from './RoadAnnotations'
 import RoadIntersectionFillet from './RoadIntersectionFillet'
-import UnifiedRoadNetwork from './UnifiedRoadNetwork'
 
 // Direction rotation for annotation labels (matches RoadModule.jsx DIRECTION_ROTATION)
 const DIRECTION_ROTATION = {
@@ -259,41 +258,13 @@ const EntityRoadModules = ({ lotPositions }) => {
         return rects
     }, [totalExtentLeft, totalExtentRight, maxLotDepth, roadsByDir])
 
-    // Compute lotBounds and enabledDirs for unified road rendering
-    const lotBounds = useMemo(() => ({
-        xMin: totalExtentLeft,
-        xMax: totalExtentRight,
-        yMin: 0,
-        yMax: maxLotDepth,
-    }), [totalExtentLeft, totalExtentRight, maxLotDepth])
-
-    const enabledDirs = useMemo(() => ({
-        front: !!roadsByDir.front,
-        left: !!roadsByDir.left,
-        right: !!roadsByDir.right,
-        rear: !!roadsByDir.rear,
-    }), [roadsByDir])
-
     if (!roadModuleStyles) return null
 
     const roadEntries = Object.entries(roadModules)
     if (roadEntries.length === 0) return null
 
-    const useUnified = layers.unifiedRoadPreview === true
-
     return (
         <group>
-            {useUnified ? (
-                /* Unified road rendering — single polyline per zone */
-                <UnifiedRoadNetwork
-                    lotBounds={lotBounds}
-                    enabledDirections={enabledDirs}
-                    roadsByDirection={roadsByDir}
-                    roadModuleStyles={roadModuleStyles}
-                    exportLineScale={exportLineScale}
-                />
-            ) : (
-                /* Legacy road rendering — separate road modules + fillets */
                 <>
                     {roadEntries.map(([roadId, road]) => {
                         if (!road.enabled) return null
@@ -430,9 +401,8 @@ const EntityRoadModules = ({ lotPositions }) => {
                         />
                     ))}
                 </>
-            )}
 
-            {/* Road annotation labels — render in both modes */}
+            {/* Road annotation labels */}
             {roadEntries.map(([roadId, road]) => {
                 if (!road.enabled) return null
                 const dir = road.direction || 'front'

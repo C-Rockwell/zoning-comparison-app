@@ -6,6 +6,7 @@ import Dimension from './Dimension'
 import LotEditor from './LotEditor'
 import BuildingEditor from './BuildingEditor'
 import LotAnnotations from './LotAnnotations'
+import LotAccessArrow from './LotAccessArrow'
 import { formatDimension } from '../utils/formatUnits'
 
 // Helper: compute total building height from story data
@@ -67,10 +68,10 @@ const RectLot = ({ width, depth, style, fillStyle, showWidthDimensions = false, 
     const w2 = width / 2
     const d2 = depth / 2
 
-    const p1 = [-w2, -d2, 0]
-    const p2 = [w2, -d2, 0]
-    const p3 = [w2, d2, 0]
-    const p4 = [-w2, d2, 0]
+    const p1 = [-w2, -d2, 0.03]
+    const p2 = [w2, -d2, 0.03]
+    const p3 = [w2, d2, 0.03]
+    const p4 = [-w2, d2, 0.03]
 
     return (
         <group>
@@ -253,6 +254,168 @@ const MaxSetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}
 }
 
 // ============================================
+// AccessorySetbackLines — accessory setback lines
+// Renders sides where accessory setback has a positive value.
+// ============================================
+const AccessorySetbackLines = ({ lotWidth, lotDepth, accessorySetbacks, style, streetSides = {}, lineScale = 1 }) => {
+    const { front: aFront, rear: aRear, sideInterior: aSideInt, sideStreet: aSideStr } = accessorySetbacks
+
+    // Street-facing sides use sideStreet; interior sides use sideInterior
+    const aLeftValue = streetSides.left ? aSideStr : aSideInt
+    const aRightValue = streetSides.right ? aSideStr : aSideInt
+
+    // Only render lines for sides with actual positive values
+    const hasFront = aFront != null && aFront > 0
+    const hasRear = aRear != null && aRear > 0
+    const hasSideLeft = aLeftValue != null && aLeftValue > 0
+    const hasSideRight = aRightValue != null && aRightValue > 0
+
+    if (!hasFront && !hasRear && !hasSideLeft && !hasSideRight) return null
+
+    const z = 0.11 // Between min setbacks (0.1) and max setbacks (0.12)
+
+    // Positions: qualifying sides use their setback offset, others fall to lot edge
+    const y1 = hasFront ? -lotDepth / 2 + aFront : -lotDepth / 2
+    const y2 = hasRear ? lotDepth / 2 - aRear : lotDepth / 2
+    const x1 = hasSideLeft ? -lotWidth / 2 + aLeftValue : -lotWidth / 2
+    const x2 = hasSideRight ? lotWidth / 2 - aRightValue : lotWidth / 2
+
+    const p1 = [x1, y1, z]
+    const p2 = [x2, y1, z]
+    const p3 = [x2, y2, z]
+    const p4 = [x1, y2, z]
+
+    return (
+        <group>
+            {hasFront && <SingleLine start={p1} end={p2} style={style} side="front" lineScale={lineScale} />}
+            {hasSideRight && <SingleLine start={p2} end={p3} style={style} side="right" lineScale={lineScale} />}
+            {hasRear && <SingleLine start={p3} end={p4} style={style} side="rear" lineScale={lineScale} />}
+            {hasSideLeft && <SingleLine start={p4} end={p1} style={style} side="left" lineScale={lineScale} />}
+        </group>
+    )
+}
+
+// ============================================
+// BTZPlanes — vertical Build-To Zone planes on
+// building facades (front and street-facing side)
+// ============================================
+const BTZPlanes = ({ principal, setbacks, streetSides = {}, style }) => {
+    const btzFront = setbacks?.btzFront
+    const btzSideStreet = setbacks?.btzSideStreet
+
+    const buildingWidth = principal.width ?? 0
+    const buildingDepth = principal.depth ?? 0
+    const firstFloorHeight = principal.firstFloorHeight ?? 12
+    const px = principal.x ?? 0
+    const py = principal.y ?? 0
+
+    const planes = []
+
+    // --- BTZ Front Plane ---
+    if (btzFront != null && btzFront > 0 && buildingWidth > 0) {
+        const planeWidth = (btzFront / 100) * buildingWidth
+        const planeHeight = firstFloorHeight
+
+        // Building front face y position
+        const buildingFrontY = py - buildingDepth / 2
+        // Offset 0.021 ft (0.25 in) toward front of lot (negative Y)
+        const planeY = buildingFrontY - 0.021
+
+        // Left-aligned: starts at left edge of building
+        const buildingLeftX = px - buildingWidth / 2
+        const planeCenterX = buildingLeftX + planeWidth / 2
+
+        planes.push(
+            <mesh
+                key="btz-front"
+                position={[planeCenterX, planeY, planeHeight / 2]}
+                rotation={[Math.PI / 2, 0, 0]}
+            >
+                <planeGeometry args={[planeWidth, planeHeight]} />
+                <meshStandardMaterial
+                    color={style.color}
+                    opacity={style.opacity}
+                    transparent={style.opacity < 1}
+                    side={THREE.DoubleSide}
+                    depthWrite={style.opacity >= 0.95}
+                    roughness={1}
+                    metalness={0}
+                />
+            </mesh>
+        )
+    }
+
+    // --- BTZ Side Street Plane (corner lots only) ---
+    if (btzSideStreet != null && btzSideStreet > 0 && buildingDepth > 0) {
+        const planeWidth = (btzSideStreet / 100) * buildingDepth
+        const planeHeight = firstFloorHeight
+
+        // Building front face y for left-alignment (front corner of side face)
+        const buildingFrontY = py - buildingDepth / 2
+
+        // Left street side
+        if (streetSides.left) {
+            const buildingLeftX = px - buildingWidth / 2
+            const planeX = buildingLeftX - 0.021
+
+            // Left-aligned from front corner: starts at buildingFrontY, extends toward rear (+Y)
+            const planeCenterY = buildingFrontY + planeWidth / 2
+
+            planes.push(
+                <mesh
+                    key="btz-side-left"
+                    position={[planeX, planeCenterY, planeHeight / 2]}
+                    rotation={[Math.PI / 2, 0, Math.PI / 2]}
+                >
+                    <planeGeometry args={[planeWidth, planeHeight]} />
+                    <meshStandardMaterial
+                        color={style.color}
+                        opacity={style.opacity}
+                        transparent={style.opacity < 1}
+                        side={THREE.DoubleSide}
+                        depthWrite={style.opacity >= 0.95}
+                        roughness={1}
+                        metalness={0}
+                    />
+                </mesh>
+            )
+        }
+
+        // Right street side
+        if (streetSides.right) {
+            const buildingRightX = px + buildingWidth / 2
+            const planeX = buildingRightX + 0.021
+
+            // Left-aligned from front corner: starts at buildingFrontY, extends toward rear (+Y)
+            const planeCenterY = buildingFrontY + planeWidth / 2
+
+            planes.push(
+                <mesh
+                    key="btz-side-right"
+                    position={[planeX, planeCenterY, planeHeight / 2]}
+                    rotation={[Math.PI / 2, 0, Math.PI / 2]}
+                >
+                    <planeGeometry args={[planeWidth, planeHeight]} />
+                    <meshStandardMaterial
+                        color={style.color}
+                        opacity={style.opacity}
+                        transparent={style.opacity < 1}
+                        side={THREE.DoubleSide}
+                        depthWrite={style.opacity >= 0.95}
+                        roughness={1}
+                        metalness={0}
+                    />
+                </mesh>
+            )
+        }
+    }
+
+    if (planes.length === 0) return null
+
+    return <group>{planes}</group>
+}
+
+// ============================================
 // LotEntity — renders a single lot's 3D content
 // from the entity system.
 // Props: lotId, offset (x position)
@@ -280,6 +443,10 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
     const updateEntityVertex = useStore(state => state.updateEntityVertex)
     const splitEntityEdge = useStore(state => state.splitEntityEdge)
     const extrudeEntityEdge = useStore(state => state.extrudeEntityEdge)
+
+    // Annotation positions for draggable elements (lot access arrows, etc.)
+    const annotationPositions = useStore(state => state.annotationPositions)
+    const setAnnotationPosition = useStore(state => state.setAnnotationPosition)
 
     if (!lot || !style) return null
 
@@ -360,6 +527,32 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     style={style.maxSetbacks}
                     streetSides={streetSides}
                     lineScale={exportLineScale}
+                />
+            )}
+
+            {/* ============================================ */}
+            {/* Accessory Setback Lines */}
+            {/* ============================================ */}
+            {layers.accessorySetbacks && visibility.accessorySetbacks && setbacks?.accessory && style?.accessorySetbacks && (
+                <AccessorySetbackLines
+                    lotWidth={lotWidth}
+                    lotDepth={lotDepth}
+                    accessorySetbacks={setbacks.accessory}
+                    style={style.accessorySetbacks}
+                    streetSides={streetSides}
+                    lineScale={exportLineScale}
+                />
+            )}
+
+            {/* ============================================ */}
+            {/* BTZ Planes (Build-To Zone) */}
+            {/* ============================================ */}
+            {layers.btzPlanes && visibility.btzPlanes && principal && setbacks?.principal && style?.btzPlanes && (
+                <BTZPlanes
+                    principal={principal}
+                    setbacks={setbacks.principal}
+                    streetSides={streetSides}
+                    style={style.btzPlanes}
                 />
             )}
 
@@ -476,6 +669,65 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     lineScale={exportLineScale}
                 />
             </group>
+
+            {/* ============================================ */}
+            {/* Lot Access Arrows */}
+            {/* ============================================ */}
+            {layers.lotAccessArrows && visibility.lotAccessArrows && lot.lotAccess && (
+                <group>
+                    {lot.lotAccess.front && (
+                        <LotAccessArrow
+                            direction="front"
+                            lotWidth={lotWidth}
+                            lotDepth={lotDepth}
+                            streetSides={streetSides}
+                            style={style?.lotAccessArrows}
+                            position={annotationPositions[`lot-${lotId}-access-front`] || [0, -lotDepth / 2 + 5, 0]}
+                            onPositionChange={(pos) => setAnnotationPosition(`lot-${lotId}-access-front`, pos)}
+                        />
+                    )}
+                    {lot.lotAccess.rear && (
+                        <LotAccessArrow
+                            direction="rear"
+                            lotWidth={lotWidth}
+                            lotDepth={lotDepth}
+                            streetSides={streetSides}
+                            style={style?.lotAccessArrows}
+                            position={annotationPositions[`lot-${lotId}-access-rear`] || [0, lotDepth / 2 - 5, 0]}
+                            onPositionChange={(pos) => setAnnotationPosition(`lot-${lotId}-access-rear`, pos)}
+                        />
+                    )}
+                    {lot.lotAccess.sideStreet && (streetSides.left || streetSides.right) && (
+                        <LotAccessArrow
+                            direction="sideStreet"
+                            lotWidth={lotWidth}
+                            lotDepth={lotDepth}
+                            streetSides={streetSides}
+                            style={style?.lotAccessArrows}
+                            position={annotationPositions[`lot-${lotId}-access-sidestreet`] || [
+                                streetSides.left ? -lotWidth / 2 + 5 : lotWidth / 2 - 5,
+                                0, 0
+                            ]}
+                            onPositionChange={(pos) => setAnnotationPosition(`lot-${lotId}-access-sidestreet`, pos)}
+                        />
+                    )}
+                    {lot.lotAccess.sideInterior && (
+                        <LotAccessArrow
+                            direction="sharedDrive"
+                            lotWidth={lotWidth}
+                            lotDepth={lotDepth}
+                            streetSides={streetSides}
+                            style={style?.lotAccessArrows}
+                            bidirectional={true}
+                            position={annotationPositions[`lot-${lotId}-access-shareddrive`] || [
+                                streetSides.right ? -lotWidth / 2 + 3 : lotWidth / 2 - 3,
+                                0, 0
+                            ]}
+                            onPositionChange={(pos) => setAnnotationPosition(`lot-${lotId}-access-shareddrive`, pos)}
+                        />
+                    )}
+                </group>
+            )}
         </group>
     )
 }

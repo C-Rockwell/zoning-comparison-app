@@ -186,7 +186,7 @@ const ModelParametersTable = () => {
                 },
                 {
                     label: 'BTZ - Front (%)',
-                    visKey: 'setbacks',
+                    visKey: 'btzPlanes',
                     getValue: (lot) => lot.setbacks?.principal?.btzFront,
                     setValue: (lotId, v) => updateLotSetback(lotId, 'principal', 'btzFront', v),
                     type: 'number', min: 0, max: 100,
@@ -221,7 +221,7 @@ const ModelParametersTable = () => {
                 },
                 {
                     label: 'BTZ - Side, Street (%)',
-                    visKey: 'setbacks',
+                    visKey: 'btzPlanes',
                     getValue: (lot) => lot.setbacks?.principal?.btzSideStreet,
                     setValue: (lotId, v) => updateLotSetback(lotId, 'principal', 'btzSideStreet', v),
                     type: 'number', min: 0, max: 100,
@@ -233,28 +233,28 @@ const ModelParametersTable = () => {
             rows: [
                 {
                     label: 'Front (ft)',
-                    visKey: 'setbacks',
+                    visKey: 'accessorySetbacks',
                     getValue: (lot) => lot.setbacks?.accessory?.front,
                     setValue: (lotId, v) => updateLotSetback(lotId, 'accessory', 'front', v),
                     type: 'number', min: 0,
                 },
                 {
                     label: 'Rear (ft)',
-                    visKey: 'setbacks',
+                    visKey: 'accessorySetbacks',
                     getValue: (lot) => lot.setbacks?.accessory?.rear,
                     setValue: (lotId, v) => updateLotSetback(lotId, 'accessory', 'rear', v),
                     type: 'number', min: 0,
                 },
                 {
                     label: 'Side, Interior (ft)',
-                    visKey: 'setbacks',
+                    visKey: 'accessorySetbacks',
                     getValue: (lot) => lot.setbacks?.accessory?.sideInterior,
                     setValue: (lotId, v) => updateLotSetback(lotId, 'accessory', 'sideInterior', v),
                     type: 'number', min: 0,
                 },
                 {
                     label: 'Side, Street (ft)',
-                    visKey: 'setbacks',
+                    visKey: 'accessorySetbacks',
                     getValue: (lot) => lot.setbacks?.accessory?.sideStreet,
                     setValue: (lotId, v) => updateLotSetback(lotId, 'accessory', 'sideStreet', v),
                     type: 'number', min: 0,
@@ -390,28 +390,28 @@ const ModelParametersTable = () => {
             rows: [
                 {
                     label: 'Front',
-                    visKey: null,
+                    visKey: 'lotAccessArrows',
                     getValue: (lot) => lot.lotAccess?.front,
                     setValue: (lotId, v) => updateLotParam(lotId, 'lotAccess', { ...lots[lotId]?.lotAccess, front: v }),
                     type: 'checkbox',
                 },
                 {
-                    label: 'Side, Interior',
-                    visKey: null,
+                    label: 'Shared Drive',
+                    visKey: 'lotAccessArrows',
                     getValue: (lot) => lot.lotAccess?.sideInterior,
                     setValue: (lotId, v) => updateLotParam(lotId, 'lotAccess', { ...lots[lotId]?.lotAccess, sideInterior: v }),
                     type: 'checkbox',
                 },
                 {
                     label: 'Side, Street',
-                    visKey: null,
+                    visKey: 'lotAccessArrows',
                     getValue: (lot) => lot.lotAccess?.sideStreet,
                     setValue: (lotId, v) => updateLotParam(lotId, 'lotAccess', { ...lots[lotId]?.lotAccess, sideStreet: v }),
                     type: 'checkbox',
                 },
                 {
                     label: 'Rear',
-                    visKey: null,
+                    visKey: 'lotAccessArrows',
                     getValue: (lot) => lot.lotAccess?.rear,
                     setValue: (lotId, v) => updateLotParam(lotId, 'lotAccess', { ...lots[lotId]?.lotAccess, rear: v }),
                     type: 'checkbox',
@@ -740,10 +740,13 @@ const LayersSection = () => {
     const layerList = [
         { key: 'lotLines', label: 'Lot Lines' },
         { key: 'setbacks', label: 'Setbacks' },
+        { key: 'accessorySetbacks', label: 'Accessory Setbacks' },
         { key: 'maxSetbacks', label: 'Max Setbacks' },
+        { key: 'btzPlanes', label: 'BTZ Planes' },
         { key: 'buildings', label: 'Buildings' },
         { key: 'roof', label: 'Roof' },
         { key: 'maxHeightPlane', label: 'Max Height Plane' },
+        { key: 'lotAccessArrows', label: 'Lot Access Arrows' },
         { key: 'dimensionsLotWidth', label: 'Dim: Lot Width' },
         { key: 'dimensionsLotDepth', label: 'Dim: Lot Depth' },
         { key: 'dimensionsSetbacks', label: 'Dim: Setbacks' },
@@ -793,6 +796,8 @@ const LayersSection = () => {
 const DistrictParametersSection = () => {
     const districtParams = useDistrictParameters()
     const setDistrictParameter = useStore((s) => s.setDistrictParameter)
+    const [collapsed, setCollapsed] = useState({})
+    const toggle = (key) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))
 
     const dp = (path) => {
         const keys = path.split('.')
@@ -811,7 +816,13 @@ const DistrictParametersSection = () => {
 
             {/* Lot Dimensions */}
             <div className="mb-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--ui-text-muted)' }}>Lot Dimensions</h4>
+                <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1 cursor-pointer select-none flex items-center gap-1"
+                    style={{ color: 'var(--ui-text-muted)' }}
+                    onClick={() => toggle('lotDimensions')}>
+                    <ChevronDown className={`w-3 h-3 transition-transform ${collapsed.lotDimensions ? '-rotate-90' : ''}`} />
+                    Lot Dimensions
+                </h4>
+                {!collapsed.lotDimensions && (
                 <div className="space-y-1">
                     {[
                         { label: 'Lot Area (sf)', path: 'lotArea' },
@@ -831,11 +842,18 @@ const DistrictParametersSection = () => {
                         </div>
                     ))}
                 </div>
+                )}
             </div>
 
             {/* Setbacks - Principal */}
             <div className="mb-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--ui-text-muted)' }}>Setbacks - Principal</h4>
+                <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1 cursor-pointer select-none flex items-center gap-1"
+                    style={{ color: 'var(--ui-text-muted)' }}
+                    onClick={() => toggle('setbacksPrincipal')}>
+                    <ChevronDown className={`w-3 h-3 transition-transform ${collapsed.setbacksPrincipal ? '-rotate-90' : ''}`} />
+                    Setbacks - Principal
+                </h4>
+                {!collapsed.setbacksPrincipal && (
                 <div className="space-y-1">
                     {[
                         { label: 'Front (ft)', path: 'setbacksPrincipal.front' },
@@ -880,11 +898,18 @@ const DistrictParametersSection = () => {
                         </div>
                     ))}
                 </div>
+                )}
             </div>
 
             {/* Setbacks - Accessory */}
             <div className="mb-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--ui-text-muted)' }}>Setbacks - Accessory</h4>
+                <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1 cursor-pointer select-none flex items-center gap-1"
+                    style={{ color: 'var(--ui-text-muted)' }}
+                    onClick={() => toggle('setbacksAccessory')}>
+                    <ChevronDown className={`w-3 h-3 transition-transform ${collapsed.setbacksAccessory ? '-rotate-90' : ''}`} />
+                    Setbacks - Accessory
+                </h4>
+                {!collapsed.setbacksAccessory && (
                 <div className="space-y-1">
                     {[
                         { label: 'Front (ft)', path: 'setbacksAccessory.front' },
@@ -904,11 +929,19 @@ const DistrictParametersSection = () => {
                         </div>
                     ))}
                 </div>
+                )}
             </div>
 
             {/* Structures */}
             <div className="mb-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--ui-text-muted)' }}>Structures</h4>
+                <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1 cursor-pointer select-none flex items-center gap-1"
+                    style={{ color: 'var(--ui-text-muted)' }}
+                    onClick={() => toggle('structures')}>
+                    <ChevronDown className={`w-3 h-3 transition-transform ${collapsed.structures ? '-rotate-90' : ''}`} />
+                    Structures
+                </h4>
+                {!collapsed.structures && (
+                <div>
                 {['principal', 'accessory'].map((type) => (
                     <div key={type} className="mb-2">
                         <span className="text-[10px] capitalize font-medium" style={{ color: 'var(--ui-text-secondary)' }}>{type}</span>
@@ -932,11 +965,19 @@ const DistrictParametersSection = () => {
                         </div>
                     </div>
                 ))}
+                </div>
+                )}
             </div>
 
             {/* Lot Access */}
             <div className="mb-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--ui-text-muted)' }}>Lot Access</h4>
+                <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1 cursor-pointer select-none flex items-center gap-1"
+                    style={{ color: 'var(--ui-text-muted)' }}
+                    onClick={() => toggle('lotAccess')}>
+                    <ChevronDown className={`w-3 h-3 transition-transform ${collapsed.lotAccess ? '-rotate-90' : ''}`} />
+                    Lot Access
+                </h4>
+                {!collapsed.lotAccess && (
                 <div className="space-y-1">
                     {[
                         { label: 'Primary Street', path: 'lotAccess.primaryStreet' },
@@ -967,11 +1008,18 @@ const DistrictParametersSection = () => {
                         </div>
                     ))}
                 </div>
+                )}
             </div>
 
             {/* Parking Locations */}
             <div className="mb-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--ui-text-muted)' }}>Parking Locations</h4>
+                <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1 cursor-pointer select-none flex items-center gap-1"
+                    style={{ color: 'var(--ui-text-muted)' }}
+                    onClick={() => toggle('parkingLocations')}>
+                    <ChevronDown className={`w-3 h-3 transition-transform ${collapsed.parkingLocations ? '-rotate-90' : ''}`} />
+                    Parking Locations
+                </h4>
+                {!collapsed.parkingLocations && (
                 <div className="space-y-1">
                     {[
                         { label: 'Front', path: 'parkingLocations.front' },
@@ -1002,6 +1050,7 @@ const DistrictParametersSection = () => {
                         </div>
                     ))}
                 </div>
+                )}
             </div>
         </Section>
     )
@@ -1724,6 +1773,9 @@ const InlineStyleControls = ({ lotId, category, style }) => {
         setEntityStyle(lotId, category, property, value)
     }
 
+    // Mesh-only categories: only color + opacity (no line width/dashed)
+    const isMeshCategory = category === 'btzPlanes' || category === 'lotAccessArrows'
+
     return (
         <div
             className="rounded p-2 mt-1 space-y-1.5"
@@ -1734,16 +1786,34 @@ const InlineStyleControls = ({ lotId, category, style }) => {
                 borderColor: 'var(--ui-border)',
             }}
         >
-            <LineStyleSelector
-                style={{
-                    color: style.color ?? '#000000',
-                    width: style.width ?? 1,
-                    opacity: style.opacity ?? 1,
-                    dashed: style.dashed ?? false,
-                }}
-                onChange={handleChange}
-                showDash={category !== 'buildingFaces' && category !== 'lotFill'}
-            />
+            {isMeshCategory ? (
+                <div className="space-y-1">
+                    <ColorPicker
+                        label="Color"
+                        value={style.color ?? '#000000'}
+                        onChange={(v) => handleChange('color', v)}
+                    />
+                    <SliderInput
+                        label="Opacity"
+                        value={style.opacity ?? 1}
+                        onChange={(v) => handleChange('opacity', v)}
+                        min={0}
+                        max={1}
+                        step={0.05}
+                    />
+                </div>
+            ) : (
+                <LineStyleSelector
+                    style={{
+                        color: style.color ?? '#000000',
+                        width: style.width ?? 1,
+                        opacity: style.opacity ?? 1,
+                        dashed: style.dashed ?? false,
+                    }}
+                    onChange={handleChange}
+                    showDash={category !== 'buildingFaces' && category !== 'lotFill'}
+                />
+            )}
             {/* Apply to all lots button */}
             <button
                 onClick={() => {
@@ -1840,7 +1910,10 @@ const ModelParametersSection = () => {
     const styleCategories = [
         { key: 'lotLines', label: 'Lot Lines' },
         { key: 'setbacks', label: 'Setbacks' },
+        { key: 'accessorySetbacks', label: 'Accessory Setbacks' },
         { key: 'maxSetbacks', label: 'Max Setbacks' },
+        { key: 'btzPlanes', label: 'BTZ Planes' },
+        { key: 'lotAccessArrows', label: 'Lot Access Arrows' },
         { key: 'buildingEdges', label: 'Building Edges' },
         { key: 'buildingFaces', label: 'Building Faces' },
         { key: 'roofFaces', label: 'Roof' },
