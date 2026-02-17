@@ -231,6 +231,7 @@ const UnifiedRoadNetwork = ({
         const right = getProfileForDirection('right')
         const frontCurb = (front.sidewalk || 0) + (front.verge || 0) // 13
         const frontWalk = front.sidewalk || 0 // 6
+        const frontROW = front.rightOfWay || 50
         const rightROW = right.rightOfWay || 50
 
         const x0 = lotBounds.xMax
@@ -248,8 +249,15 @@ const UnifiedRoadNetwork = ({
             w: rightROW - (2 * frontCurb), // 24 for S1/S1
             h: frontCurb,
         }
+        const clearRect = {
+            cx: x0 + rightROW / 2,
+            cy: y0 - frontROW / 2,
+            w: rightROW,
+            h: frontROW,
+        }
 
         return {
+            clearRect,
             sidewalkRect,
             vergeRect,
             throatRect,
@@ -290,6 +298,18 @@ const UnifiedRoadNetwork = ({
             {/* Targeted front-right T-intersection correction (phase 1) */}
             {frontRightFix && (
                 <group>
+                    <mesh position={[frontRightFix.clearRect.cx, frontRightFix.clearRect.cy, 0.059]} renderOrder={3}>
+                        <planeGeometry args={[frontRightFix.clearRect.w, frontRightFix.clearRect.h]} />
+                        <meshStandardMaterial
+                            color={pavementStyle?.fillColor || '#666666'}
+                            opacity={pavementStyle?.fillOpacity ?? 1.0}
+                            transparent={(pavementStyle?.fillOpacity ?? 1.0) < 1}
+                            side={THREE.DoubleSide}
+                            depthWrite={(pavementStyle?.fillOpacity ?? 1.0) >= 0.95}
+                            roughness={1}
+                            metalness={0}
+                        />
+                    </mesh>
                     <mesh position={[frontRightFix.sidewalkRect.cx, frontRightFix.sidewalkRect.cy, 0.060]} renderOrder={3}>
                         <planeGeometry args={[frontRightFix.sidewalkRect.w, frontRightFix.sidewalkRect.h]} />
                         <meshStandardMaterial
