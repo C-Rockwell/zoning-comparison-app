@@ -177,9 +177,9 @@ const UnifiedRoadNetwork = ({
             bl: (profilesByEdge.front && profilesByEdge.left)
                 ? Math.min(getCurbDepth(profilesByEdge.front), getCurbDepth(profilesByEdge.left))
                 : 0,
-            br: (profilesByEdge.front && profilesByEdge.right)
-                ? Math.min(getCurbDepth(profilesByEdge.front), getCurbDepth(profilesByEdge.right))
-                : 0,
+            // br is handled by explicit front-right coordinate geometry below.
+            // Keep auto-rounding disabled here to prevent double curvature artifacts.
+            br: 0,
             tr: (profilesByEdge.rear && profilesByEdge.right)
                 ? Math.min(getCurbDepth(profilesByEdge.rear), getCurbDepth(profilesByEdge.right))
                 : 0,
@@ -205,7 +205,12 @@ const UnifiedRoadNetwork = ({
                 left: boundariesByEdge.left[bandIndex + 1],
             }
 
-            const shape = createBandShape(lotBounds, inner, outer, cornerLimits)
+            const shape = createBandShape(lotBounds, inner, outer, {
+                bl: cornerLimits.bl,
+                br: cornerLimits.br,
+                tr: cornerLimits.tr,
+                tl: cornerLimits.tl,
+            })
             if (!shape) continue
 
             shapes.push({
