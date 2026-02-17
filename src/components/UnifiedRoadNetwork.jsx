@@ -231,7 +231,6 @@ const UnifiedRoadNetwork = ({
         const right = getProfileForDirection('right')
         const frontCurb = (front.sidewalk || 0) + (front.verge || 0) // 13
         const frontWalk = front.sidewalk || 0 // 6
-        const frontROW = front.rightOfWay || 50
         const rightROW = right.rightOfWay || 50
 
         const x0 = lotBounds.xMax
@@ -251,9 +250,9 @@ const UnifiedRoadNetwork = ({
         }
         const clearRect = {
             cx: x0 + rightROW / 2,
-            cy: y0 - frontROW / 2,
+            cy: y0 - frontCurb / 2,
             w: rightROW,
-            h: frontROW,
+            h: frontCurb,
         }
 
         return {
