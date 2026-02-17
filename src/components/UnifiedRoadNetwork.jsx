@@ -140,12 +140,27 @@ const createQuarterDisk = (cx, cy, radius, startAngle, endAngle) => {
     return shape
 }
 
-const createQuarterAnnulus = (cx, cy, innerRadius, outerRadius, startAngle, endAngle) => {
+const createQuarterAnnulusDifferentCenters = ({
+    outerCx,
+    innerCx,
+    cy,
+    outerRadius,
+    innerRadius,
+    startAngle,
+    endAngle,
+    sweepClockwise = true,
+}) => {
     const shape = new THREE.Shape()
-    shape.moveTo(cx + Math.cos(startAngle) * outerRadius, cy + Math.sin(startAngle) * outerRadius)
-    shape.absarc(cx, cy, outerRadius, startAngle, endAngle, false)
-    shape.lineTo(cx + Math.cos(endAngle) * innerRadius, cy + Math.sin(endAngle) * innerRadius)
-    shape.absarc(cx, cy, innerRadius, endAngle, startAngle, true)
+    shape.moveTo(
+        outerCx + Math.cos(startAngle) * outerRadius,
+        cy + Math.sin(startAngle) * outerRadius
+    )
+    shape.absarc(outerCx, cy, outerRadius, startAngle, endAngle, sweepClockwise)
+    shape.lineTo(
+        innerCx + Math.cos(endAngle) * innerRadius,
+        cy + Math.sin(endAngle) * innerRadius
+    )
+    shape.absarc(innerCx, cy, innerRadius, endAngle, startAngle, !sweepClockwise)
     shape.closePath()
     return shape
 }
@@ -235,7 +250,6 @@ const UnifiedRoadNetwork = ({
 
         const x0 = lotBounds.xMax
         const y0 = lotBounds.yMin
-        const nearCx = x0
         const farCx = x0 + rightROW
         const cy = y0
 
@@ -260,10 +274,28 @@ const UnifiedRoadNetwork = ({
             sidewalkRect,
             vergeRect,
             throatRect,
-            nearSidewalkArc: createQuarterDisk(nearCx, cy, frontWalk, -Math.PI / 2, 0),
-            nearVergeArc: createQuarterAnnulus(nearCx, cy, frontWalk, frontCurb, -Math.PI / 2, 0),
-            farSidewalkArc: createQuarterDisk(farCx, cy, frontWalk, -Math.PI, -Math.PI / 2),
-            farVergeArc: createQuarterAnnulus(farCx, cy, frontWalk, frontCurb, -Math.PI, -Math.PI / 2),
+            nearSidewalkArc: createQuarterDisk(x0 + frontWalk, cy, frontWalk, Math.PI, Math.PI * 1.5),
+            nearVergeArc: createQuarterAnnulusDifferentCenters({
+                outerCx: x0 + frontCurb,
+                innerCx: x0 + frontWalk,
+                cy,
+                outerRadius: frontCurb,
+                innerRadius: frontWalk,
+                startAngle: Math.PI,
+                endAngle: Math.PI * 1.5,
+                sweepClockwise: false,
+            }),
+            farSidewalkArc: createQuarterDisk(farCx - frontWalk, cy, frontWalk, 0, -Math.PI / 2),
+            farVergeArc: createQuarterAnnulusDifferentCenters({
+                outerCx: farCx - frontCurb,
+                innerCx: farCx - frontWalk,
+                cy,
+                outerRadius: frontCurb,
+                innerRadius: frontWalk,
+                startAngle: 0,
+                endAngle: -Math.PI / 2,
+                sweepClockwise: true,
+            }),
         }
     }, [enabledDirections, lotBounds])
 
