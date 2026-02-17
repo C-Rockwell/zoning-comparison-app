@@ -252,10 +252,16 @@ const UnifiedRoadNetwork = ({
 
         return {
             clearRect,
-            sidewalkTopRect: {
-                cx: x0 + rightROW / 2,
+            sidewalkTopLeftRect: {
+                cx: x0 + (frontWalk / 2),
                 cy: y0 - frontWalk / 2,
-                w: Math.max(0, rightROW - (2 * frontWalk)),
+                w: frontWalk,
+                h: frontWalk,
+            },
+            sidewalkTopRightRect: {
+                cx: x0 + rightROW - (frontWalk / 2),
+                cy: y0 - frontWalk / 2,
+                w: frontWalk,
                 h: frontWalk,
             },
             sidewalkBottomRect: {
@@ -264,22 +270,16 @@ const UnifiedRoadNetwork = ({
                 w: rightROW,
                 h: frontWalk,
             },
-            sidewalkNearRect: {
-                cx: x0 + (frontWalk / 2),
-                cy: y0 - ((frontROW + frontWalk) / 2),
-                w: frontWalk,
-                h: Math.max(0, frontROW - frontWalk),
-            },
-            sidewalkFarRect: {
-                cx: x0 + rightROW - (frontWalk / 2),
-                cy: y0 - ((frontROW + frontWalk) / 2),
-                w: frontWalk,
-                h: Math.max(0, frontROW - frontWalk),
-            },
-            vergeTopRect: {
-                cx: x0 + rightROW / 2,
+            vergeTopLeftRect: {
+                cx: x0 + (frontCurb / 2),
                 cy: y0 - ((frontWalk + frontCurb) / 2),
-                w: Math.max(0, rightROW - (2 * frontCurb)),
+                w: frontCurb,
+                h: vergeDepth,
+            },
+            vergeTopRightRect: {
+                cx: x0 + rightROW - (frontCurb / 2),
+                cy: y0 - ((frontWalk + frontCurb) / 2),
+                w: frontCurb,
                 h: vergeDepth,
             },
             vergeBottomRect: {
@@ -288,17 +288,11 @@ const UnifiedRoadNetwork = ({
                 w: rightROW,
                 h: vergeDepth,
             },
-            vergeNearRect: {
-                cx: x0 + frontWalk + (vergeDepth / 2),
-                cy: y0 - ((frontROW + frontCurb) / 2),
-                w: vergeDepth,
-                h: Math.max(0, frontROW - frontCurb),
-            },
-            vergeFarRect: {
-                cx: x0 + rightROW - frontWalk - (vergeDepth / 2),
-                cy: y0 - ((frontROW + frontCurb) / 2),
-                w: vergeDepth,
-                h: Math.max(0, frontROW - frontCurb),
+            throatRect: {
+                cx: x0 + rightROW / 2,
+                cy: y0 - frontCurb / 2,
+                w: Math.max(0, rightROW - (2 * frontCurb)),
+                h: frontCurb,
             },
             nearSidewalkArc: createQuarterDisk(x0, y0, frontWalk, -Math.PI / 2, 0),
             nearVergeArc: createQuarterAnnulus(x0, y0, frontWalk, frontCurb, -Math.PI / 2, 0),
@@ -349,7 +343,20 @@ const UnifiedRoadNetwork = ({
                             metalness={0}
                         />
                     </mesh>
-                    {[frontRightFix.vergeTopRect, frontRightFix.vergeBottomRect, frontRightFix.vergeNearRect, frontRightFix.vergeFarRect].map((r, i) => (
+                    <mesh position={[frontRightFix.throatRect.cx, frontRightFix.throatRect.cy, 0.060]} renderOrder={3}>
+                        <planeGeometry args={[frontRightFix.throatRect.w, frontRightFix.throatRect.h]} />
+                        <meshStandardMaterial
+                            color={pavementStyle?.fillColor || '#666666'}
+                            opacity={pavementStyle?.fillOpacity ?? 1.0}
+                            transparent={(pavementStyle?.fillOpacity ?? 1.0) < 1}
+                            side={THREE.DoubleSide}
+                            depthWrite={(pavementStyle?.fillOpacity ?? 1.0) >= 0.95}
+                            roughness={1}
+                            metalness={0}
+                        />
+                    </mesh>
+
+                    {[frontRightFix.vergeTopLeftRect, frontRightFix.vergeTopRightRect, frontRightFix.vergeBottomRect].map((r, i) => (
                         <mesh key={`fr-verge-rect-${i}`} position={[r.cx, r.cy, 0.060]} renderOrder={3}>
                             <planeGeometry args={[r.w, r.h]} />
                             <meshStandardMaterial
@@ -372,7 +379,7 @@ const UnifiedRoadNetwork = ({
                         <meshStandardMaterial color={vergeStyle?.fillColor || '#c4a77d'} opacity={vergeStyle?.fillOpacity ?? 1.0} transparent={(vergeStyle?.fillOpacity ?? 1.0) < 1} side={THREE.DoubleSide} depthWrite={(vergeStyle?.fillOpacity ?? 1.0) >= 0.95} roughness={1} metalness={0} />
                     </mesh>
 
-                    {[frontRightFix.sidewalkTopRect, frontRightFix.sidewalkBottomRect, frontRightFix.sidewalkNearRect, frontRightFix.sidewalkFarRect].map((r, i) => (
+                    {[frontRightFix.sidewalkTopLeftRect, frontRightFix.sidewalkTopRightRect, frontRightFix.sidewalkBottomRect].map((r, i) => (
                         <mesh key={`fr-sidewalk-rect-${i}`} position={[r.cx, r.cy, 0.062]} renderOrder={3}>
                             <planeGeometry args={[r.w, r.h]} />
                             <meshStandardMaterial
