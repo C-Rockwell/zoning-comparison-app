@@ -258,6 +258,12 @@ const UnifiedRoadNetwork = ({
                 w: Math.max(0, rightROW - (2 * frontWalk)),
                 h: frontWalk,
             },
+            sidewalkBottomRect: {
+                cx: x0 + rightROW / 2,
+                cy: y0 - frontROW + (frontWalk / 2),
+                w: rightROW,
+                h: frontWalk,
+            },
             sidewalkNearRect: {
                 cx: x0 + (frontWalk / 2),
                 cy: y0 - ((frontROW + frontWalk) / 2),
@@ -274,6 +280,12 @@ const UnifiedRoadNetwork = ({
                 cx: x0 + rightROW / 2,
                 cy: y0 - ((frontWalk + frontCurb) / 2),
                 w: Math.max(0, rightROW - (2 * frontCurb)),
+                h: vergeDepth,
+            },
+            vergeBottomRect: {
+                cx: x0 + rightROW / 2,
+                cy: y0 - ((frontROW - frontWalk) + (vergeDepth / 2)),
+                w: rightROW,
                 h: vergeDepth,
             },
             vergeNearRect: {
@@ -337,7 +349,7 @@ const UnifiedRoadNetwork = ({
                             metalness={0}
                         />
                     </mesh>
-                    {[frontRightFix.vergeTopRect, frontRightFix.vergeNearRect, frontRightFix.vergeFarRect].map((r, i) => (
+                    {[frontRightFix.vergeTopRect, frontRightFix.vergeBottomRect, frontRightFix.vergeNearRect, frontRightFix.vergeFarRect].map((r, i) => (
                         <mesh key={`fr-verge-rect-${i}`} position={[r.cx, r.cy, 0.060]} renderOrder={3}>
                             <planeGeometry args={[r.w, r.h]} />
                             <meshStandardMaterial
@@ -360,7 +372,7 @@ const UnifiedRoadNetwork = ({
                         <meshStandardMaterial color={vergeStyle?.fillColor || '#c4a77d'} opacity={vergeStyle?.fillOpacity ?? 1.0} transparent={(vergeStyle?.fillOpacity ?? 1.0) < 1} side={THREE.DoubleSide} depthWrite={(vergeStyle?.fillOpacity ?? 1.0) >= 0.95} roughness={1} metalness={0} />
                     </mesh>
 
-                    {[frontRightFix.sidewalkTopRect, frontRightFix.sidewalkNearRect, frontRightFix.sidewalkFarRect].map((r, i) => (
+                    {[frontRightFix.sidewalkTopRect, frontRightFix.sidewalkBottomRect, frontRightFix.sidewalkNearRect, frontRightFix.sidewalkFarRect].map((r, i) => (
                         <mesh key={`fr-sidewalk-rect-${i}`} position={[r.cx, r.cy, 0.062]} renderOrder={3}>
                             <planeGeometry args={[r.w, r.h]} />
                             <meshStandardMaterial
