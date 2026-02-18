@@ -232,6 +232,8 @@ export const createDefaultLotVisibility = () => ({
     buildings: true,
     roof: true,
     maxHeightPlane: true,
+    maxHeightPlanePrincipal: true,
+    maxHeightPlaneAccessory: true,
     dimensions: true,
     accessoryBuilding: true,
     maxSetbacks: true,
@@ -467,8 +469,8 @@ export const useStore = create(
                 renderSettings: {
                     quality: 'high', // 'low' | 'medium' | 'high'
                     ambientOcclusion: true,
-                    aoIntensity: 1.5,
-                    aoRadius: 0.5,
+                    aoIntensity: 0.8,
+                    aoRadius: 0.3,
                     toneMapping: true,
                     antialiasing: true,
                     environmentIntensity: 0.8,
@@ -500,7 +502,9 @@ export const useStore = create(
                         gimbal: true,
                         origin: true,
                         roadModule: true, // Road module layer
-                        maxHeightPlane: true, // Max height plane layer
+                        maxHeightPlane: true, // Max height plane layer (legacy)
+                        maxHeightPlanePrincipal: true, // Principal max height plane
+                        maxHeightPlaneAccessory: true, // Accessory max height plane
                         roof: true, // Roof layer
                         // Annotation & intersection layers
                         annotationLabels: false, // Master toggle for all annotation labels
@@ -1563,6 +1567,18 @@ export const useStore = create(
                 updateLotParam: (lotId, key, value) => set((state) => {
                     const lot = state.entities.lots[lotId];
                     if (!lot) return state;
+
+                    // Clear stale lot access arrow positions when dimensions change
+                    let annotationPositions = state.annotationPositions;
+                    if (key === 'lotWidth' || key === 'lotDepth') {
+                        const prefix = `lot-${lotId}-access-`;
+                        const filtered = { ...annotationPositions };
+                        for (const k of Object.keys(filtered)) {
+                            if (k.startsWith(prefix)) delete filtered[k];
+                        }
+                        annotationPositions = filtered;
+                    }
+
                     return {
                         entities: {
                             ...state.entities,
@@ -1571,6 +1587,7 @@ export const useStore = create(
                                 [lotId]: { ...lot, [key]: value },
                             },
                         },
+                        annotationPositions,
                     };
                 }),
 
@@ -2503,7 +2520,7 @@ export const useStore = create(
                         lineDashed: false,
                         lineOpacity: 1.0,
                         fillColor: '#666666',
-                        fillOpacity: 0.8,
+                        fillOpacity: 1.0,
                     },
                     // Left side styles
                     leftParking: {
@@ -2512,7 +2529,7 @@ export const useStore = create(
                         lineDashed: false,
                         lineOpacity: 1.0,
                         fillColor: '#888888',
-                        fillOpacity: 0.6,
+                        fillOpacity: 1.0,
                     },
                     leftVerge: {
                         lineColor: '#000000',
@@ -2520,7 +2537,7 @@ export const useStore = create(
                         lineDashed: false,
                         lineOpacity: 1.0,
                         fillColor: '#c4a77d',
-                        fillOpacity: 0.7,
+                        fillOpacity: 1.0,
                     },
                     leftSidewalk: {
                         lineColor: '#000000',
@@ -2528,7 +2545,7 @@ export const useStore = create(
                         lineDashed: false,
                         lineOpacity: 1.0,
                         fillColor: '#90EE90',
-                        fillOpacity: 0.7,
+                        fillOpacity: 1.0,
                     },
                     leftTransitionZone: {
                         lineColor: '#000000',
@@ -2536,7 +2553,7 @@ export const useStore = create(
                         lineDashed: false,
                         lineOpacity: 1.0,
                         fillColor: '#98D8AA',
-                        fillOpacity: 0.6,
+                        fillOpacity: 1.0,
                     },
                     // Right side styles
                     rightParking: {
@@ -2545,7 +2562,7 @@ export const useStore = create(
                         lineDashed: false,
                         lineOpacity: 1.0,
                         fillColor: '#888888',
-                        fillOpacity: 0.6,
+                        fillOpacity: 1.0,
                     },
                     rightVerge: {
                         lineColor: '#000000',
@@ -2553,7 +2570,7 @@ export const useStore = create(
                         lineDashed: false,
                         lineOpacity: 1.0,
                         fillColor: '#c4a77d',
-                        fillOpacity: 0.7,
+                        fillOpacity: 1.0,
                     },
                     rightSidewalk: {
                         lineColor: '#000000',
@@ -2561,7 +2578,7 @@ export const useStore = create(
                         lineDashed: false,
                         lineOpacity: 1.0,
                         fillColor: '#90EE90',
-                        fillOpacity: 0.7,
+                        fillOpacity: 1.0,
                     },
                     rightTransitionZone: {
                         lineColor: '#000000',
@@ -2569,7 +2586,17 @@ export const useStore = create(
                         lineDashed: false,
                         lineOpacity: 1.0,
                         fillColor: '#98D8AA',
-                        fillOpacity: 0.6,
+                        fillOpacity: 1.0,
+                    },
+                    // Intersection fill style (where perpendicular roads overlap)
+                    intersectionFill: {
+                        fillColor: '#666666',
+                        fillOpacity: 1.0,
+                    },
+                    // Alley intersection fill style (S3 corners — independent from main intersection fills)
+                    alleyIntersectionFill: {
+                        fillColor: '#666666',
+                        fillOpacity: 1.0,
                     },
                 },
                 // ============================================
@@ -2633,6 +2660,8 @@ export const useStore = create(
                     for (const key of zoneKeys) {
                         if (updated[key]) updated[key] = { ...updated[key], fillColor: color, lineColor: color }
                     }
+                    if (updated.intersectionFill) updated.intersectionFill = { ...updated.intersectionFill, fillColor: color }
+                    if (updated.alleyIntersectionFill) updated.alleyIntersectionFill = { ...updated.alleyIntersectionFill, fillColor: color }
                     return { roadModuleStyles: updated }
                 }),
 
@@ -2643,6 +2672,8 @@ export const useStore = create(
                     for (const key of zoneKeys) {
                         if (updated[key]) updated[key] = { ...updated[key], fillOpacity: opacity }
                     }
+                    if (updated.intersectionFill) updated.intersectionFill = { ...updated.intersectionFill, fillOpacity: opacity }
+                    if (updated.alleyIntersectionFill) updated.alleyIntersectionFill = { ...updated.alleyIntersectionFill, fillOpacity: opacity }
                     return { roadModuleStyles: updated }
                 }),
 
@@ -2943,7 +2974,7 @@ export const useStore = create(
             }),
             {
                 name: 'zoning-app-storage',
-                version: 22, // v22: split building styles into principal/accessory variants
+                version: 24, // v24: alleyIntersectionFill style
                 migrate: (persistedState, version) => {
                     // Split dimensionsLot into dimensionsLotWidth and dimensionsLotDepth
                     if (persistedState.viewSettings && persistedState.viewSettings.layers && persistedState.viewSettings.layers.dimensionsLot !== undefined) {
@@ -3566,9 +3597,42 @@ export const useStore = create(
                         }
                     }
 
+                    if (version < 23) {
+                        // v23: Fix remaining sub-1.0 fillOpacity defaults that v17 missed (0.6 values)
+                        const rms = persistedState.roadModuleStyles;
+                        if (rms) {
+                            const allZoneKeys = [
+                                'roadWidth', 'leftParking', 'leftVerge', 'leftSidewalk', 'leftTransitionZone',
+                                'rightParking', 'rightVerge', 'rightSidewalk', 'rightTransitionZone',
+                            ];
+                            for (const key of allZoneKeys) {
+                                if (rms[key] && rms[key].fillOpacity != null && rms[key].fillOpacity < 1) {
+                                    rms[key].fillOpacity = 1.0;
+                                }
+                            }
+                        }
+                        // v23: Reduce AO intensity/radius to prevent dark artifacts at road fillet corners
+                        if (persistedState.renderSettings) {
+                            if (persistedState.renderSettings.aoIntensity >= 1.5) {
+                                persistedState.renderSettings.aoIntensity = 0.8;
+                            }
+                            if (persistedState.renderSettings.aoRadius >= 0.5) {
+                                persistedState.renderSettings.aoRadius = 0.3;
+                            }
+                        }
+                    }
+
+                    if (version < 24) {
+                        // v24: Add alleyIntersectionFill style
+                        const rms = persistedState.roadModuleStyles;
+                        if (rms && !rms.alleyIntersectionFill) {
+                            rms.alleyIntersectionFill = { fillColor: '#666666', fillOpacity: 1.0 };
+                        }
+                    }
+
                     return {
                         ...persistedState,
-                        version: 22
+                        version: 24
                     };
                 },
                 partialize: (state) => ({
@@ -3622,6 +3686,13 @@ export const useStore = create(
                             }
                         }
                     }
+                    // Patch missing roadModuleStyles keys
+                    if (merged.roadModuleStyles && !merged.roadModuleStyles.intersectionFill) {
+                        merged.roadModuleStyles.intersectionFill = { fillColor: '#666666', fillOpacity: 1.0 };
+                    }
+                    if (merged.roadModuleStyles && !merged.roadModuleStyles.alleyIntersectionFill) {
+                        merged.roadModuleStyles.alleyIntersectionFill = { fillColor: '#666666', fillOpacity: 1.0 };
+                    }
                     // Reset transient batch export state on hydration
                     if (merged.viewSettings) {
                         merged.viewSettings.exportQueue = []
@@ -3629,7 +3700,7 @@ export const useStore = create(
                     }
                     // Patch missing viewSettings.layers keys
                     if (merged.viewSettings?.layers) {
-                        const layerDefaults = { maxSetbacks: true, btzPlanes: true, accessorySetbacks: true, lotAccessArrows: true };
+                        const layerDefaults = { maxSetbacks: true, btzPlanes: true, accessorySetbacks: true, lotAccessArrows: true, maxHeightPlanePrincipal: true, maxHeightPlaneAccessory: true };
                         for (const [key, val] of Object.entries(layerDefaults)) {
                             if (merged.viewSettings.layers[key] === undefined) {
                                 merged.viewSettings.layers[key] = val;

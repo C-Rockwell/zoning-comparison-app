@@ -67,11 +67,7 @@ const CameraHandler = ({ controlsRef }) => {
                     const index = parseInt(cameraView.split('-')[1])
                     const viewData = useStore.getState().savedViews[index]
 
-                    if (viewData) {
-                        // Restore saved view
-                        // If it was saved in Ortho, should we switch to Ortho?
-                        // For now, let's respect the current projection or maybe store projection too?
-                        // Let's just restore position/target.
+                    if (viewData && viewData.position && viewData.target) {
                         const { position, target, zoom } = viewData
                         controls.setLookAt(
                             position.x, position.y, position.z,

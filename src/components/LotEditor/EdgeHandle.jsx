@@ -93,11 +93,12 @@ const EdgeHandle = ({ v1, v2, edgeIndex, onExtrude, offsetGroupX = 0 }) => {
         // Project movement onto perpendicular direction
         const distance = dx * perpDir.x + dy * perpDir.y
 
-        // Only update if distance changed significantly
+        // Only update if distance changed significantly — send DELTA, not cumulative
         if (Math.abs(distance - initialDistanceRef.current) > 0.5) {
+            const delta = distance - initialDistanceRef.current
             initialDistanceRef.current = distance
             if (onExtrude) {
-                onExtrude(edgeIndex, distance)
+                onExtrude(edgeIndex, delta)
             }
         }
     }

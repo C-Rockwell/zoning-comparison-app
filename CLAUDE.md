@@ -1,476 +1,136 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Project Overview
 
-A React Three Fiber application with two working modules:
-1. **Comparison Module** — Side-by-side existing vs. proposed zoning with split-screen 3D view
-2. **District Module** — Multi-lot composition with up to 5 lots, principal + accessory buildings, multi-direction roads
+React Three Fiber zoning visualization app with two modules:
+1. **Comparison Module** — Side-by-side existing vs. proposed zoning (split-screen 3D)
+2. **District Module** — Multi-lot composition (up to 5 lots), principal + accessory buildings, multi-direction roads
 
-Features real-time 3D styling, enhanced dimension annotations (multi-plane, billboard text, angular dimensions), annotation labels (lot/road/building labels with drag-to-reposition), road intersection fillets (curved corner geometry), sun simulation, multi-format export (PNG/JPG/SVG/OBJ/GLB/DAE/DXF/IFC), CSV import (lots + district parameters), batch export (ZIP of multiple saved view × camera angle diagrams), and keyboard shortcuts. Includes an Express.js backend for project persistence with snapshots and layer states.
-
-## Navigation Reference
-See `CODEBASE_NAV.md` for a complete file/function/action index. Consult it BEFORE searching the codebase. If you make significant structural changes (new files, renamed components, new store actions, moved utilities), update CODEBASE_NAV.md to reflect those changes.
+Express.js backend for project persistence. See `CODEBASE_NAV.md` for file/function/action index — consult it BEFORE searching the codebase. Update it when making structural changes.
 
 ## Commands
 
-All commands run from `zoning-comparison-app/`.
-
 ```bash
-npm run dev              # Start both Vite frontend and Express backend concurrently
-npm run dev:client       # Start only Vite frontend (port 5173)
-npm run dev:server       # Start only Express backend (port 3001)
-npm run build            # Production build (outputs to /dist)
-npm run lint             # Run ESLint
-npm run preview          # Preview production build
+npm run dev              # Start Vite frontend + Express backend
+npm run dev:client       # Vite only (port 5173)
+npm run dev:server       # Express only (port 3001)
+npm run build            # Production build
+npm run lint             # ESLint
 ```
 
-## Architecture
+## Tech Stack
 
-### Technology Stack
-- **Frontend**: React 19 + Vite 7 + Three.js 0.182 via @react-three/fiber 9.4
-- **Routing**: react-router-dom 7 with HashRouter
-- **3D Utilities**: @react-three/drei (camera, gizmo, grid), @react-three/postprocessing (AO, SMAA)
-- **State**: Zustand 5 with Zundo 2.3 (undo/redo, 50-step history)
-- **Styling**: Tailwind CSS 3.4 + CSS variables for full theming (`var(--ui-*)` on all components)
-- **Icons**: Lucide React
-- **Backend**: Express 5 on port 3001 (proxied via Vite dev server)
-- **No TypeScript, no tests**
+React 19 + Vite 7 + Three.js 0.182 via @react-three/fiber 9.4 | Zustand 5 + Zundo 2.3 (undo/redo, 50-step) | Tailwind CSS 3.4 + CSS variables (`var(--ui-*)`) | Express 5 backend on port 3001 | react-router-dom 7 (HashRouter) | Lucide React icons | **No TypeScript, no tests**
 
-### Key Directories
-```
-zoning-comparison-app/
-├── src/
-│   ├── components/
-│   │   ├── Viewer3D.jsx              # Comparison 3D canvas, controls, export panel (~449 lines)
-│   │   ├── SceneContent.jsx          # Comparison 3D rendering: lots, buildings, roads, annotations, fillets (~833 lines)
-│   │   ├── ParameterPanel.jsx        # Comparison sidebar: params, inline styles, layers, annotations (~1,809 lines)
-│   │   ├── Exporter.jsx              # Multi-format export engine, module-aware IFC, batch export orchestrator (~554 lines)
-│   │   ├── ProjectManager.jsx        # Project CRUD, module switcher, Sun controls, Home button (~450 lines)
-│   │   ├── StateManager.jsx          # Views (snapshots) + layer states UI (~320 lines)
-│   │   ├── RoadModule.jsx            # Parametric road with direction prop (front/left/right/rear) (~343 lines)
-│   │   ├── Dimension.jsx             # Enhanced dimension lines: multi-plane, billboard, backgrounds (~231 lines)
-│   │   ├── CameraHandler.jsx         # Camera preset handling (91 lines)
-│   │   ├── SunControls.jsx           # Sun controls dropdown: rotation, angle, intensity, shadows (~139 lines)
-│   │   ├── StartScreen.jsx           # App entry: Sandbox / New Project / Open Existing (~438 lines)
-│   │   ├── DistrictViewer.jsx        # District 3D viewer with SharedCanvas (~203 lines)
-│   │   ├── DistrictSceneContent.jsx  # District 3D: multi-lot layout, roads, intersection fills, fillets, S3 T-junctions (~615 lines)
-│   │   ├── DistrictParameterPanel.jsx # District sidebar: model setup, params, styles, road styles, annotations, batch export (~2,359 lines)
-│   │   ├── SharedCanvas.jsx          # Shared R3F Canvas infra: lighting, sun/studio toggle, post-processing (~316 lines)
-│   │   ├── LotEntity.jsx             # Single lot entity renderer with annotations (~786 lines)
-│   │   ├── ImportWizard.jsx          # 3-step CSV import wizard: lot data + district parameters (~822 lines)
-│   │   ├── AnnotationText.jsx        # Shared text component: billboard/follow-line/fixed modes (~143 lines)
-│   │   ├── DraggableLabel.jsx        # Drag-to-reposition label with leader lines (~171 lines)
-│   │   ├── LotAnnotations.jsx        # Lot/setback/building annotation labels (~250 lines)
-│   │   ├── RoadAnnotations.jsx       # Road name and zone annotation labels (~232 lines)
-│   │   ├── LotAccessArrow.jsx         # Draggable 2D arrow for lot access directions (~321 lines)
-│   │   ├── RoadIntersectionFillet.jsx # Curved corner geometry at road intersections (~122 lines)
-│   │   ├── LeaderCallout.jsx         # Leader line with arrow pointing to feature (~98 lines)
-│   │   ├── AngularDimension.jsx      # Arc dimension for angles/pitch (~154 lines)
-│   │   ├── StyleEditor.jsx           # Comparison module inline style controls (~1,174 lines, not imported — legacy)
-│   │   ├── LotEditor/               # Polygon lot vertex editing (index + PolygonLot + handles + EdgeHandle + MidpointHandle + VertexHandle)
-│   │   ├── BuildingEditor/           # Polygon building editing + roof rendering
-│   │   │   ├── index.jsx            # Orchestrator: rect/polygon floors, handles, dimensions (~504 lines)
-│   │   │   ├── HeightHandle.jsx     # Draggable sphere for vertical height adjustment (~106 lines)
-│   │   │   ├── PolygonBuilding.jsx  # ExtrudeGeometry per-floor renderer (~80 lines)
-│   │   │   └── RoofMesh.jsx         # Roof geometry renderer (shed/gabled/hipped) (~67 lines)
-│   │   └── ui/                       # Reusable UI atoms
-│   │       ├── Section.jsx           # Collapsible section wrapper
-│   │       ├── ColorPicker.jsx       # Color input with ring overlay
-│   │       ├── SliderInput.jsx       # Range + number input combo
-│   │       └── LineStyleSelector.jsx # Solid/dashed line style toggle
-│   ├── store/useStore.js             # Centralized Zustand store (~3,653 lines, v22)
-│   ├── services/api.js               # REST API client for backend (~150 lines)
-│   ├── hooks/
-│   │   ├── useSunPosition.js         # SunCalc-based sun position hook (~121 lines)
-│   │   ├── useEntityStore.js         # Entity system selector hooks (~145 lines)
-│   │   ├── useAutoSave.js            # Periodic auto-save hook (~45 lines)
-│   │   └── useKeyboardShortcuts.js   # Cmd+Z/S/Shift+Z, M (move), Delete, Escape shortcuts (~114 lines)
-│   ├── utils/
-│   │   ├── ifcGenerator.js           # IFC4 BIM generator: generateIFC + generateDistrictIFC (~755 lines)
-│   │   ├── roofGeometry.js           # Roof geometry computation (shed/gabled/hipped) (~301 lines)
-│   │   ├── importParser.js           # CSV parser + field mapping + auto-match + district params (~502 lines)
-│   │   ├── formatUnits.js            # Unit formatting: feet, feet-inches, meters (~36 lines)
-│   │   ├── dimensionLayout.js        # Auto-stacking parallel dimensions (~95 lines)
-│   │   └── intersectionGeometry.js   # Road corner fillet arc geometry (~266 lines)
-│   ├── App.jsx                       # Root: routing, theme, toast, auto-save, keyboard shortcuts
-│   └── main.jsx                      # React entry point with HashRouter
-├── server/
-│   ├── index.js                      # Express setup, CORS, 50MB limit
-│   └── routes/
-│       ├── config.js                 # GET/PUT projects directory config
-│       ├── projects.js               # Project CRUD with folder structure
-│       ├── exports.js                # Save/list/delete exported files
-│       ├── snapshots.js              # Full state snapshots
-│       └── layer-states.js           # Style-only snapshots
-├── _archive/                         # Old briefing/research docs (reference only)
-├── DEVELOPMENT_STRATEGY.md           # Original roadmap (largely completed)
-├── package.json
-├── vite.config.js                    # React plugin + /api proxy to :3001
-├── tailwind.config.js
-├── eslint.config.js
-└── launch-zoning-app.command         # macOS convenience launcher
-```
+## Two Module Architecture
 
-### Two Module Architecture
-
-**Comparison Module** (legacy, fully functional):
-- Route: `/app` with `activeModule === 'comparison'`
+**Comparison Module** (legacy): Route `/app` + `activeModule === 'comparison'`
 - Components: `Viewer3D` + `ParameterPanel` + `SceneContent`
-- State: `existing` / `proposed` objects with accessory buildings + comparison roads
-- Inline style controls in ParameterPanel (StyleEditor.jsx exists but is unused/legacy)
+- State: `existing` / `proposed` objects + `comparisonRoads`
 
-**District Module** (new, entity-based):
-- Route: `/app` with `activeModule === 'district'`
+**District Module** (entity-based): Route `/app` + `activeModule === 'district'`
 - Components: `DistrictViewer` + `DistrictParameterPanel` + `DistrictSceneContent` + `LotEntity`
-- State: `entities.lots[lotId]` with up to 5 lots, each having principal + accessory buildings
-- Multi-direction roads: front/left/right/rear with S1/S2/S3 types, roads extend to connect at corners
-- Lot layout: Lot 1 extends in positive X from origin (0,0 = front-left corner), Lots 2+ extend in negative X
-- Layer visibility: global layer toggles (Layers panel) override per-lot visibility (`layers.X && visibility.X`)
-- MODEL PARAMETERS subsections are collapsible with chevron toggle
-- Sun Controls: `<SunControls />` dropdown in `ProjectManager.jsx` top bar (rotation, angle, intensity, shadows)
-- Sidebar sections: Model Setup → Layers → Annotations → District Parameters → Model Parameters → **Styles** → Building/Roof → Road Modules → Road Module Styles → Views → Batch Export
+- State: `entities.lots[lotId]` — each lot has `buildings: { principal, accessory }` + expanded setbacks
+- Lot layout: Lot 1 in +X from origin (0,0 = front-left corner), Lots 2+ in -X
+- Visibility: `layers.X && lotVisibility[lotId].X` (global layers override per-lot)
+- Sidebar order: Model Setup → Layers → Annotations → District Parameters → Model Parameters → Styles → Analytics → Building/Roof → Road Modules → Road Module Styles → Views → Batch Export
 
-### State Structure (useStore.js)
+## State Structure (useStore.js ~3,700 lines, v24)
 
-**Legacy Comparison Module state**: Two parallel condition objects (`existing` and `proposed`), each with:
-- Lot dimensions, polygon geometry (vertices, mode: rectangle/polygon)
-- Building dimensions, position (X/Y), stories (firstFloorHeight, upperFloorHeight, buildingStories)
-- Building polygon geometry (mode: rectangle/polygon, vertices), selection state
-- Accessory building: accessoryWidth/Depth/Stories/Height/Roof/BuildingGeometry + 11 dedicated actions
-- Roof settings (type: flat/shed/gabled/hipped, ridgeDirection, shedDirection, overrideHeight)
-- Setbacks (front, rear, left, right)
-- Max height plane settings
-- **comparisonRoads**: `{ left: { enabled, type, rightOfWay, roadWidth, ... }, right: {...}, rear: {...} }`
+**Entity System** (District):
+- `entities.lots[lotId]` — lot data with buildings, setbacks (principal + accessory)
+- `entityOrder` — lot IDs in display order
+- `entityStyles[lotId]` — per-lot styles (12 categories)
+- `lotVisibility[lotId]` — per-lot visibility toggles
+- `modelSetup` — numLots, streetEdges, streetTypes (S1/S2/S3)
+- `districtParameters` — informational zoning data (not visualized)
+- Factory functions: `createDefaultLot()`, `createDefaultLotStyle()`, `createDefaultRoadModule()`, `createDefaultLotVisibility()`
 
-**Entity System (District Module)** — coexists with legacy state:
-- **entities**: `{ lots: { [lotId]: lotData }, roadModules: { [roadId]: roadData } }`
-- **entityOrder**: Array of lot IDs in display order (up to 5)
-- **entityStyles**: `{ [lotId]: styleData }` — per-lot style settings
-- **lotVisibility**: `{ [lotId]: { lotLines, setbacks, buildings, ... } }` — per-lot visibility toggles
-- **modelSetup**: numLots, streetEdges (front/left/right/rear), streetTypes (S1/S2/S3)
-- **districtParameters**: Informational/reference zoning data (not visualized)
-- Each lot has `buildings: { principal: {...}, accessory: {...} }` with independent params/roof/geometry
-- Each lot has expanded setbacks: `{ principal: { front, maxFront, btzFront, ... }, accessory: { ... } }`
-- Factory functions exported: `createDefaultLot()`, `createDefaultLotStyle()`, `createDefaultRoadModule()`, `createDefaultLotVisibility()`
+**Other key state**: `viewSettings` (camera, export, batch queue), `layerVisibility` (26+ layers), `dimensionSettings`, `annotationSettings`, `annotationPositions`, `styleSettings`, `roadModule`, `roadModuleStyles` (11 categories), `sunSettings`, `moveMode` (transient, excluded from persist/Zundo)
 
-Additional top-level state:
-- **activeModule**: `'comparison'` | `'district'`
-- **autoSave**: `{ enabled, intervalMs, lastSavedAt, isDirty }` — with `setAutoSaveEnabled`, `markDirty`, `markSaved` actions
-- **viewSettings**: camera mode, projection (ortho/perspective), export format/resolution, batch export queue (`exportQueue`, `isBatchExporting`)
-- **layerVisibility**: 26+ toggleable layers (lotLines, setbacks, buildings, roof, grid, roadModule, origin, ground, roadIntersections, annotationLabels, labelLotNames, labelLotEdges, labelSetbacks, labelRoadNames, labelRoadZones, labelBuildings, btzPlanes, accessorySetbacks, lotAccessArrows, etc.) — global layers act as master override via `&&` with per-lot visibility
-- **dimensionSettings**: text/line colors, font, custom labels per dimension, textMode (follow-line/billboard), textBackground, autoStack, unitFormat
-- **annotationSettings**: textRotation (billboard/fixed), fontSize, colors, background, leader line settings, unitFormat
-- **annotationPositions**: `{ [annotationId]: [x,y,z] | null }` — persisted custom label positions for dragged annotations
-- **styleSettings**: per-condition colors/opacity/line styles with per-side overrides
-- **roadModule**: shared front road parameters + per-zone left/right styles
-- **roadModuleStyles**: 10 style categories for road zone colors/widths/opacity
-- **sunSettings**: azimuth (0-360 rotation), altitude (0-90 angle), intensity, ambientIntensity, shadowsEnabled
-- **moveMode**: transient state for AutoCAD-style move command — `{ active, phase ('selectObject'|'selectBase'|'moving'), targetType ('building'|'lotAccessArrow'), targetLotId, targetBuildingType, targetDirection, basePoint, originalPosition }`. Excluded from both persist and Zundo partialize (transient UI state).
-- **Project state**: currentProject, projects list, snapshots, layerStates
+**Store version 24**: Migrations v1–v23. Persist `merge` function patches missing `entityStyles`, `lotVisibility`, `viewSettings.layers`, `roadModuleStyles` keys on every hydration.
 
-**Store version**: 22 (with migration system for backward compat from v1-v21; v15 added entity system, accessory buildings, comparison roads; v16 added annotation system, enhanced dimensions, road intersection fillets; v17 fixed fillOpacity defaults to 1.0 for all road zone and roadWidth styles; v18 added max setback lines with independent style/visibility/layer toggles; v19 internal; v20 added BTZ planes, accessory setback lines, lot access arrows — new style categories, visibility keys, layer toggles, accessory defaults to zero/null; v21 backfill migration for v20 keys; v22 added principal/accessory building style variants — `principalBuildingEdges`, `principalBuildingFaces`, `accessoryBuildingEdges`, `accessoryBuildingFaces`). Persist config includes a custom `merge` function that patches missing `entityStyles`, `lotVisibility`, and `viewSettings.layers` keys on every hydration — ensures forward compatibility without relying solely on version-gated migrations.
+**Undo/redo**: Tracks entities, entityOrder, entityStyles, lotVisibility, existing, proposed, viewSettings, sunSettings, roadModule, roadModuleStyles, comparisonRoads, annotationSettings, annotationPositions. Excludes export flags.
 
-**Undo/redo via Zundo**: tracks existing, proposed, viewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, entities, entityOrder, entityStyles, lotVisibility, comparisonRoads, annotationSettings, annotationPositions. Excludes exportRequested, exportQueue, isBatchExporting flags.
+**Entity hooks** (`useEntityStore.js`): `useLot(lotId)`, `useLotIds()`, `useActiveLot()`, `useLotStyle(lotId)`, `useBuilding(lotId, type)`, `useRoadModules()`, `useLotVisibility(lotId)`, `useActiveModule()`, `useModelSetup()`, `useDistrictParameters()`, `getLotData(lotId)` (non-hook)
 
-**Entity selector hooks** (`src/hooks/useEntityStore.js`): `useLot(lotId)`, `useLotIds()`, `useActiveLot()`, `useLotStyle(lotId)`, `useBuilding(lotId, type)`, `useRoadModules()`, `useRoadModulesByDirection(direction)`, `useLotVisibility(lotId)`, `useActiveModule()`, `useModelSetup()`, `useDistrictParameters()`, `useEntityCount()`, `getLotData(lotId)` (non-hook)
+## Import Patterns
 
-### Road Module System
-
-RoadModule.jsx accepts a `direction` prop: `'front'` (default), `'left'`, `'right'`, `'rear'`. Direction changes are implemented via group rotation (DIRECTION_ROTATION constant). Also accepts `suppressLeftEnd` / `suppressRightEnd` boolean props to hide end-edge border lines at intersection boundaries (computed per-direction in DistrictSceneContent based on perpendicular road existence). In the District Module, roads stop at lot boundaries; intersection fill rectangles (z=0.04, renderOrder=1) cover the ROW overlap area, and fillet arcs (z=0.05, renderOrder=2) handle curved zone corners. Road Module Styles are editable via `RoadModuleStylesSection` in DistrictParameterPanel using `setRoadModuleStyle(layerType, property, value)`. Fillets generate 4 sub-corners per perpendicular pair using `computeCornerZoneStack(roadA, roadB, corner, styles, sideA, sideB)` from `intersectionGeometry.js`.
-
-**S3 (Alley) T-Junction Behavior**: When an S3 road intersects a non-S3 road, fillets and intersection fill rects are suppressed (alleys meet cross-streets at 90-degree angles with no curb returns). Non-S3 roads extend their span through perpendicular S3 road ROW so their zone bands continue through the alley area. Small alley fill rects (width = perpendicular road's `(ROW - roadWidth) / 2` = sidewalk+verge inset) connect alley pavement to the cross-street at each corner. Suppress-end logic: non-S3 roads keep end lines at S3 corners; S3 roads suppress ends at cross-streets.
-
-Road types with distinct defaults:
-- **S1** (Primary Street): ROW 50', road 24' — full zones (parking, verge, sidewalk, transition)
-- **S2** (Secondary Street): ROW 40', road 24' — narrower variant
-- **S3** (Alley/Rear): ROW 20', road 16' — minimal, no sidewalk/verge. At intersections with S1/S2 roads, uses T-junction behavior (no fillets, road extension through alley area)
-
-### Backend API
-
-Config stored at `~/.zoning-app-config.json`. Projects saved as folders:
-```
-{projectsDir}/{project-id}/
-├── project.json       # { name, createdAt, modifiedAt, state }
-├── images/            # PNG/JPG exports
-├── models/            # OBJ/GLB/DAE/DXF/IFC exports
-├── snapshots/         # Full state + camera JSON files
-└── layer-states/      # Style-only JSON files
-```
-
-Key endpoints:
-- `GET /api/health` - Health check
-- `GET/PUT /api/config` - Projects directory path
-- `GET/POST/PUT/DELETE /api/projects/:id` - Project CRUD
-- `GET/POST/DELETE /api/projects/:id/exports/:filename` - Export files
-- `GET/POST/DELETE /api/projects/:id/snapshots/:name` - Full state snapshots
-- `GET/POST/DELETE /api/projects/:id/layer-states/:name` - Style-only snapshots
-
-### Import Patterns
 ```javascript
 import { useStore } from './store/useStore'
-const value = useStore(state => state.value)
-
-// Entity hooks (for District Module)
 import { useLot, useLotIds, useActiveLot } from '../hooks/useEntityStore'
-
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { GizmoHelper, CameraControls } from '@react-three/drei'
-
-import * as api from './services/api'
-
-// Undo/redo via Zundo temporal middleware
 const { undo, redo } = useStore.temporal.getState()
 ```
 
-## Key Features
+## Conventions (CRITICAL)
 
-### Comparison Module
-- **Dual Condition Comparison**: Side-by-side existing vs. proposed zoning with split-screen 3D view
-- **Accessory Buildings**: Each condition has principal + accessory building with independent params/roof
-- **Multi-Direction Roads**: Front road + optional left/right/rear comparison roads (S1/S2/S3)
-- **Inline Style Controls**: All style controls integrated into ParameterPanel (no floating StyleEditor)
-- **Per-Parameter Visibility**: Eye-icon toggles for each parameter row
+### Numeric & Rendering Guards
+- **`??` not `||`** for numeric fallbacks — respects explicit `0`
+- **`!= null && > 0`** guard before rendering any geometry/dimension
+- **Opacity defaults to 1.0** — sub-1.0 causes Three.js transparent sorting issues
+- **`transparent={opacity < 1}`** + **`depthWrite={opacity >= 0.95}`** — never hardcode `transparent={true}`
 
-### District Module
-- **Multi-Lot Layout**: Up to 5 lots — Lot 1 in positive X from origin, Lots 2+ in negative X. Origin (0,0) = front-left corner of Lot 1
-- **Per-Lot Buildings**: Principal + accessory buildings per lot with separate dimensions/roof
-- **Multi-Direction Roads**: Front/left/right/rear roads with S1/S2/S3 types per edge, roads extend to connect at corners
-- **Per-Lot Styles**: Independent style settings per lot with "Apply to all" option
-- **District Parameters**: Informational/reference fields (zoning data, not visualized in 3D)
-- **Model Parameters**: Functional parameters in per-lot columns with collapsible subsections (Lot Dimensions, Setbacks Principal/Accessory, BTZ Front/Side Street, Structures Principal/Accessory with width/depth/stories/heights, Lot Access with draggable arrows, Parking, Parking Setbacks)
+### Zustand Patterns
+- **`useShallow`** when selecting objects from store — prevents infinite re-renders
+- **Undo batching**: `pause()` on pointer down, `resume()` on pointer up for all drags
+- **4-place update** for new style/visibility/layer keys: `createDefaultLotStyle()`, `createDefaultLotVisibility()`, `viewSettings.layers`, persist `merge` function
 
-### Shared Features
-- **Polygon Lot Editing**: Vertex manipulation, edge splitting/extrusion, perpendicular constraints, Shoelace area calc
-- **Building Polygon Editing**: Direct-manipulation footprint reshaping with vertex/edge/midpoint handles
-- **Height Handle**: Draggable sphere at building top for vertical height adjustment
-- **Roof System**: Flat/shed/gabled/hipped massing roofs, auto-conform peak to max height, pitch calculation
-- **Building Stories System**: Separate first floor and upper floor heights, configurable story count
-- **Road Module**: Configurable ROW, road width, parking, verge, sidewalk, transition zones with left/right differentiation
-- **Road Intersection Fillets**: Curved corner geometry where perpendicular roads meet. Each intersection generates **4 sub-corners** (lot corner, far-A, far-B, far corner) using toward-lot and away-from-lot zone sides (`sideA`/`sideB` params). Per-zone arc rendering (transition, sidewalk, verge, parking) with annular arc sectors via THREE.Shape `absarc()`. Fillets render at z=0.05 (fills) with arc border lines at z=0.055 (zOffset+0.005) to ensure lines render above fills in the transparent pass. Arc lines use renderOrder=3 (above fill renderOrder=2). Road module end-edge lines are suppressed at intersection boundaries via `suppressLeftEnd`/`suppressRightEnd` props. Angle quadrant mapping uses flipA (front↔rear) and flipB (left↔right) for correct arc direction per sub-corner. Works in both District and Comparison modules.
-- **Enhanced Dimensions**: Multi-plane support (XY/XZ/YZ/auto), billboard text mode (camera-facing), text backgrounds with configurable color/opacity, unit formatting (feet/feet-inches/meters), auto-stacking parallel dimensions, angular dimensions for roof pitch
-- **Annotation Labels**: Draggable text labels for lots (name, edges, setbacks), buildings (principal/accessory), roads (name, zone labels). Per-category visibility toggles, leader lines when displaced, position persistence via annotationPositions state, reset functionality. Components: AnnotationText (shared text renderer), DraggableLabel (drag wrapper), LotAnnotations, RoadAnnotations, LeaderCallout
-- **Sun Simulation**: Directional light with rotation (0-360), angle (0-90), intensity control, shadow toggle. Dropdown in top bar. SunLighting component in SharedCanvas converts azimuth/altitude to 3D position
-- **Multi-Format Export**: PNG, JPG, SVG (raster/vector), OBJ, GLB, DAE, DXF, IFC (BIM). IFC is module-aware (uses `generateDistrictIFC` for district, `generateIFC` for comparison)
-- **CSV Import**: 3-step wizard with auto-matching CSV headers to app fields, preview, and batch lot creation. Also supports district parameter import with auto-detection (lot vs district mode)
-- **Batch Export**: Queue multiple saved view presets × camera angles (ISO/Top/Front/Side/Left), export all at once as a ZIP file via JSZip. BatchExportSection in district sidebar with checkbox grid, format (PNG/JPG), and resolution selector
-- **WYSIWYG Export**: Lines scale proportionally at any export resolution
-- **Custom Dimension Labels**: Replace numeric values with arbitrary text
-- **Camera Presets**: 5 saved view slots + standard views (top, front, side, iso)
-- **Undo/Redo**: 50-step history via Zundo middleware + Cmd/Ctrl+Z/Shift+Z keyboard shortcuts
-- **Keyboard Shortcuts**: Cmd+Z (undo), Cmd+Shift+Z (redo), Cmd+S (save project), M (move mode — district only), Delete/Backspace (delete selected building — district only), Escape (cancel move mode)
-- **Auto-Save**: Configurable periodic save when project is open and changes are dirty
-- **Project Management**: Save/load projects, full-state views (snapshots), style-only layer states
-- **Project Setup**: Start screen with Sandbox/New Project/Open Existing, module selection, district count
-- **Calculated Metrics**: Lot area, building coverage %, GFA, FAR (auto-calculated)
-- **Theme System**: Standard (dark gray + blue) and modern (black + cyan neon) UI themes via CSS variables (`var(--ui-*)`). All sidebar components use inline styles with CSS variables — no hardcoded Tailwind color classes. Custom CSS utility classes in `index.css` handle hover/focus/accent/placeholder/scrollbar pseudo-states (`hover-bg-secondary`, `focus-ring-accent-1`, `accent-theme`, etc.)
+### renderOrder Map
+Road zones=0, intersection fill=1, alley fill=1, fillet fills=2, fillet lines=3, building faces=4, roof=4, BTZ planes=5, max height plane=6, height handle ring=9, sphere=10. **Note**: `renderOrder` doesn't work reliably on drei `<Line>` — use z-offset separation instead.
 
-## Conventions
+### Z-Layer Map (Lot Geometry)
+Lot fill (z=0.02) → lot lines (0.03) → min setbacks (0.1) → accessory setbacks (0.11) → max setbacks (0.12) → lot access arrows (0.15) → BTZ planes (vertical)
 
-- **Material opacity defaults to 1.0 (100%)**: All `fillOpacity`, `lineOpacity`, and material `opacity` values must default to 1.0 unless the user explicitly requests transparency. Sub-1.0 defaults cause color mismatches between overlapping geometry layers and complicate z-ordering with Three.js transparent object sorting.
-- **renderOrder for layered geometry**: When multiple transparent/overlapping meshes exist at different z-offsets, use Three.js `renderOrder` prop to control draw sequence (not just z-position). Road zones = 0, intersection fill = 1, alley fill = 1, fillet arc fills = 2, fillet arc lines = 3, building faces = 4, roof = 4, BTZ planes = 5, max height plane = 6, height handle ring = 9, height handle sphere = 10. **Note**: `renderOrder` does NOT reliably work on drei `<Line>` (Line2) components for transparent sorting — use z-offset separation instead (e.g., arc lines at zOffset+0.005 above fills).
-- **Conditional transparent/depthWrite on materials**: Never hardcode `transparent={true}` — use `transparent={opacity < 1}` so geometry at full opacity renders in the opaque pass (reliable z-buffer sorting) instead of the transparent pass (unreliable centroid-based sorting). Pair with `depthWrite={opacity >= 0.95}`. This prevents perspective view rendering artifacts (z-fighting, bleed-through, floating geometry).
-- **Undo batching for drag operations**: All drag operations (building, height handle, lot access arrows, labels, polygon vertices, edge extrude) use Zundo's `pause()` / `resume()` API to batch intermediate pointer-move state updates. Call `useStore.temporal.getState().pause()` on pointer down and `resume()` on pointer up. This ensures one Ctrl+Z undoes the entire drag, not each pixel movement.
-- **Road intersection system**: Roads stop at lot boundaries (no ROW extensions). Intersection fill rectangles (z=0.04, renderOrder=1) cover the ROW overlap area with conditional `transparent`/`depthWrite` based on fillOpacity (opaque when >= 0.95, ensuring correct render pass ordering). Fillet arcs (z=0.05, renderOrder=2) handle curved zone corners with arc border lines at z=0.055. Road module zone end-edge lines are suppressed at intersection boundaries via `suppressLeftEnd`/`suppressRightEnd` props on RoadModule (direction-to-end mapping computed in DistrictSceneContent). Road Module Style Editor in DistrictParameterPanel allows customizing all zone colors.
-- **S3 (alley) T-junctions**: When an S3 road meets a non-S3 road at a corner, fillets and intersection fill rects are suppressed. Instead, the non-S3 road extends its span through the S3 road's ROW so its zone bands (sidewalk, verge, pavement) continue through the alley area. Small alley fill rectangles (z=0.035, renderOrder=1, width = perpendicular road's sidewalk+verge inset) connect the alley pavement to the cross-street at each corner. **Known limitation**: the cross-street sidewalk is not yet rendered on top of the alley fill rects (future TODO).
-- **Parameter-to-rendering integrity**: Every piece of visible geometry MUST correspond to a parameter the user can see and edit. If a parameter field is null/empty/cleared, the corresponding geometry must NOT render. Use `!= null && > 0` guards before rendering any line or dimension. Use `??` (nullish coalescing) instead of `||` for building prop fallbacks so that explicit `0` values are respected.
-- **Street-aware setback rendering**: `SetbackLines`, `AccessorySetbackLines`, `MaxSetbackLines`, and annotation labels use `streetSides` to determine which sides face streets. Street-facing sides use `minSideStreet`; interior sides use `sideInterior`. This is critical for corner lots where one side faces a street — that side's setback is a side street setback, not a side interior setback. The `streetSides` prop is computed in `DistrictSceneContent.jsx` from `modelSetup.streetEdges`.
-- **Z-layer map for lot geometry**: Lot fill (z=0.02) → lot lines (z=0.03) → min setback lines (z=0.1) → accessory setback lines (z=0.11) → max setback lines (z=0.12) → lot access arrows (z=0.15) → BTZ planes (vertical, z=0 to firstFloorHeight).
-- **useShallow for object selectors**: When selecting an object from the Zustand store (e.g., `state.renderSettings`, `state.viewSettings`), always use `useShallow` from `zustand/react/shallow` to prevent infinite re-renders. Without it, every store change creates a new object reference, triggering unnecessary re-renders. Scalar selectors (`state.someNumber`) don't need it.
-- **Persist merge function**: The store's persist config has a custom `merge` function that patches missing `entityStyles`, `lotVisibility`, and `viewSettings.layers` keys from defaults on every hydration. When adding new style categories, visibility keys, or layer toggles, add them to: (1) `createDefaultLotStyle()`, (2) `createDefaultLotVisibility()`, (3) `viewSettings.layers` initial state, (4) the `merge` function's layer defaults object. This ensures both new and existing lots always have the keys.
+### Street-Aware Setbacks
+`streetSides` prop (from `DistrictSceneContent` via `modelSetup.streetEdges`) determines which lot sides face streets. Street-facing sides use `minSideStreet`/`maxSideStreet`; interior sides use `sideInterior`. Critical for corner lots.
 
-### Setback Line Rendering (District Module)
+### Road Intersection System
+Roads stop at lot boundaries. Intersection fills use notched `THREE.Shape` geometry (z=0.04, renderOrder=1) with concave quarter-circle cutouts matching fillet outer radii — prevents z-fighting with fillet arcs. Utilities in `intersectionGeometry.js`: `computeFilletOuterRadius()` returns total zone depth, `createNotchedRectShape()` creates centered shape with per-corner notch radii. Fillet arcs (z=0.05, renderOrder=2) handle curved corners with arc lines at z=0.055. End-edge lines suppressed via `suppressLeftEnd`/`suppressRightEnd` on RoadModule.
 
-**`SetbackLines`** component in `LotEntity.jsx` renders individual min setback lines. Each of the 4 sides (front, rear, left, right) only renders if its value is `!= null && > 0`. Street-facing sides use `minSideStreet` from `setbacks.principal`; interior sides use `sideInterior`. The `streetSides` prop (passed from `DistrictSceneContent` → `LotEntity` → `SetbackLines`) determines which sides face streets. Dimension annotations are also per-side conditional.
+**S3 (Alley) T-Junctions**: When S3 meets non-S3, fillets/fills suppressed. Non-S3 road extends through S3 ROW. Small alley fill rects connect alley pavement to cross-street. Alley fills use independent `alleyIntersectionFill` style (with `?? intersectionFill` fallback).
 
-**`SetbackLayer`** in `SceneContent.jsx` (Comparison Module) follows the same conditional pattern — each side only renders when its setback value is `!= null && > 0`.
+**Road types**: S1 (Primary, ROW 50', road 24'), S2 (Secondary, ROW 40', road 24'), S3 (Alley, ROW 20', road 16')
 
-### Max Setback Lines (added v18, fixed v21)
+### Move Mode (M Key, District Only)
+AutoCAD-style 3-phase: selectObject → selectBase (pause undo, disable camera) → moving (capture plane at z=200 handles placement). `BuildingEditor` handles phases 1-2, `MoveModeCapturePlane` in `DistrictSceneContent` handles phase 3. Transient state excluded from persist/Zundo.
 
-**Status**: IMPLEMENTED — working correctly. Required v21 migration to backfill `maxSetbacks` style key into existing lots' `entityStyles`.
+### Other Conventions
+- **N8AO**: `aoIntensity: 0.8`, `aoRadius: 0.3` — higher values cause artifacts at fillet corners
+- **Shadow camera**: `target-position={[0, 50, 0]}` centers frustum on ground plane (y=50)
+- **Lot access arrow bounds**: Validated against lot bounds + 20ft margin; stale positions fall back to defaults
+- **Edge extrude**: Sends DELTA per pointer move (not cumulative) — additive displacement
+- **CameraControls**: `dollySpeed={0.25}`, `smoothTime={0.35}`
+- **Building style split** (v22): `principalBuildingEdges`/`Faces` and `accessoryBuildingEdges`/`Faces` — wired with `??` fallback to `buildingEdges`/`buildingFaces`
 
-Max setback lines visualize `maxFront` and `maxSideStreet` from `setbacks.principal` as individual dashed lines forming an "L" shape on corner lots (NOT a closed rectangle — only sides with values get lines). Lines are clipped to min setback and rear setback boundaries.
+## Style Categories (12)
+Lot Lines, Setbacks, Accessory Setbacks, Max Setbacks, BTZ Planes, Lot Access Arrows, Principal Building Edges/Faces, Accessory Building Edges/Faces, Roof, Max Height Plane
 
-**Components & files**:
+## Backend API
 
-- `MaxSetbackLines` component in `LotEntity.jsx` — renders individual lines at z=0.12, with `!= null && > 0` guards
-- **L-shape trimming**: max front line clips at max side street position on the street side; max side street line starts at max front line (L corner) and ends at rear setback. On non-street sides, max front line clips at min side setback instead.
-- `streetSides` prop computed in `DistrictSceneContent.jsx` — auto-detects which lot sides face streets from `modelSetup.streetEdges` (Lot 1 right edge → right road, last lot left edge → left road, interior lots → no street sides)
-- `maxSetbacks` style in `createDefaultLotStyle()` — own style category with shorter dash pattern (dashSize=0.5, gapSize=0.3) vs min setbacks (1/0.5)
-- `maxSetbacks` visibility in `createDefaultLotVisibility()` — per-lot toggle, defaults to `true`
-- `maxSetbacks` + `labelMaxSetbacks` layer toggles in `viewSettings.layers`
-- `visKey: 'maxSetbacks'` on the "Max. Front" and "Max. Side, Street" model parameter rows
-- Max setback annotation labels in `LotAnnotations.jsx` — "Max. Front Setback", "Max. Side Setback"
-- Style category "Max Setbacks" in `DistrictParameterPanel.jsx` styleCategories
+Config at `~/.zoning-app-config.json`. Projects at `{projectsDir}/{id}/` with `project.json`, `images/`, `models/`, `snapshots/`, `layer-states/`.
 
-### BTZ Planes (added v20, fixed v21)
+Endpoints: `/api/health`, `/api/config` (GET/PUT), `/api/projects/:id` (CRUD), `/api/projects/:id/exports/:filename`, `/api/projects/:id/snapshots/:name`, `/api/projects/:id/layer-states/:name`
 
-**Status**: IMPLEMENTED — rendering correctly. Required v21 migration + merge to backfill `btzPlanes` style/layer/visibility keys.
+## Untested Features
 
-BTZ (Build-To Zone) planes are vertical `THREE.PlaneGeometry` meshes on building facades showing the required build-to percentage.
-
-**Components & files**:
-
-- `BTZPlanes` component in `LotEntity.jsx` — renders vertical planes at ~1.2" (0.1 ft) offset from building face with `polygonOffset`, `renderOrder={5}`, conditional `transparent={style.opacity < 1}`, `depthWrite={style.opacity >= 0.95}`, `side={THREE.FrontSide}` for clean perspective rendering
-- **BTZ Front**: uses `<planeGeometry>` with Euler rotation `[π/2, 0, 0]`, left-aligned on front face, width = `(btzFront / 100) * buildingWidth`, height = `firstFloorHeight`
-- **BTZ Side Street**: corner lots only (when `streetSides.left` or `streetSides.right`), uses manually constructed `BufferGeometry` quad in the YZ plane (no mesh rotation — vertices directly encode Y and Z extents), left-aligned from front corner of side face, width = `(btzSideStreet / 100) * buildingDepth`
-- `btzPlanes` style in `createDefaultLotStyle()` — `{ color: '#AA00FF', opacity: 1.0 }` (magenta)
-- `btzPlanes` visibility in `createDefaultLotVisibility()` — per-lot toggle, defaults to `true`
-- `btzPlanes` layer toggle in `viewSettings.layers`
-- `visKey: 'btzPlanes'` on the BTZ parameter rows in `DistrictParameterPanel.jsx`
-- Style category "BTZ Planes" in `DistrictParameterPanel.jsx` styleCategories
-- Guard: `btzFront != null && btzFront > 0` (no plane renders when value is null/0)
-
-### Accessory Setback Lines (added v20, fixed v21)
-
-**Status**: IMPLEMENTED — rendering correctly. Required v21 migration + merge to backfill `accessorySetbacks` style/layer/visibility keys.
-
-Accessory setback lines render per-side conditional lines for accessory buildings. Renders whenever the accessory setback has a positive value (blue lines are visually distinct from black principal setback lines).
-
-**Components & files**:
-
-- `AccessorySetbackLines` component in `LotEntity.jsx` — renders at z=0.11 (between min setbacks at 0.1 and max setbacks at 0.12)
-- Street-aware: uses `streetSides` to pick `sideStreet` for street-facing sides, `sideInterior` for interior sides (same logic as principal setbacks)
-- Guard per side: `aValue != null && aValue > 0`
-- `accessorySetbacks` style in `createDefaultLotStyle()` — `{ color: '#2196F3', width: 1, dashed: true, dashSize: 0.8, gapSize: 0.4, dashScale: 1, opacity: 1.0, overrides: { front/rear/left/right } }` (blue)
-- `accessorySetbacks` visibility in `createDefaultLotVisibility()` — per-lot toggle, defaults to `true`
-- `accessorySetbacks` layer toggle in `viewSettings.layers`
-- `visKey: 'accessorySetbacks'` on the accessory setback model parameter rows (eye toggle controls accessory setback visibility independently from principal)
-- Style category "Accessory Setbacks" in `DistrictParameterPanel.jsx` styleCategories
-- **Accessory defaults**: width=0, depth=0, stories=0, all setbacks=null — no accessory building or setback lines render by default
-
-### Lot Access Arrows (added v20, fixed v21)
-
-**Status**: IMPLEMENTED — rendering correctly. Required v21 migration + merge to backfill `lotAccessArrows` style/layer/visibility keys. Style prop wired from `entityStyles[lotId].lotAccessArrows` with `visKey: 'lotAccessArrows'` on parameter rows.
-
-Lot access arrows are flat 2D arrow shapes on the ground plane indicating vehicular/pedestrian access directions.
-
-**Components & files**:
-
-- `LotAccessArrow.jsx` — standalone component using `THREE.ShapeGeometry` (shaft + triangular arrowhead for regular arrows, T-junction shape for shared drive)
-- Direction-based rotation: front (0), rear (PI), sideStreet (±PI/2 based on `streetSides`), sharedDrive (0, no rotation — T-junction shape encodes both directions)
-- **Shared Drive**: T-junction symbol with `createSharedDriveShape()` — thick stem from front street to mid-lot + double-ended horizontal arrow crossbar. Dynamic stem length = `lotDepth / 2`. Geometry only centered on X (Y origin at stem bottom for front-edge positioning). Default position on property line (`±lotWidth/2`) at front lot edge (`-lotDepth/2`).
-- **Draggable**: pointer capture + ray-plane intersection pattern (same as `DraggableLabel`), position persistence via `annotationPositions`
-- Z-offset: 0.15, color: `#FF00FF` (magenta), `meshBasicMaterial` with `THREE.DoubleSide`
-- Default positions computed from lot geometry (e.g., front: `[0, -lotDepth/2 + 5, 0]`)
-- Wired into `LotEntity.jsx` — conditional on `layers.lotAccessArrows && visibility.lotAccessArrows && lot.lotAccess`
-- `lotAccessArrows` visibility in `createDefaultLotVisibility()` — per-lot toggle, defaults to `true`
-- `lotAccessArrows` layer toggle in `viewSettings.layers`
-- Label rename: "Side, Interior" → "Shared Drive" in `DistrictParameterPanel.jsx` (internal key `sideInterior` unchanged)
-
-### Building Dimension Parameters (District Module)
-
-Both Structures Principal and Structures Accessory sections in `DistrictParameterPanel.jsx` expose full building parameters:
-
-- **Principal**: Height (computed, read-only), Width (ft), Depth (ft), Stories, First Story Height, Upper Floor Height, Show Roof, Show Max Height Plane
-- **Accessory**: Height (computed, read-only), Width (ft), Depth (ft), Stories, First Story Height, Upper Floor Height, Show Roof, Show Max Height Plane
-
-All editable fields use `updateBuildingParam(lotId, buildingType, key, value)`. Building rendering in `LotEntity.jsx` uses `??` (nullish coalescing) for fallback values to ensure `0` is treated as a valid user-entered value.
-
-### Styles Section (added v22)
-
-Dedicated "Styles" section in `DistrictParameterPanel.jsx` below Model Parameters. Contains 12 labeled, clickable rows with accordion behavior (one open at a time). Each row expands to show `InlineStyleControls` for that category.
-
-**Style categories**: Lot Lines, Setbacks, Accessory Setbacks, Max Setbacks, BTZ Planes, Lot Access Arrows, Principal Building Edges, Principal Building Faces, Accessory Building Edges, Accessory Building Faces, Roof, Max Height Plane.
-
-**Principal/Accessory building style split** (v22):
-- `principalBuildingEdges` / `principalBuildingFaces` — style keys for principal building
-- `accessoryBuildingEdges` / `accessoryBuildingFaces` — style keys for accessory building
-- In `LotEntity.jsx`, wired with `??` fallback: `style.principalBuildingEdges ?? style.buildingEdges`
-
-### Move Mode — M Key (District Module)
-
-Buildings and lot access arrows can ONLY be moved via the M key move command (no free-drag). AutoCAD-style move command with 3 phases:
-1. **selectObject**: Press M → click a building or lot access arrow to select it
-2. **selectBase**: Click the selected object to set a base point (reference position). Undo tracking is paused and camera controls are disabled.
-3. **moving**: Move mouse to preview new position → click to place (or Escape to cancel and restore). `MoveModeCapturePlane` handles all movement and finalization (resumes undo, re-enables controls, exits move mode).
-
-**State**: `moveMode` in `useStore.js` — transient (excluded from persist/Zundo).
-**Actions**: `enterMoveMode()`, `exitMoveMode()`, `setMoveTarget(type, lotId, buildingType|direction)`, `setMoveBasePoint(point)`
-**Visual feedback**: Green highlight on move target, light blue on selectable objects during selectObject phase.
-**Scene capture**: `MoveModeCapturePlane` in `DistrictSceneContent.jsx` — invisible 2000×2000 plane that is the SOLE handler for pointer movement and click-to-place during 'moving' phase. Handles undo resume and camera re-enable on finalization.
-**Components**: `BuildingEditor/index.jsx` handles selectObject and selectBase phases only (no drag logic). `LotAccessArrow.jsx` handles its own move mode phases. `useKeyboardShortcuts.js` handles M key and Escape.
-
-### Delete/Regenerate Buildings (District Module)
-
-- **Delete**: Press Delete or Backspace with a building selected → calls `deleteEntityBuilding(lotId, buildingType)` which resets width=0, depth=0, stories=0
-- **Regenerate**: When a building is deleted (width===0 && stories===0), a `+` button appears in the Structures section header → calls `regenerateEntityBuilding(lotId, buildingType)` with sensible defaults (principal: 30×40, 2 stories; accessory: 15×20, 1 story)
-
-### Road Module Styles — Global Controls + Collapsible Zones
-
-`RoadModuleStylesSection` in `DistrictParameterPanel.jsx` has:
-- **Global** subsection: master Color (`setAllRoadZoneColor`), Opacity (`setAllRoadZoneOpacity`), Line Width (`setAllRoadLineWidths`) — affects all road zones at once
-- **Collapsible zone groups**: Each zone (ROW Lines, Road Surface, Left/Right Parking/Verge/Sidewalk/Transition) has a chevron toggle to collapse/expand its individual controls. Uses `collapsedZones` local state.
-
-## Road Intersection System — WORKING (All 4 Directions)
-
-**Status**: COMPLETE — All 4 road directions (front/left/right/rear) render correctly with the original fillet-based system. S3 (alley) T-junctions are fully supported.
-
-### Road Rendering Architecture
-
-Roads are rendered as separate per-direction `RoadModule` components, with `RoadIntersectionFillet` handling curved corners where perpendicular roads meet. Intersection fill rectangles cover the ROW overlap area between roads.
-
-- **`RoadModule.jsx`** — Uses drei's `<Line>` (Line2) for all straight edge lines and ROW boundary lines. `lineWidth` wired from `roadModuleStyles` per zone. `lineScale` multiplier from `exportLineScale`. Accepts `suppressLeftEnd`/`suppressRightEnd` props to hide end-edge border lines at intersection boundaries.
-- **`RoadIntersectionFillet.jsx`** — Uses `<Line segments>` (LineSegments2) with `toSegmentPairs()` helper for arc border lines. Annular arc sector fills via THREE.Shape `absarc()`.
-- **`DistrictSceneContent.jsx`** — Computes intersection fill rects, fillet sub-corners, end-edge suppression, S3 T-junction road extensions, and alley fill rects.
-- **`intersectionGeometry.js`** — `computeCornerZoneStack()` generates 4 sub-corners per perpendicular road pair.
-- **`useStore.js`** — `setAllRoadLineWidths(width)` action for universal line width control.
-- **`DistrictParameterPanel.jsx`** — "All Lines > Line Width" universal slider + per-zone style editing.
-
-### Previous Exploration: Unified Polygon Approach (ABANDONED)
-
-A unified polygon approach was explored on the `origin/codex-fix` branch (15 commits) to replace per-road rendering with single closed polygons per zone type. This approach **did not work** — it could not reliably handle all corner cases. The original fillet-based system was retained and refined instead. Leftover untracked files (`UnifiedRoadNetwork.jsx`, `unifiedRoadGeometry.js`) and exploration report (`docs/pre-built-road-scenario-exploration.md`) remain as reference but are NOT part of the active codebase.
-
-### Known Cosmetic Issue
-
-Fillet arc border lines may appear slightly thicker than straight road edges due to how drei's Line2 renders multi-point curves vs 2-point straight lines. This is a minor visual artifact that does not affect functionality.
-
-## Batch Export — UNTESTED
-
-**Status**: IMPLEMENTED but NOT YET TESTED. Build passes, no lint errors, but runtime behavior has not been verified.
-
-Queue multiple saved view presets × camera angles, export all at once, download as a ZIP file.
-
-**Components & files**:
-
-- `useStore.js` — `exportQueue` (array of queue items), `isBatchExporting` (flag) in `viewSettings`. Actions: `addToExportQueue(items)`, `shiftExportQueue()`, `clearExportQueue()`, `setIsBatchExporting(bool)`. Both keys excluded from Zundo partialize and reset on hydration.
-- `Exporter.jsx` — JSZip import, `zipRef`/`savedLayersRef`/`batchProcessingRef` refs. PNG/JPG capture routes to ZIP when `isBatchExporting`. Batch orchestrator useEffect: applies layers/view from queue item → double-RAF → `triggerExport()` → capture → shift queue → repeat. When queue empty, generates ZIP blob, triggers download, restores original layer state.
-- `DistrictParameterPanel.jsx` — `BatchExportSection` component after Views section. Checkbox grid (saved view slots × 5 camera angles: ISO/Top/Front/Side/Left), format selector (PNG/JPG), resolution selector (720p/1080p/4K/8K), "Export N Diagrams" button.
-
-**Queue item shape**: `{ presetSlot, cameraView, layers, format, label }`
-
-## District Parameter CSV Import — UNTESTED
-
-**Status**: IMPLEMENTED but NOT YET TESTED. Build passes, no lint errors, but runtime behavior has not been verified.
-
-Extends the existing CSV ImportWizard to auto-detect and import district zoning reference parameters.
-
-**Components & files**:
-
-- `importParser.js` — `DISTRICT_FIELDS` constant (~67 fields covering full `districtParameters` shape: lot dimensions, setbacks principal/accessory, structures principal/accessory, lot access, parking locations — all with min/max). `autoMatchHeaders(csvHeaders, fields = APP_FIELDS)` now accepts optional fields param. `applyDistrictMapping(row, mapping)` returns flat `{ 'dot.path': value }` object; `.permitted` fields parsed as boolean, others as float.
-- `ImportWizard.jsx` — `importType` state (`'lot'` | `'district'`). Auto-detection: runs `autoMatchHeaders` with both APP_FIELDS and DISTRICT_FIELDS, higher match count wins. Toggle buttons in step 2 for manual override. District mode: `applyDistrictMapping` for single-row parsing, `setDistrictParameter(path, value)` for import, key-value table preview in step 3.
-- `DistrictParameterPanel.jsx` — "Import CSV" button in District Parameters section header via `headerRight` prop, opens ImportWizard modal.
+- **Batch Export**: Queue saved views × camera angles → ZIP download. Uses `exportQueue`/`isBatchExporting` in viewSettings, JSZip in Exporter.jsx, BatchExportSection in DistrictParameterPanel.
+- **District Parameter CSV Import**: Auto-detects lot vs district CSV. `DISTRICT_FIELDS` in importParser.js (~67 fields). ImportWizard with `importType` toggle.
 
 ## Known Limitations
 
-- Setback visualization only works with rectangular lots, not polygon lots
-- No 3D model import
-- No test suite
-- Store is ~3,653 lines — large but functional; entity system, annotation system, and legacy state coexist
-- ImportWizard supports CSV only (no Excel/XLSX — would need external library)
-- Batch export and district parameter CSV import are implemented but NOT YET TESTED — may have runtime issues
-- District Module lots are positioned in a simple row layout (no arbitrary placement)
-- Road intersection fillet arc lines rely on z-offset separation (not renderOrder) for visibility above fills; transparent sorting edge cases may still occur with non-default opacity values
-- Comparison Module road intersections don't yet have end-edge suppression (District Module only)
-- Fillet arc border lines may appear slightly thicker than straight road edges (cosmetic; drei Line2 multi-point curve rendering artifact)
+- Setback visualization: rectangular lots only (not polygon)
+- No 3D model import, no test suite
+- Lots positioned in simple row layout (no arbitrary placement)
+- Fillet arc lines may appear slightly thicker than straight edges (drei Line2 artifact)
+- Comparison Module road intersections lack end-edge suppression
+- `origin/codex-fix` branch: abandoned unified polygon approach — do not use
 
 ## Git
 
 - **Remote**: https://github.com/C-Rockwell/zoning-comparison-app.git
-- **Branches**: `gemini-fix` (active development), `main` (stable)
-- **Abandoned branch**: `origin/codex-fix` (failed unified road polygon approach, 15 commits — do not use)
+- **Branches**: `gemini-fix` (active), `main` (stable)
 
 ## User Shortcuts
 
-- **/PUCP** — "Please Update, Commit, and Push". When the user types `/PUCP`, perform these 3 steps in order: (1) Update CLAUDE.md with any changes from the current session, (2) Commit all changes with an appropriate message, (3) Push to GitHub.
+- **/PUCP** — Update CLAUDE.md, commit all changes, push to GitHub.

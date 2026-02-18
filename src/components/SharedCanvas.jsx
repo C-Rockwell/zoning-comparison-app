@@ -34,17 +34,19 @@ export const StudioLighting = () => {
             {/* Main key light - soft directional */}
             <directionalLight
                 position={[x, y, z]}
+                target-position={[0, 50, 0]}
                 intensity={intensityRaw}
                 castShadow={shadowsEnabled}
                 shadow-mapSize-width={4096}
                 shadow-mapSize-height={4096}
-                shadow-camera-far={500}
-                shadow-camera-left={-150}
-                shadow-camera-right={150}
-                shadow-camera-top={150}
-                shadow-camera-bottom={-150}
-                shadow-bias={-0.0001}
-                shadow-normalBias={0.02}
+                shadow-camera-near={0.1}
+                shadow-camera-far={1000}
+                shadow-camera-left={-300}
+                shadow-camera-right={300}
+                shadow-camera-top={300}
+                shadow-camera-bottom={-300}
+                shadow-bias={-0.001}
+                shadow-normalBias={0.05}
             />
 
             {/* Fill light from opposite side */}
@@ -93,17 +95,19 @@ export const SunLighting = () => {
         <>
             <directionalLight
                 position={[x, y, z]}
+                target-position={[0, 50, 0]}
                 intensity={intensity ?? 1.5}
                 castShadow={shadowsEnabled}
                 shadow-mapSize-width={4096}
                 shadow-mapSize-height={4096}
-                shadow-camera-far={500}
-                shadow-camera-left={-150}
-                shadow-camera-right={150}
-                shadow-camera-top={150}
-                shadow-camera-bottom={-150}
-                shadow-bias={-0.0001}
-                shadow-normalBias={0.02}
+                shadow-camera-near={0.1}
+                shadow-camera-far={1000}
+                shadow-camera-left={-300}
+                shadow-camera-right={300}
+                shadow-camera-top={300}
+                shadow-camera-bottom={-300}
+                shadow-bias={-0.001}
+                shadow-normalBias={0.05}
             />
 
             <ambientLight intensity={ambientIntensity ?? 0.4} />
@@ -281,7 +285,12 @@ const SharedCanvas = forwardRef(({ children, onPointerMissed }, ref) => {
                 far={2000}
             />
 
-            <CameraControls ref={cameraControlsRef} makeDefault />
+            <CameraControls
+                ref={cameraControlsRef}
+                makeDefault
+                dollySpeed={0.25}
+                smoothTime={0.35}
+            />
             <CameraHandler controlsRef={cameraControlsRef} />
             <Exporter target={contentRef} />
 

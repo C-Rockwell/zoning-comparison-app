@@ -252,7 +252,7 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
 
     // Default styles if not provided
     const rowStyle = styles.rightOfWay || { color: '#000000', width: 1, dashed: true, dashSize: 2, gapSize: 1, opacity: 1 }
-    const roadStyle = styles.roadWidth || { lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1, fillColor: '#666666', fillOpacity: 0.8 }
+    const roadStyle = styles.roadWidth || { lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1, fillColor: '#666666', fillOpacity: 1.0 }
 
     // Resolve rotation angle from direction prop
     const rotationZ = DIRECTION_ROTATION[direction] || 0
@@ -301,7 +301,7 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
             {leftLayers.map((layer, index) => {
                 // Use side-specific style key (e.g., 'leftParking' instead of 'parking')
                 const styleKey = `left${layer.type.charAt(0).toUpperCase()}${layer.type.slice(1)}`
-                const layerStyle = styles[styleKey] || styles[layer.type] || { lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1, fillColor: '#888888', fillOpacity: 0.6 }
+                const layerStyle = styles[styleKey] || styles[layer.type] || { lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1, fillColor: '#888888', fillOpacity: 1.0 }
                 return (
                     <RoadPolygon
                         key={`left-${layer.type}-${index}`}
@@ -321,7 +321,7 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
             {rightLayers.map((layer, index) => {
                 // Use side-specific style key (e.g., 'rightParking' instead of 'parking')
                 const styleKey = `right${layer.type.charAt(0).toUpperCase()}${layer.type.slice(1)}`
-                const layerStyle = styles[styleKey] || styles[layer.type] || { lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1, fillColor: '#888888', fillOpacity: 0.6 }
+                const layerStyle = styles[styleKey] || styles[layer.type] || { lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1, fillColor: '#888888', fillOpacity: 1.0 }
                 return (
                     <RoadPolygon
                         key={`right-${layer.type}-${index}`}

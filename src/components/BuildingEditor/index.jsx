@@ -148,10 +148,9 @@ const BuildingEditor = ({
     // ============================================
 
     const handlePointerDown = (e) => {
-        e.stopPropagation()
-
         // Move mode: select object phase
         if (moveMode?.active && moveMode.phase === 'selectObject') {
+            e.stopPropagation()
             if (onSelect) onSelect()
             setMoveTarget('building', model, buildingType, null)
             return
@@ -159,6 +158,7 @@ const BuildingEditor = ({
 
         // Move mode: select base point phase
         if (moveMode?.active && moveMode.phase === 'selectBase' && isMoveModeTarget) {
+            e.stopPropagation()
             if (e.ray.intersectPlane(plane, planeIntersectPoint)) {
                 const localX = planeIntersectPoint.x - offsetGroupX
                 const localY = planeIntersectPoint.y
@@ -169,10 +169,11 @@ const BuildingEditor = ({
             return
         }
 
-        // During moving phase, clicks are handled by MoveModeCapturePlane
+        // During moving phase, DON'T stopPropagation — let capture plane handle finalize
         if (moveMode?.active) return
 
-        // No normal drag — buildings are only moved via M key (move mode)
+        // Normal click: select building
+        e.stopPropagation()
         if (onSelect) onSelect()
     }
 

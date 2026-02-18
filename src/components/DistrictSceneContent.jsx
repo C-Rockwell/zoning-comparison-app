@@ -8,6 +8,7 @@ import LotEntity from './LotEntity'
 import RoadModule from './RoadModule'
 import RoadAnnotations from './RoadAnnotations'
 import RoadIntersectionFillet from './RoadIntersectionFillet'
+import { computeFilletOuterRadius, createNotchedRectShape } from '../utils/intersectionGeometry'
 
 // Direction rotation for annotation labels (matches RoadModule.jsx DIRECTION_ROTATION)
 const DIRECTION_ROTATION = {
@@ -154,6 +155,7 @@ const EntityRoadModules = ({ lotPositions }) => {
     // Compute intersection fill rectangles — one per perpendicular road pair.
     // Each rectangle covers the full ROW × ROW overlap area at z=0.04
     // (above road zones at 0.01 and ROW lines at 0.03, below fillets at 0.05).
+    // Corners are notched with concave arcs matching fillet outer radii to prevent z-fighting.
     const intersectionRects = useMemo(() => {
         const pairs = [
             { dirA: 'front', dirB: 'left',  corner: [totalExtentLeft, 0] },
@@ -167,8 +169,10 @@ const EntityRoadModules = ({ lotPositions }) => {
             // Suppress intersection fill at S3 (alley) corners — the dominant
             // road's extended zone bands cover the corner area instead
             if ((roadsByDir[dirA].type || 'S1') === 'S3' || (roadsByDir[dirB].type || 'S1') === 'S3') continue
-            const rowA = roadsByDir[dirA].rightOfWay || 0
-            const rowB = roadsByDir[dirB].rightOfWay || 0
+            const roadA = roadsByDir[dirA]
+            const roadB = roadsByDir[dirB]
+            const rowA = roadA.rightOfWay || 0
+            const rowB = roadB.rightOfWay || 0
             let x, y, w, h
             if (dirA === 'front' && dirB === 'left') {
                 x = corner[0] - rowB; y = corner[1] - rowA; w = rowB; h = rowA
@@ -180,11 +184,34 @@ const EntityRoadModules = ({ lotPositions }) => {
                 x = corner[0]; y = corner[1]; w = rowB; h = rowA
             }
             if (w > 0 && h > 0) {
+                // Compute fillet outer radius at each sub-corner of this intersection rect.
+                // Sub-corners: tt = toward A × toward B, ta = toward A × away B,
+                //              at = away A × toward B, aa = away A × away B
+                const rTT = computeFilletOuterRadius(roadA, roadB, 'right', 'right')
+                const rTA = computeFilletOuterRadius(roadA, roadB, 'right', 'left')
+                const rAT = computeFilletOuterRadius(roadA, roadB, 'left', 'right')
+                const rAA = computeFilletOuterRadius(roadA, roadB, 'left', 'left')
+
+                // Map sub-corners to rect corners (topLeft/topRight/bottomLeft/bottomRight)
+                // based on which intersection position this is
+                let radii
+                if (dirA === 'front' && dirB === 'left') {
+                    radii = { topRight: rTT, topLeft: rTA, bottomRight: rAT, bottomLeft: rAA }
+                } else if (dirA === 'front' && dirB === 'right') {
+                    radii = { topLeft: rTT, topRight: rTA, bottomLeft: rAT, bottomRight: rAA }
+                } else if (dirA === 'rear' && dirB === 'left') {
+                    radii = { bottomRight: rTT, bottomLeft: rTA, topRight: rAT, topLeft: rAA }
+                } else {
+                    // rear-right
+                    radii = { bottomLeft: rTT, bottomRight: rTA, topLeft: rAT, topRight: rAA }
+                }
+
+                const shape = createNotchedRectShape(w, h, radii)
                 rects.push({
                     key: `intersection-${dirA}-${dirB}`,
                     cx: x + w / 2,
                     cy: y + h / 2,
-                    w, h,
+                    w, h, shape,
                 })
             }
         }
@@ -357,35 +384,44 @@ const EntityRoadModules = ({ lotPositions }) => {
                         )
                     })}
 
-                    {(layers.roadIntersections !== false) && intersectionRects.map(rect => (
-                        <mesh key={rect.key} position={[rect.cx, rect.cy, 0.04]} receiveShadow renderOrder={1}>
-                            <planeGeometry args={[rect.w, rect.h]} />
-                            <meshStandardMaterial
-                                color={roadModuleStyles.roadWidth?.fillColor || '#666666'}
-                                opacity={roadModuleStyles.roadWidth?.fillOpacity ?? 1.0}
-                                transparent={(roadModuleStyles.roadWidth?.fillOpacity ?? 1.0) < 1}
-                                side={THREE.DoubleSide}
-                                depthWrite={(roadModuleStyles.roadWidth?.fillOpacity ?? 1.0) >= 0.95}
-                                roughness={1}
-                                metalness={0}
-                            />
-                        </mesh>
-                    ))}
+                    {(layers.roadIntersections !== false) && intersectionRects.map(rect => {
+                        if (!rect.shape) return null
+                        const intColor = roadModuleStyles.intersectionFill?.fillColor ?? roadModuleStyles.roadWidth?.fillColor ?? '#666666'
+                        const intOpacity = roadModuleStyles.intersectionFill?.fillOpacity ?? roadModuleStyles.roadWidth?.fillOpacity ?? 1.0
+                        return (
+                            <mesh key={rect.key} position={[rect.cx, rect.cy, 0.04]} receiveShadow renderOrder={1}>
+                                <shapeGeometry args={[rect.shape]} />
+                                <meshStandardMaterial
+                                    color={intColor}
+                                    opacity={intOpacity}
+                                    transparent={intOpacity < 1}
+                                    side={THREE.DoubleSide}
+                                    depthWrite={intOpacity >= 0.95}
+                                    roughness={1}
+                                    metalness={0}
+                                />
+                            </mesh>
+                        )
+                    })}
 
-                    {(layers.roadIntersections !== false) && alleyFillRects.map(rect => (
-                        <mesh key={rect.key} position={[rect.cx, rect.cy, 0.035]} receiveShadow renderOrder={1}>
-                            <planeGeometry args={[rect.w, rect.h]} />
-                            <meshStandardMaterial
-                                color={roadModuleStyles.roadWidth?.fillColor || '#666666'}
-                                opacity={roadModuleStyles.roadWidth?.fillOpacity ?? 1.0}
-                                transparent={(roadModuleStyles.roadWidth?.fillOpacity ?? 1.0) < 1}
-                                side={THREE.DoubleSide}
-                                depthWrite={(roadModuleStyles.roadWidth?.fillOpacity ?? 1.0) >= 0.95}
-                                roughness={1}
-                                metalness={0}
-                            />
-                        </mesh>
-                    ))}
+                    {(layers.roadIntersections !== false) && alleyFillRects.map(rect => {
+                        const intColor = roadModuleStyles.alleyIntersectionFill?.fillColor ?? roadModuleStyles.intersectionFill?.fillColor ?? '#666666'
+                        const intOpacity = roadModuleStyles.alleyIntersectionFill?.fillOpacity ?? roadModuleStyles.intersectionFill?.fillOpacity ?? 1.0
+                        return (
+                            <mesh key={rect.key} position={[rect.cx, rect.cy, 0.035]} receiveShadow renderOrder={1}>
+                                <planeGeometry args={[rect.w, rect.h]} />
+                                <meshStandardMaterial
+                                    color={intColor}
+                                    opacity={intOpacity}
+                                    transparent={intOpacity < 1}
+                                    side={THREE.DoubleSide}
+                                    depthWrite={intOpacity >= 0.95}
+                                    roughness={1}
+                                    metalness={0}
+                                />
+                            </mesh>
+                        )
+                    })}
 
                     {(layers.roadIntersections !== false) && allFilletCorners.map(({ key, corner, dirA, dirB, pos, sideA, sideB }) => (
                         <RoadIntersectionFillet
@@ -505,7 +541,7 @@ const MoveModeCapturePlane = () => {
 
     return (
         <mesh
-            position={[0, 0, 0.001]}
+            position={[0, 0, 200]}
             onPointerMove={handlePointerMove}
             onPointerDown={handlePointerDown}
         >

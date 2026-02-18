@@ -1,9 +1,9 @@
 import { useState, useMemo, useCallback } from 'react'
-import { useStore } from '../store/useStore'
+import { useStore, calculatePolygonArea } from '../store/useStore'
 import {
     useLotIds,
     useModelSetup, useDistrictParameters, useEntityCount,
-    useRoadModules, useActiveLotId,
+    useRoadModules, useActiveLotId, getLotData,
 } from '../hooks/useEntityStore'
 import Section from './ui/Section'
 import ColorPicker from './ui/ColorPicker'
@@ -11,7 +11,7 @@ import SliderInput from './ui/SliderInput'
 import LineStyleSelector from './ui/LineStyleSelector'
 import {
     ChevronDown, ChevronUp, Eye, EyeOff, Palette, Plus, Minus, Trash2, Copy,
-    Layers, Settings, Building2, Route, Upload, Download,
+    Layers, Settings, Building2, Route, Upload, Download, BarChart3, Hexagon,
 } from 'lucide-react'
 import ImportWizard from './ImportWizard'
 
@@ -123,7 +123,7 @@ const VisibilityToggle = ({ visible, onClick }) => (
 // MODEL PARAMETERS TABLE
 // ============================================
 
-const ModelParametersTable = () => {
+const ModelParametersTable = ({ collapseKey, allModelCollapsed }) => {
     const lotIds = useLotIds()
     const updateLotParam = useStore((s) => s.updateLotParam)
     const updateLotSetback = useStore((s) => s.updateLotSetback)
@@ -323,9 +323,15 @@ const ModelParametersTable = () => {
                 },
                 {
                     label: 'Show Max. Height Plane',
-                    visKey: 'maxHeightPlane',
+                    visKey: 'maxHeightPlanePrincipal',
                     getValue: () => true,
                     type: 'display',
+                },
+                {
+                    label: 'Edit Shape',
+                    type: 'action',
+                    buildingType: 'principal',
+                    canAct: (lot) => (lot.buildings?.principal?.width ?? 0) > 0 && (lot.buildings?.principal?.stories ?? 0) > 0,
                 },
             ],
         },
@@ -385,9 +391,15 @@ const ModelParametersTable = () => {
                 },
                 {
                     label: 'Show Max. Height Plane',
-                    visKey: 'maxHeightPlane',
+                    visKey: 'maxHeightPlaneAccessory',
                     getValue: () => true,
                     type: 'display',
+                },
+                {
+                    label: 'Edit Shape',
+                    type: 'action',
+                    buildingType: 'accessory',
+                    canAct: (lot) => (lot.buildings?.accessory?.width ?? 0) > 0 && (lot.buildings?.accessory?.stories ?? 0) > 0,
                 },
             ],
         },
@@ -527,6 +539,8 @@ const ModelParametersTable = () => {
                             firstLotVis={firstLotVis}
                             setLotVisibilityAction={setLotVisibilityAction}
                             lotCornerStatus={lotCornerStatus}
+                            collapseKey={collapseKey}
+                            allModelCollapsed={allModelCollapsed}
                         />
                     ))}
                 </tbody>
@@ -536,9 +550,16 @@ const ModelParametersTable = () => {
 }
 
 /** A group of rows in the model parameters table with a collapsible section header */
-const SectionGroup = ({ section, lotIds, lots, firstLotVis, setLotVisibilityAction, lotCornerStatus }) => {
+const SectionGroup = ({ section, lotIds, lots, firstLotVis, setLotVisibilityAction, lotCornerStatus, collapseKey, allModelCollapsed }) => {
     const [isOpen, setIsOpen] = useState(true)
+    // Sync with parent collapse-all toggle
+    const [prevCollapseKey, setPrevCollapseKey] = useState(collapseKey)
+    if (collapseKey !== prevCollapseKey) {
+        setPrevCollapseKey(collapseKey)
+        setIsOpen(!allModelCollapsed)
+    }
     const regenerateEntityBuilding = useStore((s) => s.regenerateEntityBuilding)
+    const enableEntityBuildingPolygonMode = useStore((s) => s.enableEntityBuildingPolygonMode)
 
     // Detect if this is a Structures section with a deleted building
     const isStructuresSection = section.title === 'Structures Principal' || section.title === 'Structures Accessory'
@@ -599,6 +620,27 @@ const SectionGroup = ({ section, lotIds, lots, firstLotVis, setLotVisibilityActi
                         return (
                             <td key={lotId} className="py-1 px-1 text-center text-xs" style={{ color: 'var(--ui-text-muted)' }}>
                                 --
+                            </td>
+                        )
+                    }
+
+                    if (row.type === 'action') {
+                        const canAct = row.canAct ? row.canAct(lot) : true
+                        return (
+                            <td key={lotId} className="py-1 px-1 text-center">
+                                {canAct ? (
+                                    <button
+                                        onClick={() => enableEntityBuildingPolygonMode(lotId, row.buildingType)}
+                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] transition-colors"
+                                        style={{ color: 'var(--ui-accent)', border: '1px solid var(--ui-accent)' }}
+                                        title={`Edit ${row.buildingType} shape`}
+                                    >
+                                        <Hexagon className="w-3 h-3" />
+                                        Edit
+                                    </button>
+                                ) : (
+                                    <span className="text-[10px]" style={{ color: 'var(--ui-text-muted)' }}>--</span>
+                                )}
                             </td>
                         )
                     }
@@ -836,6 +878,18 @@ const DistrictParametersSection = () => {
     const [collapsed, setCollapsed] = useState({})
     const [showImportWizard, setShowImportWizard] = useState(false)
     const toggle = (key) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))
+    const allDistrictKeys = ['lotDimensions', 'setbacksPrincipal', 'setbacksAccessory', 'structures', 'lotAccess', 'parkingLocations']
+    const allCollapsed = allDistrictKeys.every(k => collapsed[k])
+    const toggleCollapseAll = (e) => {
+        e.stopPropagation()
+        if (allCollapsed) {
+            setCollapsed({})
+        } else {
+            const next = {}
+            allDistrictKeys.forEach(k => { next[k] = true })
+            setCollapsed(next)
+        }
+    }
 
     const dp = (path) => {
         const keys = path.split('.')
@@ -852,15 +906,25 @@ const DistrictParametersSection = () => {
             icon={<Building2 className="w-4 h-4" />}
             defaultOpen={false}
             headerRight={
-                <button
-                    onClick={(e) => { e.stopPropagation(); setShowImportWizard(true) }}
-                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] transition-opacity hover:opacity-80"
-                    style={{ color: 'var(--ui-accent)' }}
-                    title="Import district parameters from CSV"
-                >
-                    <Upload className="w-3 h-3" />
-                    Import CSV
-                </button>
+                <div className="flex items-center gap-1">
+                    <button
+                        onClick={toggleCollapseAll}
+                        className="px-1.5 py-0.5 rounded text-[10px] transition-opacity hover:opacity-80"
+                        style={{ color: 'var(--ui-text-muted)' }}
+                        title={allCollapsed ? 'Expand All' : 'Collapse All'}
+                    >
+                        {allCollapsed ? 'Expand All' : 'Collapse All'}
+                    </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setShowImportWizard(true) }}
+                        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] transition-opacity hover:opacity-80"
+                        style={{ color: 'var(--ui-accent)' }}
+                        title="Import district parameters from CSV"
+                    >
+                        <Upload className="w-3 h-3" />
+                        Import CSV
+                    </button>
+                </div>
             }
         >
             {showImportWizard && (
@@ -872,8 +936,8 @@ const DistrictParametersSection = () => {
 
             {/* Lot Dimensions */}
             <div className="mb-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1 cursor-pointer select-none flex items-center gap-1"
-                    style={{ color: 'var(--ui-text-muted)' }}
+                <h4 className="text-[10px] font-bold uppercase tracking-wider cursor-pointer select-none flex items-center gap-1"
+                    style={{ color: 'var(--ui-text-secondary)', borderBottom: '1px solid var(--ui-border)', borderLeft: '2px solid var(--ui-text-muted)', paddingLeft: '6px', paddingBottom: '4px', paddingTop: '8px' }}
                     onClick={() => toggle('lotDimensions')}>
                     <ChevronDown className={`w-3 h-3 transition-transform ${collapsed.lotDimensions ? '-rotate-90' : ''}`} />
                     Lot Dimensions
@@ -903,8 +967,8 @@ const DistrictParametersSection = () => {
 
             {/* Setbacks - Principal */}
             <div className="mb-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1 cursor-pointer select-none flex items-center gap-1"
-                    style={{ color: 'var(--ui-text-muted)' }}
+                <h4 className="text-[10px] font-bold uppercase tracking-wider cursor-pointer select-none flex items-center gap-1"
+                    style={{ color: 'var(--ui-text-secondary)', borderBottom: '1px solid var(--ui-border)', borderLeft: '2px solid var(--ui-text-muted)', paddingLeft: '6px', paddingBottom: '4px', paddingTop: '8px' }}
                     onClick={() => toggle('setbacksPrincipal')}>
                     <ChevronDown className={`w-3 h-3 transition-transform ${collapsed.setbacksPrincipal ? '-rotate-90' : ''}`} />
                     Setbacks - Principal
@@ -959,8 +1023,8 @@ const DistrictParametersSection = () => {
 
             {/* Setbacks - Accessory */}
             <div className="mb-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1 cursor-pointer select-none flex items-center gap-1"
-                    style={{ color: 'var(--ui-text-muted)' }}
+                <h4 className="text-[10px] font-bold uppercase tracking-wider cursor-pointer select-none flex items-center gap-1"
+                    style={{ color: 'var(--ui-text-secondary)', borderBottom: '1px solid var(--ui-border)', borderLeft: '2px solid var(--ui-text-muted)', paddingLeft: '6px', paddingBottom: '4px', paddingTop: '8px' }}
                     onClick={() => toggle('setbacksAccessory')}>
                     <ChevronDown className={`w-3 h-3 transition-transform ${collapsed.setbacksAccessory ? '-rotate-90' : ''}`} />
                     Setbacks - Accessory
@@ -990,8 +1054,8 @@ const DistrictParametersSection = () => {
 
             {/* Structures */}
             <div className="mb-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1 cursor-pointer select-none flex items-center gap-1"
-                    style={{ color: 'var(--ui-text-muted)' }}
+                <h4 className="text-[10px] font-bold uppercase tracking-wider cursor-pointer select-none flex items-center gap-1"
+                    style={{ color: 'var(--ui-text-secondary)', borderBottom: '1px solid var(--ui-border)', borderLeft: '2px solid var(--ui-text-muted)', paddingLeft: '6px', paddingBottom: '4px', paddingTop: '8px' }}
                     onClick={() => toggle('structures')}>
                     <ChevronDown className={`w-3 h-3 transition-transform ${collapsed.structures ? '-rotate-90' : ''}`} />
                     Structures
@@ -1027,8 +1091,8 @@ const DistrictParametersSection = () => {
 
             {/* Lot Access */}
             <div className="mb-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1 cursor-pointer select-none flex items-center gap-1"
-                    style={{ color: 'var(--ui-text-muted)' }}
+                <h4 className="text-[10px] font-bold uppercase tracking-wider cursor-pointer select-none flex items-center gap-1"
+                    style={{ color: 'var(--ui-text-secondary)', borderBottom: '1px solid var(--ui-border)', borderLeft: '2px solid var(--ui-text-muted)', paddingLeft: '6px', paddingBottom: '4px', paddingTop: '8px' }}
                     onClick={() => toggle('lotAccess')}>
                     <ChevronDown className={`w-3 h-3 transition-transform ${collapsed.lotAccess ? '-rotate-90' : ''}`} />
                     Lot Access
@@ -1069,8 +1133,8 @@ const DistrictParametersSection = () => {
 
             {/* Parking Locations */}
             <div className="mb-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1 cursor-pointer select-none flex items-center gap-1"
-                    style={{ color: 'var(--ui-text-muted)' }}
+                <h4 className="text-[10px] font-bold uppercase tracking-wider cursor-pointer select-none flex items-center gap-1"
+                    style={{ color: 'var(--ui-text-secondary)', borderBottom: '1px solid var(--ui-border)', borderLeft: '2px solid var(--ui-text-muted)', paddingLeft: '6px', paddingBottom: '4px', paddingTop: '8px' }}
                     onClick={() => toggle('parkingLocations')}>
                     <ChevronDown className={`w-3 h-3 transition-transform ${collapsed.parkingLocations ? '-rotate-90' : ''}`} />
                     Parking Locations
@@ -1377,11 +1441,29 @@ const RoadModuleStylesSection = () => {
 
     const [collapsedZones, setCollapsedZones] = useState({})
     const toggleZone = (key) => setCollapsedZones(prev => ({ ...prev, [key]: !prev[key] }))
+    const [savedSnapshot, setSavedSnapshot] = useState(null)
 
     if (!roadModuleStyles) return null
 
     // Use roadWidth lineWidth as the reference for the universal slider
     const universalLineWidth = roadModuleStyles.roadWidth?.lineWidth ?? 1
+
+    // Snapshot current styles before applying global changes
+    const snapshotAndApply = (fn) => {
+        if (!savedSnapshot) setSavedSnapshot(JSON.parse(JSON.stringify(roadModuleStyles)))
+        fn()
+    }
+    const handleResetGlobal = () => {
+        if (!savedSnapshot) return
+        for (const [key, val] of Object.entries(savedSnapshot)) {
+            if (typeof val === 'object' && val !== null) {
+                for (const [prop, propVal] of Object.entries(val)) {
+                    setRoadModuleStyle(key, prop, propVal)
+                }
+            }
+        }
+        setSavedSnapshot(null)
+    }
 
     const renderZoneHeader = (zoneKey, label) => (
         <div
@@ -1432,15 +1514,26 @@ const RoadModuleStylesSection = () => {
         <Section title="Road Module Styles" icon={<Palette className="w-4 h-4" />} defaultOpen={false}>
             {/* Global Controls */}
             <div style={{ marginBottom: '12px' }}>
-                <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '4px', fontWeight: 'bold', color: 'var(--ui-accent)' }}>Global</span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 'bold', color: 'var(--ui-accent)' }}>Global</span>
+                    {savedSnapshot && (
+                        <button
+                            onClick={handleResetGlobal}
+                            className="text-[9px] px-1.5 py-0.5 rounded transition-colors"
+                            style={{ color: 'var(--ui-warning)', border: '1px solid var(--ui-warning)' }}
+                        >
+                            Reset
+                        </button>
+                    )}
+                </div>
                 <ControlRow label="Color">
-                    <ColorPicker value={roadModuleStyles.roadWidth?.fillColor ?? '#666666'} onChange={(c) => setAllRoadZoneColor(c)} />
+                    <ColorPicker value={roadModuleStyles.roadWidth?.fillColor ?? '#666666'} onChange={(c) => snapshotAndApply(() => setAllRoadZoneColor(c))} />
                 </ControlRow>
                 <ControlRow label="Opacity">
-                    <SliderInput value={roadModuleStyles.roadWidth?.fillOpacity ?? 1} onChange={(v) => setAllRoadZoneOpacity(v)} min={0} max={1} step={0.05} />
+                    <SliderInput value={roadModuleStyles.roadWidth?.fillOpacity ?? 1} onChange={(v) => snapshotAndApply(() => setAllRoadZoneOpacity(v))} min={0} max={1} step={0.05} />
                 </ControlRow>
                 <ControlRow label="Line Width">
-                    <SliderInput value={universalLineWidth} onChange={(v) => setAllRoadLineWidths(v)} min={0.5} max={5} step={0.5} />
+                    <SliderInput value={universalLineWidth} onChange={(v) => snapshotAndApply(() => setAllRoadLineWidths(v))} min={0.5} max={5} step={0.5} />
                 </ControlRow>
             </div>
 
@@ -1486,6 +1579,32 @@ const RoadModuleStylesSection = () => {
                     </ControlRow>
                     <ControlRow label="Fill Opacity">
                         <SliderInput value={roadModuleStyles.roadWidth?.fillOpacity ?? 0.8} onChange={(v) => setRoadModuleStyle('roadWidth', 'fillOpacity', v)} min={0} max={1} step={0.05} />
+                    </ControlRow>
+                </div>
+            )}
+
+            {/* Intersection Fill */}
+            {renderZoneHeader('intersectionFill', 'Intersection Fill')}
+            {!collapsedZones.intersectionFill && (
+                <div style={{ marginBottom: '12px' }}>
+                    <ControlRow label="Fill Color">
+                        <ColorPicker value={roadModuleStyles.intersectionFill?.fillColor ?? roadModuleStyles.roadWidth?.fillColor ?? '#666666'} onChange={(c) => setRoadModuleStyle('intersectionFill', 'fillColor', c)} />
+                    </ControlRow>
+                    <ControlRow label="Fill Opacity">
+                        <SliderInput value={roadModuleStyles.intersectionFill?.fillOpacity ?? 1} onChange={(v) => setRoadModuleStyle('intersectionFill', 'fillOpacity', v)} min={0} max={1} step={0.05} />
+                    </ControlRow>
+                </div>
+            )}
+
+            {/* Alley Intersection Fill */}
+            {renderZoneHeader('alleyIntersectionFill', 'Alley Intersection Fill')}
+            {!collapsedZones.alleyIntersectionFill && (
+                <div style={{ marginBottom: '12px' }}>
+                    <ControlRow label="Fill Color">
+                        <ColorPicker value={roadModuleStyles.alleyIntersectionFill?.fillColor ?? '#666666'} onChange={(c) => setRoadModuleStyle('alleyIntersectionFill', 'fillColor', c)} />
+                    </ControlRow>
+                    <ControlRow label="Fill Opacity">
+                        <SliderInput value={roadModuleStyles.alleyIntersectionFill?.fillOpacity ?? 1} onChange={(v) => setRoadModuleStyle('alleyIntersectionFill', 'fillOpacity', v)} min={0} max={1} step={0.05} />
                     </ControlRow>
                 </div>
             )}
@@ -2042,7 +2161,9 @@ const InlineStyleControls = ({ lotId, category, style }) => {
     }
 
     // Mesh-only categories: only color + opacity (no line width/dashed)
-    const isMeshCategory = ['btzPlanes', 'lotAccessArrows', 'principalBuildingFaces', 'accessoryBuildingFaces', 'buildingFaces', 'roofFaces', 'maxHeightPlane'].includes(category)
+    const isMeshCategory = ['btzPlanes', 'lotAccessArrows', 'principalBuildingFaces', 'accessoryBuildingFaces', 'buildingFaces', 'roofFaces'].includes(category)
+    // Hybrid categories: mesh controls (fill color/opacity) + line controls (lineColor/lineWidth/lineDashed)
+    const isHybridCategory = category === 'maxHeightPlane'
 
     return (
         <div
@@ -2054,7 +2175,47 @@ const InlineStyleControls = ({ lotId, category, style }) => {
                 borderColor: 'var(--ui-border)',
             }}
         >
-            {isMeshCategory ? (
+            {isHybridCategory ? (
+                <div className="space-y-1">
+                    <ColorPicker
+                        label="Fill Color"
+                        value={style.color ?? '#FF6B6B'}
+                        onChange={(v) => handleChange('color', v)}
+                    />
+                    <SliderInput
+                        label="Fill Opacity"
+                        value={style.opacity ?? 0.3}
+                        onChange={(v) => handleChange('opacity', v)}
+                        min={0}
+                        max={1}
+                        step={0.05}
+                    />
+                    <ColorPicker
+                        label="Line Color"
+                        value={style.lineColor ?? '#FF0000'}
+                        onChange={(v) => handleChange('lineColor', v)}
+                    />
+                    <SliderInput
+                        label="Line Width"
+                        value={style.lineWidth ?? 2}
+                        onChange={(v) => handleChange('lineWidth', v)}
+                        min={0.5}
+                        max={5}
+                        step={0.5}
+                    />
+                    <div style={{ paddingTop: '4px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer', color: 'var(--ui-text-muted)' }}>
+                            <input
+                                type="checkbox"
+                                checked={style.lineDashed ?? true}
+                                onChange={(e) => handleChange('lineDashed', e.target.checked)}
+                                style={{ borderColor: 'var(--ui-border)' }}
+                            />
+                            Dashed
+                        </label>
+                    </div>
+                </div>
+            ) : isMeshCategory ? (
                 <div className="space-y-1">
                     <ColorPicker
                         label="Color"
@@ -2118,6 +2279,13 @@ const ModelParametersSection = () => {
     const removeLot = useStore((s) => s.removeLot)
     const selectEntity = useStore((s) => s.selectEntity)
     const activeLotId = useActiveLotId()
+    const [collapseKey, setCollapseKey] = useState(0)
+    const [allModelCollapsed, setAllModelCollapsed] = useState(false)
+    const toggleModelCollapseAll = (e) => {
+        e.stopPropagation()
+        setAllModelCollapsed(!allModelCollapsed)
+        setCollapseKey(k => k + 1)
+    }
 
     // Lot header with duplicate/delete actions
     const renderLotHeader = () => {
@@ -2161,11 +2329,20 @@ const ModelParametersSection = () => {
     }
 
     return (
-        <Section title="Model Parameters" defaultOpen={true}>
+        <Section title="Model Parameters" defaultOpen={true} headerRight={
+            <button
+                onClick={toggleModelCollapseAll}
+                className="px-1.5 py-0.5 rounded text-[10px] transition-opacity hover:opacity-80"
+                style={{ color: 'var(--ui-text-muted)' }}
+                title={allModelCollapsed ? 'Expand All' : 'Collapse All'}
+            >
+                {allModelCollapsed ? 'Expand All' : 'Collapse All'}
+            </button>
+        }>
             {renderLotHeader()}
 
             {lotIds.length > 0 ? (
-                <ModelParametersTable />
+                <ModelParametersTable collapseKey={collapseKey} allModelCollapsed={allModelCollapsed} />
             ) : (
                 <p className="text-xs italic" style={{ color: 'var(--ui-text-muted)' }}>No lots. Use Model Setup to add lots.</p>
             )}
@@ -2318,6 +2495,132 @@ const AnnotationSettingsSection = () => {
     )
 }
 
+// ============================================
+// ANALYTICS SECTION — Per-lot metrics dashboard
+// ============================================
+
+const AnalyticsSection = () => {
+    const lotIds = useLotIds()
+    const lots = useStore((s) => s.entities?.lots ?? {})
+
+    const metrics = useMemo(() => {
+        let districtLotArea = 0
+        let districtGFA = 0
+        let districtFootprint = 0
+
+        const perLot = lotIds.map((lotId) => {
+            const lot = lots[lotId]
+            if (!lot) return { lotArea: 0, coverage: 0, gfa: 0, far: 0, footprint: 0 }
+
+            // Lot area
+            const isPolygon = lot.lotGeometry?.mode === 'polygon' && lot.lotGeometry?.vertices?.length >= 3
+            const lotArea = isPolygon
+                ? calculatePolygonArea(lot.lotGeometry.vertices)
+                : (lot.lotWidth ?? 50) * (lot.lotDepth ?? 100)
+
+            // Building footprints + GFA
+            let totalFootprint = 0
+            let totalGFA = 0
+            for (const type of ['principal', 'accessory']) {
+                const b = lot.buildings?.[type]
+                if (b && b.width > 0 && b.depth > 0 && (b.stories ?? 0) > 0) {
+                    const footprint = b.width * b.depth
+                    totalFootprint += footprint
+                    totalGFA += footprint * b.stories
+                }
+            }
+
+            const coverage = lotArea > 0 ? (totalFootprint / lotArea) * 100 : 0
+            const far = lotArea > 0 ? totalGFA / lotArea : 0
+
+            districtLotArea += lotArea
+            districtGFA += totalGFA
+            districtFootprint += totalFootprint
+
+            return { lotArea, coverage, gfa: totalGFA, far, footprint: totalFootprint }
+        })
+
+        const districtCoverage = districtLotArea > 0 ? (districtFootprint / districtLotArea) * 100 : 0
+        const districtFAR = districtLotArea > 0 ? districtGFA / districtLotArea : 0
+
+        return { perLot, district: { lotArea: districtLotArea, coverage: districtCoverage, gfa: districtGFA, far: districtFAR } }
+    }, [lotIds, lots])
+
+    const formatNum = (n, decimals = 0) => {
+        if (n == null || isNaN(n)) return '--'
+        return n.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+    }
+
+    const metricRows = [
+        { label: 'Lot Area', unit: 'SF', key: 'lotArea', decimals: 0 },
+        { label: 'Coverage', unit: '%', key: 'coverage', decimals: 1, showBar: true },
+        { label: 'GFA', unit: 'SF', key: 'gfa', decimals: 0 },
+        { label: 'FAR', unit: '', key: 'far', decimals: 2 },
+    ]
+
+    return (
+        <Section title="Analytics" icon={<BarChart3 className="w-4 h-4" />} defaultOpen={true}>
+            <div className="overflow-x-auto">
+                <table className="w-full text-xs border-collapse">
+                    <thead>
+                        <tr style={{ borderBottom: '1px solid var(--ui-border)' }}>
+                            <th
+                                className="text-left font-medium py-1 pr-2 min-w-[80px]"
+                                style={{ color: 'var(--ui-text-secondary)' }}
+                            >
+                                Metric
+                            </th>
+                            {lotIds.map((_, i) => (
+                                <th key={i} className="text-right font-medium py-1 px-1 min-w-[65px]" style={{ color: 'var(--ui-text-secondary)' }}>
+                                    Lot {i + 1}
+                                </th>
+                            ))}
+                            {lotIds.length > 1 && (
+                                <th className="text-right font-medium py-1 px-1 min-w-[65px]" style={{ color: 'var(--ui-accent)' }}>
+                                    Total
+                                </th>
+                            )}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {metricRows.map(({ label, unit, key, decimals, showBar }) => (
+                            <tr key={key} style={{ borderBottom: '1px solid var(--ui-border)' }}>
+                                <td className="py-1.5 pr-2 font-medium" style={{ color: 'var(--ui-text-secondary)' }}>
+                                    {label}
+                                    {unit && <span className="ml-1 opacity-50 font-normal">({unit})</span>}
+                                </td>
+                                {metrics.perLot.map((m, i) => (
+                                    <td key={i} className="text-right py-1.5 px-1">
+                                        <div className="relative">
+                                            {showBar && (
+                                                <div
+                                                    className="absolute inset-0 rounded-sm opacity-20"
+                                                    style={{
+                                                        backgroundColor: 'var(--ui-accent)',
+                                                        width: `${Math.min(100, m[key])}%`,
+                                                    }}
+                                                />
+                                            )}
+                                            <span className="relative" style={{ color: 'var(--ui-text-primary)' }}>
+                                                {formatNum(m[key], decimals)}
+                                            </span>
+                                        </div>
+                                    </td>
+                                ))}
+                                {lotIds.length > 1 && (
+                                    <td className="text-right py-1.5 px-1 font-semibold" style={{ color: 'var(--ui-accent)' }}>
+                                        {formatNum(metrics.district[key], decimals)}
+                                    </td>
+                                )}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </Section>
+    )
+}
+
 const DistrictParameterPanel = () => {
     return (
         <div
@@ -2346,6 +2649,7 @@ const DistrictParameterPanel = () => {
                 <DistrictParametersSection />
                 <ModelParametersSection />
                 <StylesSection />
+                <AnalyticsSection />
                 <BuildingRoofSection />
                 <RoadModulesSection />
                 <RoadModuleStylesSection />

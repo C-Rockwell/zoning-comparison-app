@@ -622,7 +622,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     firstFloorHeight={principal.firstFloorHeight ?? 12}
                     upperFloorHeight={principal.upperFloorHeight ?? 10}
                     maxHeight={principal.maxHeight ?? 30}
-                    showMaxHeightPlane={layers.maxHeightPlane && visibility.maxHeightPlane}
+                    showMaxHeightPlane={(layers.maxHeightPlanePrincipal ?? layers.maxHeightPlane) && (visibility.maxHeightPlanePrincipal ?? visibility.maxHeightPlane)}
                     maxHeightPlaneStyle={style.maxHeightPlane}
                     roof={principal.roof}
                     roofStyles={{ roofFaces: style.roofFaces, roofEdges: style.roofEdges }}
@@ -659,7 +659,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     firstFloorHeight={accessory.firstFloorHeight ?? 10}
                     upperFloorHeight={accessory.upperFloorHeight ?? 10}
                     maxHeight={accessory.maxHeight ?? 15}
-                    showMaxHeightPlane={layers.maxHeightPlane && visibility.maxHeightPlane}
+                    showMaxHeightPlane={(layers.maxHeightPlaneAccessory ?? layers.maxHeightPlane) && (visibility.maxHeightPlaneAccessory ?? visibility.maxHeightPlane)}
                     maxHeightPlaneStyle={style.maxHeightPlane}
                     roof={accessory.roof}
                     roofStyles={{ roofFaces: style.roofFaces, roofEdges: style.roofEdges }}
@@ -718,7 +718,16 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
             {/* ============================================ */}
             {/* Lot Access Arrows */}
             {/* ============================================ */}
-            {layers.lotAccessArrows && visibility.lotAccessArrows && lot.lotAccess && (
+            {layers.lotAccessArrows && visibility.lotAccessArrows && lot.lotAccess && (() => {
+                // Validate stored positions — ignore if outside lot bounds (stale from old dimensions)
+                const validPos = (key, fallback) => {
+                    const stored = annotationPositions[key]
+                    if (!stored) return fallback
+                    const margin = 20
+                    if (Math.abs(stored[0]) > lotWidth / 2 + margin || Math.abs(stored[1]) > lotDepth / 2 + margin) return fallback
+                    return stored
+                }
+                return (
                 <group>
                     {lot.lotAccess.front && (
                         <LotAccessArrow
@@ -728,7 +737,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                             lotDepth={lotDepth}
                             streetSides={streetSides}
                             style={style?.lotAccessArrows}
-                            position={annotationPositions[`lot-${lotId}-access-front`] || [0, -lotDepth / 2 + 5, 0]}
+                            position={validPos(`lot-${lotId}-access-front`, [0, -lotDepth / 2 + 5, 0])}
                             onPositionChange={(pos) => setAnnotationPosition(`lot-${lotId}-access-front`, pos)}
                         />
                     )}
@@ -740,7 +749,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                             lotDepth={lotDepth}
                             streetSides={streetSides}
                             style={style?.lotAccessArrows}
-                            position={annotationPositions[`lot-${lotId}-access-rear`] || [0, lotDepth / 2 - 5, 0]}
+                            position={validPos(`lot-${lotId}-access-rear`, [0, lotDepth / 2 - 5, 0])}
                             onPositionChange={(pos) => setAnnotationPosition(`lot-${lotId}-access-rear`, pos)}
                         />
                     )}
@@ -752,10 +761,10 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                             lotDepth={lotDepth}
                             streetSides={streetSides}
                             style={style?.lotAccessArrows}
-                            position={annotationPositions[`lot-${lotId}-access-sidestreet`] || [
+                            position={validPos(`lot-${lotId}-access-sidestreet`, [
                                 streetSides.left ? -lotWidth / 2 + 5 : lotWidth / 2 - 5,
                                 0, 0
-                            ]}
+                            ])}
                             onPositionChange={(pos) => setAnnotationPosition(`lot-${lotId}-access-sidestreet`, pos)}
                         />
                     )}
@@ -768,15 +777,16 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                             streetSides={streetSides}
                             style={style?.lotAccessArrows}
                             bidirectional={true}
-                            position={annotationPositions[`lot-${lotId}-access-shareddrive`] || [
+                            position={validPos(`lot-${lotId}-access-shareddrive`, [
                                 streetSides.right ? -lotWidth / 2 : lotWidth / 2,
                                 -lotDepth / 2, 0
-                            ]}
+                            ])}
                             onPositionChange={(pos) => setAnnotationPosition(`lot-${lotId}-access-shareddrive`, pos)}
                         />
                     )}
                 </group>
-            )}
+                )
+            })()}
         </group>
     )
 }
