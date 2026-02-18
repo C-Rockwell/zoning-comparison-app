@@ -485,7 +485,7 @@ const MoveModeCapturePlane = ({ experimental = false }) => {
     const setEntityBuildingPosition = useStore((s) => s.setEntityBuildingPosition)
     const setAnnotationPosition = useStore((s) => s.setAnnotationPosition)
     const exitMoveMode = useStore((s) => s.exitMoveMode)
-    const { controls } = useThree()
+    const { controls, camera, gl } = useThree()
     const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), [])
     const planeIntersectPoint = useMemo(() => new THREE.Vector3(), [])
 
@@ -515,6 +515,78 @@ const MoveModeCapturePlane = ({ experimental = false }) => {
             if (controls) controls.enabled = true
         }
     }, [experimental, controls])
+
+    // Experimental mode: use global pointer listeners for robust move tracking.
+    // This avoids dependence on mesh hover/raycast order while moving.
+    useEffect(() => {
+        if (!experimental || !moveMode?.active || moveMode.phase !== 'moving' || !moveMode.basePoint) return
+
+        const raycaster = new THREE.Raycaster()
+        const ndc = new THREE.Vector2()
+        const worldPoint = new THREE.Vector3()
+
+        const projectPointerToGround = (clientX, clientY) => {
+            const rect = gl.domElement.getBoundingClientRect()
+            ndc.x = ((clientX - rect.left) / rect.width) * 2 - 1
+            ndc.y = -((clientY - rect.top) / rect.height) * 2 + 1
+            raycaster.setFromCamera(ndc, camera)
+            if (!raycaster.ray.intersectPlane(plane, worldPoint)) return null
+            return worldPoint
+        }
+
+        const onPointerMove = (event) => {
+            const hit = projectPointerToGround(event.clientX, event.clientY)
+            if (!hit) return
+
+            if (moveMode.targetType === 'building') {
+                const lotOffset = lotOffsets[moveMode.targetLotId] ?? { x: 0, y: 0 }
+                const localX = hit.x - lotOffset.x
+                const localY = hit.y - lotOffset.y
+                const dx = localX - moveMode.basePoint[0]
+                const dy = localY - moveMode.basePoint[1]
+                const newX = Math.round((moveMode.originalPosition?.[0] ?? 0) + dx)
+                const newY = Math.round((moveMode.originalPosition?.[1] ?? 0) + dy)
+                setEntityBuildingPosition(moveMode.targetLotId, moveMode.targetBuildingType, newX, newY)
+            } else if (moveMode.targetType === 'lotAccessArrow') {
+                const dx = hit.x - moveMode.basePoint[0]
+                const dy = hit.y - moveMode.basePoint[1]
+                const newPos = [
+                    (moveMode.originalPosition?.[0] ?? 0) + dx,
+                    (moveMode.originalPosition?.[1] ?? 0) + dy,
+                    moveMode.originalPosition?.[2] ?? 0,
+                ]
+                setAnnotationPosition(`lot-${moveMode.targetLotId}-access-${moveMode.targetDirection}`, newPos)
+            }
+        }
+
+        const onPointerDown = (event) => {
+            if (event.button !== 0) return
+            event.preventDefault()
+            event.stopPropagation()
+            useStore.temporal.getState().resume()
+            if (controls) controls.enabled = true
+            exitMoveMode()
+        }
+
+        window.addEventListener('pointermove', onPointerMove)
+        window.addEventListener('pointerdown', onPointerDown, true)
+
+        return () => {
+            window.removeEventListener('pointermove', onPointerMove)
+            window.removeEventListener('pointerdown', onPointerDown, true)
+        }
+    }, [
+        experimental,
+        moveMode,
+        lotOffsets,
+        setEntityBuildingPosition,
+        setAnnotationPosition,
+        exitMoveMode,
+        controls,
+        camera,
+        gl,
+        plane,
+    ])
 
     const handlePointerMove = useCallback((e) => {
         if (!moveMode?.active || moveMode.phase !== 'moving' || !moveMode.basePoint) return
@@ -550,6 +622,8 @@ const MoveModeCapturePlane = ({ experimental = false }) => {
         if (controls) controls.enabled = true // eslint-disable-line react-hooks/immutability
         exitMoveMode()
     }, [exitMoveMode, controls])
+
+    if (experimental) return null
 
     return (
         <mesh
