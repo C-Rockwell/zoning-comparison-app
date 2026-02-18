@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useCallback } from 'react'
 import * as THREE from 'three'
 import { useStore } from '../store/useStore'
 import { useLotIds, useRoadModules, getLotData } from '../hooks/useEntityStore'
@@ -438,6 +438,80 @@ const EntityRoadModules = ({ lotPositions }) => {
 }
 
 // ============================================
+// MoveModeCapturePlane — invisible full-screen plane
+// that captures pointer events during move mode
+// so user can move the mouse freely in 3D space
+// ============================================
+const MoveModeCapturePlane = () => {
+    const moveMode = useStore((s) => s.moveMode)
+    const setEntityBuildingPosition = useStore((s) => s.setEntityBuildingPosition)
+    const setAnnotationPosition = useStore((s) => s.setAnnotationPosition)
+    const exitMoveMode = useStore((s) => s.exitMoveMode)
+    const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), [])
+    const planeIntersectPoint = useMemo(() => new THREE.Vector3(), [])
+
+    // Get lot offset for building position calculation
+    const lotIds = useLotIds()
+    const lotPositions = useMemo(() => {
+        const positions = {}
+        let negOffset = 0
+        for (let i = 0; i < lotIds.length; i++) {
+            const lot = getLotData(lotIds[i])
+            const lotWidth = lot?.lotWidth || 50
+            if (i === 0) {
+                positions[lotIds[i]] = lotWidth / 2
+            } else {
+                negOffset -= lotWidth
+                positions[lotIds[i]] = negOffset + lotWidth / 2
+            }
+        }
+        return positions
+    }, [lotIds])
+
+    const handlePointerMove = useCallback((e) => {
+        if (!moveMode?.active || moveMode.phase !== 'moving' || !moveMode.basePoint) return
+        e.stopPropagation()
+        if (!e.ray.intersectPlane(plane, planeIntersectPoint)) return
+
+        if (moveMode.targetType === 'building') {
+            const offsetGroupX = lotPositions[moveMode.targetLotId] ?? 0
+            const localX = planeIntersectPoint.x - offsetGroupX
+            const localY = planeIntersectPoint.y
+            const dx = localX - moveMode.basePoint[0]
+            const dy = localY - moveMode.basePoint[1]
+            const newX = Math.round((moveMode.originalPosition?.[0] ?? 0) + dx)
+            const newY = Math.round((moveMode.originalPosition?.[1] ?? 0) + dy)
+            setEntityBuildingPosition(moveMode.targetLotId, moveMode.targetBuildingType, newX, newY)
+        } else if (moveMode.targetType === 'lotAccessArrow') {
+            const dx = planeIntersectPoint.x - moveMode.basePoint[0]
+            const dy = planeIntersectPoint.y - moveMode.basePoint[1]
+            const newPos = [
+                (moveMode.originalPosition?.[0] ?? 0) + dx,
+                (moveMode.originalPosition?.[1] ?? 0) + dy,
+                moveMode.originalPosition?.[2] ?? 0,
+            ]
+            setAnnotationPosition(`lot-${moveMode.targetLotId}-access-${moveMode.targetDirection}`, newPos)
+        }
+    }, [moveMode, plane, planeIntersectPoint, lotPositions, setEntityBuildingPosition, setAnnotationPosition])
+
+    const handlePointerDown = useCallback((e) => {
+        e.stopPropagation()
+        exitMoveMode()
+    }, [exitMoveMode])
+
+    return (
+        <mesh
+            position={[0, 0, 0.001]}
+            onPointerMove={handlePointerMove}
+            onPointerDown={handlePointerDown}
+        >
+            <planeGeometry args={[2000, 2000]} />
+            <meshBasicMaterial visible={false} />
+        </mesh>
+    )
+}
+
+// ============================================
 // DistrictSceneContent — iterates entityOrder
 // and renders LotEntity for each lot, positioned
 // in a row along the X axis with spacing.
@@ -509,6 +583,9 @@ const DistrictSceneContent = () => {
         })
     }, [lotPositions, activeRoadDirs])
 
+    // Move mode state
+    const moveMode = useStore((s) => s.moveMode)
+
     return (
         <group>
             {/* Ground plane */}
@@ -525,6 +602,11 @@ const DistrictSceneContent = () => {
             {/* Road modules from entity system */}
             {layers.roadModule && (
                 <EntityRoadModules lotPositions={lotPositions} />
+            )}
+
+            {/* Move mode capture plane — invisible plane that captures pointer events during move */}
+            {moveMode?.active && moveMode.phase === 'moving' && (
+                <MoveModeCapturePlane />
             )}
         </group>
     )

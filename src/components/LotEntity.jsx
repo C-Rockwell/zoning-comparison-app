@@ -601,7 +601,8 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     y={principal.y}
                     buildingGeometry={principal.geometry}
                     selected={principal.selected}
-                    styles={{ faces: style.buildingFaces, edges: style.buildingEdges }}
+                    buildingType="principal"
+                    styles={{ faces: style.principalBuildingFaces ?? style.buildingFaces, edges: style.principalBuildingEdges ?? style.buildingEdges }}
                     scaleFactor={1}
                     onSelect={() => selectEntityBuilding(lotId, 'principal')}
                     onPositionChange={(x, y) => setEntityBuildingPosition(lotId, 'principal', x, y)}
@@ -638,7 +639,8 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     y={accessory.y}
                     buildingGeometry={accessory.geometry}
                     selected={accessory.selected}
-                    styles={{ faces: style.buildingFaces, edges: style.buildingEdges }}
+                    buildingType="accessory"
+                    styles={{ faces: style.accessoryBuildingFaces ?? style.buildingFaces, edges: style.accessoryBuildingEdges ?? style.buildingEdges }}
                     scaleFactor={1}
                     onSelect={() => selectEntityBuilding(lotId, 'accessory')}
                     onPositionChange={(x, y) => setEntityBuildingPosition(lotId, 'accessory', x, y)}
@@ -711,6 +713,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     {lot.lotAccess.front && (
                         <LotAccessArrow
                             direction="front"
+                            lotId={lotId}
                             lotWidth={lotWidth}
                             lotDepth={lotDepth}
                             streetSides={streetSides}
@@ -722,6 +725,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     {lot.lotAccess.rear && (
                         <LotAccessArrow
                             direction="rear"
+                            lotId={lotId}
                             lotWidth={lotWidth}
                             lotDepth={lotDepth}
                             streetSides={streetSides}
@@ -733,6 +737,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     {lot.lotAccess.sideStreet && (streetSides.left || streetSides.right) && (
                         <LotAccessArrow
                             direction="sideStreet"
+                            lotId={lotId}
                             lotWidth={lotWidth}
                             lotDepth={lotDepth}
                             streetSides={streetSides}
@@ -747,6 +752,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     {lot.lotAccess.sideInterior && (
                         <LotAccessArrow
                             direction="sharedDrive"
+                            lotId={lotId}
                             lotWidth={lotWidth}
                             lotDepth={lotDepth}
                             streetSides={streetSides}

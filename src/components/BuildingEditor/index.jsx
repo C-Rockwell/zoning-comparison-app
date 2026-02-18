@@ -3,6 +3,7 @@ import { useThree } from '@react-three/fiber'
 import { Line, Edges } from '@react-three/drei'
 import { Select } from '@react-three/postprocessing'
 import * as THREE from 'three'
+import { useStore } from '../../store/useStore'
 import VertexHandle from '../LotEditor/VertexHandle'
 import MidpointHandle from '../LotEditor/MidpointHandle'
 import EdgeHandle from '../LotEditor/EdgeHandle'
@@ -32,6 +33,7 @@ const BuildingEditor = ({
     // Building polygon state
     buildingGeometry,
     selected = false,
+    buildingType = 'principal',
     // Story system
     stories = 1,
     firstFloorHeight = 12,
@@ -68,6 +70,15 @@ const BuildingEditor = ({
     const { controls } = useThree()
     const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), [])
     const planeIntersectPoint = new THREE.Vector3()
+
+    // Move mode state
+    const moveMode = useStore((s) => s.moveMode)
+    const setMoveTarget = useStore((s) => s.setMoveTarget)
+    const setMoveBasePoint = useStore((s) => s.setMoveBasePoint)
+    const exitMoveMode = useStore((s) => s.exitMoveMode)
+
+    // Is this building the current move target?
+    const isMoveModeTarget = moveMode?.active && moveMode.targetType === 'building' && moveMode.targetLotId === model && moveMode.targetBuildingType === buildingType
 
     const isPolygon = buildingGeometry?.mode === 'polygon' && buildingGeometry?.vertices?.length >= 3
     const vertices = buildingGeometry?.vertices
@@ -142,7 +153,35 @@ const BuildingEditor = ({
 
     const handlePointerDown = (e) => {
         e.stopPropagation()
-        // Select building on click
+
+        // Move mode: select object phase
+        if (moveMode?.active && moveMode.phase === 'selectObject') {
+            if (onSelect) onSelect()
+            setMoveTarget('building', model, buildingType, null)
+            return
+        }
+
+        // Move mode: select base point phase
+        if (moveMode?.active && moveMode.phase === 'selectBase' && isMoveModeTarget) {
+            if (e.ray.intersectPlane(plane, planeIntersectPoint)) {
+                const localX = planeIntersectPoint.x - offsetGroupX
+                const localY = planeIntersectPoint.y
+                setMoveBasePoint([localX, localY], [x, y])
+            }
+            if (controls) controls.enabled = false
+            e.target.setPointerCapture(e.pointerId)
+            return
+        }
+
+        // Move mode: finalize placement
+        if (moveMode?.active && moveMode.phase === 'moving' && isMoveModeTarget) {
+            if (controls) controls.enabled = true
+            e.target.releasePointerCapture(e.pointerId)
+            exitMoveMode()
+            return
+        }
+
+        // Normal drag mode
         if (onSelect) onSelect()
         if (controls) controls.enabled = false
         setDragging(true)
@@ -151,12 +190,30 @@ const BuildingEditor = ({
 
     const handlePointerUp = (e) => {
         e.stopPropagation()
+        // Skip normal pointer up during move mode
+        if (moveMode?.active) return
         setDragging(false)
         if (controls) controls.enabled = true
         e.target.releasePointerCapture(e.pointerId)
     }
 
     const handlePointerMove = (e) => {
+        // Move mode: moving phase — update building position relative to base point
+        if (moveMode?.active && moveMode.phase === 'moving' && isMoveModeTarget && moveMode.basePoint) {
+            e.stopPropagation()
+            if (!e.ray.intersectPlane(plane, planeIntersectPoint)) return
+            const localX = planeIntersectPoint.x - offsetGroupX
+            const localY = planeIntersectPoint.y
+            const dx = localX - moveMode.basePoint[0]
+            const dy = localY - moveMode.basePoint[1]
+            const newX = Math.round((moveMode.originalPosition?.[0] ?? x) + dx)
+            const newY = Math.round((moveMode.originalPosition?.[1] ?? y) + dy)
+            if (onPositionChange && (newX !== x || newY !== y)) {
+                onPositionChange(newX, newY)
+            }
+            return
+        }
+
         if (!dragging) return
         e.stopPropagation()
 
@@ -266,9 +323,9 @@ const BuildingEditor = ({
                         >
                             <boxGeometry args={[width, depth, floor.height]} />
                             <meshStandardMaterial
-                                color={dragging ? '#ffff00' : faces.color}
+                                color={isMoveModeTarget ? '#00ff88' : dragging ? '#ffff00' : (moveMode?.active && moveMode.phase === 'selectObject') ? '#88ccff' : faces.color}
                                 transparent={true}
-                                opacity={dragging ? 0.8 : faces.opacity}
+                                opacity={isMoveModeTarget ? 0.7 : dragging ? 0.8 : (moveMode?.active && moveMode.phase === 'selectObject') ? 0.8 : faces.opacity}
                                 side={THREE.DoubleSide}
                                 depthWrite={faces.opacity >= 0.95}
                                 roughness={0.7}

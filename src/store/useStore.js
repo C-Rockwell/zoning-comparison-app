@@ -175,6 +175,10 @@ export const createDefaultLotStyle = (overrides = {}) => ({
     lotFill: { color: '#E5E5E5', opacity: 1.0, visible: true },
     buildingEdges: { color: '#000000', width: 1.5, visible: true, dashed: false, opacity: 1.0 },
     buildingFaces: { color: '#D5D5D5', opacity: 1.0, transparent: true },
+    principalBuildingEdges: { color: '#000000', width: 1.5, visible: true, dashed: false, opacity: 1.0 },
+    principalBuildingFaces: { color: '#D5D5D5', opacity: 1.0, transparent: true },
+    accessoryBuildingEdges: { color: '#666666', width: 1.5, visible: true, dashed: false, opacity: 1.0 },
+    accessoryBuildingFaces: { color: '#B0B0B0', opacity: 1.0, transparent: true },
     maxHeightPlane: { color: '#FF6B6B', opacity: 0.3, lineColor: '#FF0000', lineWidth: 2, lineDashed: true },
     maxSetbacks: {
         color: '#000000', width: 1, dashed: true, dashSize: 0.5, gapSize: 0.3, dashScale: 1, opacity: 1.0,
@@ -366,6 +370,16 @@ export const useStore = create(
                 nextEntityId: 1,
                 activeEntityId: null,
                 selectedBuildingType: null, // 'principal' | 'accessory' | null
+                moveMode: {
+                    active: false,
+                    phase: null, // 'selectObject' | 'selectBase' | 'moving'
+                    targetType: null, // 'building' | 'lotAccessArrow'
+                    targetLotId: null,
+                    targetBuildingType: null, // 'principal' | 'accessory'
+                    targetDirection: null, // for lot access arrows
+                    basePoint: null, // [x, y]
+                    originalPosition: null, // [x, y]
+                },
                 entityStyles: {},     // { [lotId]: styleData }
                 lotVisibility: {},    // { [lotId]: per-parameter visibility }
                 modelSetup: {
@@ -505,7 +519,6 @@ export const useStore = create(
                         accessorySetbacks: true, // Accessory setback lines
                         lotAccessArrows: true,   // Lot access directional arrows
                         roadIntersections: true, // Road intersection fillet geometry
-                        unifiedRoadPreview: false, // Unified road polygon rendering (replaces separate roads + fillets)
                     },
                     exportRequested: false,
                     exportFormat: 'obj', // 'obj' | 'glb' | 'dae' | 'dxf' | 'png' | 'jpg' | 'svg'
@@ -1600,6 +1613,65 @@ export const useStore = create(
                     };
                 }),
 
+                deleteEntityBuilding: (lotId, buildingType) => set((state) => {
+                    const lot = state.entities.lots[lotId]
+                    if (!lot) return state
+                    const resetBuilding = {
+                        width: 0, depth: 0, stories: 0, x: 0, y: 0,
+                        firstFloorHeight: buildingType === 'principal' ? 12 : 10,
+                        upperFloorHeight: 10,
+                        maxHeight: buildingType === 'principal' ? 30 : 15,
+                        geometry: { mode: 'rectangle', vertices: null },
+                        selected: false,
+                        roof: { type: 'flat', overrideHeight: false, ridgeHeight: null, ridgeDirection: 'x', shedDirection: '+y' },
+                    }
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    buildings: {
+                                        ...lot.buildings,
+                                        [buildingType]: resetBuilding,
+                                    },
+                                },
+                            },
+                        },
+                        selectedBuildingType: null,
+                    }
+                }),
+
+                regenerateEntityBuilding: (lotId, buildingType) => set((state) => {
+                    const lot = state.entities.lots[lotId]
+                    if (!lot) return state
+                    const defaults = buildingType === 'principal'
+                        ? { width: 30, depth: 40, stories: 2, firstFloorHeight: 12, upperFloorHeight: 10, x: 0, y: 0, maxHeight: 30 }
+                        : { width: 15, depth: 20, stories: 1, firstFloorHeight: 10, upperFloorHeight: 10, x: 0, y: 15, maxHeight: 15 }
+                    const newBuilding = {
+                        ...defaults,
+                        geometry: { mode: 'rectangle', vertices: null },
+                        selected: false,
+                        roof: { type: 'flat', overrideHeight: false, ridgeHeight: null, ridgeDirection: 'x', shedDirection: '+y' },
+                    }
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    buildings: {
+                                        ...lot.buildings,
+                                        [buildingType]: newBuilding,
+                                    },
+                                },
+                            },
+                        },
+                    }
+                }),
+
                 // Building roof settings (entity version)
                 setEntityRoofSetting: (lotId, buildingType, key, value) => set((state) => {
                     const lot = state.entities.lots[lotId];
@@ -1719,6 +1791,20 @@ export const useStore = create(
                         selectedBuildingType: null,
                     };
                 }),
+
+                // Move mode actions
+                enterMoveMode: () => set({
+                    moveMode: { active: true, phase: 'selectObject', targetType: null, targetLotId: null, targetBuildingType: null, targetDirection: null, basePoint: null, originalPosition: null }
+                }),
+                exitMoveMode: () => set({
+                    moveMode: { active: false, phase: null, targetType: null, targetLotId: null, targetBuildingType: null, targetDirection: null, basePoint: null, originalPosition: null }
+                }),
+                setMoveTarget: (targetType, lotId, buildingType, direction) => set((state) => ({
+                    moveMode: { ...state.moveMode, phase: 'selectBase', targetType, targetLotId: lotId, targetBuildingType: buildingType, targetDirection: direction }
+                })),
+                setMoveBasePoint: (point, originalPosition) => set((state) => ({
+                    moveMode: { ...state.moveMode, phase: 'moving', basePoint: point, originalPosition }
+                })),
 
                 // Entity building position
                 setEntityBuildingPosition: (lotId, buildingType, newX, newY) => set((state) => {
@@ -2519,6 +2605,26 @@ export const useStore = create(
                     }
                     return { roadModuleStyles: updated }
                 }),
+                setAllRoadZoneColor: (color) => set((state) => {
+                    const updated = { ...state.roadModuleStyles }
+                    if (updated.rightOfWay) updated.rightOfWay = { ...updated.rightOfWay, color }
+                    const zoneKeys = ['roadWidth', 'leftParking', 'leftVerge', 'leftSidewalk', 'leftTransitionZone', 'rightParking', 'rightVerge', 'rightSidewalk', 'rightTransitionZone']
+                    for (const key of zoneKeys) {
+                        if (updated[key]) updated[key] = { ...updated[key], fillColor: color, lineColor: color }
+                    }
+                    return { roadModuleStyles: updated }
+                }),
+
+                setAllRoadZoneOpacity: (opacity) => set((state) => {
+                    const updated = { ...state.roadModuleStyles }
+                    if (updated.rightOfWay) updated.rightOfWay = { ...updated.rightOfWay, opacity }
+                    const zoneKeys = ['roadWidth', 'leftParking', 'leftVerge', 'leftSidewalk', 'leftTransitionZone', 'rightParking', 'rightVerge', 'rightSidewalk', 'rightTransitionZone']
+                    for (const key of zoneKeys) {
+                        if (updated[key]) updated[key] = { ...updated[key], fillOpacity: opacity }
+                    }
+                    return { roadModuleStyles: updated }
+                }),
+
                 // Comparison Roads Actions
                 setComparisonRoadSetting: (direction, key, value) => set((state) => ({
                     comparisonRoads: {
@@ -2816,7 +2922,7 @@ export const useStore = create(
             }),
             {
                 name: 'zoning-app-storage',
-                version: 21, // v21: backfill missing style/visibility/layer keys for v20 lots
+                version: 22, // v22: split building styles into principal/accessory variants
                 migrate: (persistedState, version) => {
                     // Split dimensionsLot into dimensionsLotWidth and dimensionsLotDepth
                     if (persistedState.viewSettings && persistedState.viewSettings.layers && persistedState.viewSettings.layers.dimensionsLot !== undefined) {
@@ -3414,9 +3520,34 @@ export const useStore = create(
                         }
                     }
 
+                    if (version < 22) {
+                        // v22: Split buildingEdges/buildingFaces into principal/accessory variants
+                        if (persistedState.entityStyles) {
+                            for (const lotId of Object.keys(persistedState.entityStyles)) {
+                                const s = persistedState.entityStyles[lotId];
+                                if (!s.principalBuildingEdges) {
+                                    s.principalBuildingEdges = s.buildingEdges
+                                        ? JSON.parse(JSON.stringify(s.buildingEdges))
+                                        : { color: '#000000', width: 1.5, visible: true, dashed: false, opacity: 1.0 };
+                                }
+                                if (!s.principalBuildingFaces) {
+                                    s.principalBuildingFaces = s.buildingFaces
+                                        ? JSON.parse(JSON.stringify(s.buildingFaces))
+                                        : { color: '#D5D5D5', opacity: 1.0, transparent: true };
+                                }
+                                if (!s.accessoryBuildingEdges) {
+                                    s.accessoryBuildingEdges = { color: '#666666', width: 1.5, visible: true, dashed: false, opacity: 1.0 };
+                                }
+                                if (!s.accessoryBuildingFaces) {
+                                    s.accessoryBuildingFaces = { color: '#B0B0B0', opacity: 1.0, transparent: true };
+                                }
+                            }
+                        }
+                    }
+
                     return {
                         ...persistedState,
-                        version: 21
+                        version: 22
                     };
                 },
                 partialize: (state) => ({

@@ -10,7 +10,7 @@ import ColorPicker from './ui/ColorPicker'
 import SliderInput from './ui/SliderInput'
 import LineStyleSelector from './ui/LineStyleSelector'
 import {
-    ChevronDown, Eye, EyeOff, Palette, Plus, Minus, Trash2, Copy,
+    ChevronDown, ChevronUp, Eye, EyeOff, Palette, Plus, Minus, Trash2, Copy,
     Layers, Settings, Building2, Route,
 } from 'lucide-react'
 
@@ -115,21 +115,6 @@ const VisibilityToggle = ({ visible, onClick }) => (
         ) : (
             <EyeOff className="w-3.5 h-3.5" style={{ color: 'var(--ui-text-muted)' }} />
         )}
-    </button>
-)
-
-/** Inline style toggle button (palette icon) for section headers */
-const StyleToggle = ({ isOpen, onClick }) => (
-    <button
-        onClick={(e) => { e.stopPropagation(); onClick() }}
-        className={`p-0.5 rounded transition-colors ${isOpen ? '' : 'hover-text-secondary'}`}
-        style={isOpen
-            ? { color: 'var(--ui-accent)', backgroundColor: 'var(--ui-accent-muted)' }
-            : { color: 'var(--ui-text-muted)' }
-        }
-        title="Style controls"
-    >
-        <Palette className="w-3.5 h-3.5" />
     </button>
 )
 
@@ -531,6 +516,15 @@ const ModelParametersTable = () => {
 /** A group of rows in the model parameters table with a collapsible section header */
 const SectionGroup = ({ section, lotIds, lots, firstLotVis, setLotVisibilityAction }) => {
     const [isOpen, setIsOpen] = useState(true)
+    const regenerateEntityBuilding = useStore((s) => s.regenerateEntityBuilding)
+
+    // Detect if this is a Structures section with a deleted building
+    const isStructuresSection = section.title === 'Structures Principal' || section.title === 'Structures Accessory'
+    const buildingType = section.title === 'Structures Principal' ? 'principal' : section.title === 'Structures Accessory' ? 'accessory' : null
+    const allBuildingsDeleted = isStructuresSection && lotIds.every(lotId => {
+        const b = lots[lotId]?.buildings?.[buildingType]
+        return !b || (b.width === 0 && b.stories === 0)
+    })
 
     return (
     <>
@@ -547,6 +541,19 @@ const SectionGroup = ({ section, lotIds, lots, firstLotVis, setLotVisibilityActi
                         style={{ color: 'var(--ui-text-muted)' }}
                     />
                     {section.title}
+                    {isStructuresSection && allBuildingsDeleted && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                lotIds.forEach(lotId => regenerateEntityBuilding(lotId, buildingType))
+                            }}
+                            className="ml-2 p-0.5 rounded transition-colors"
+                            style={{ color: 'var(--ui-accent)' }}
+                            title={`Regenerate ${buildingType} building for all lots`}
+                        >
+                            <Plus className="w-3 h-3" />
+                        </button>
+                    )}
                 </div>
             </td>
         </tr>
@@ -754,7 +761,6 @@ const LayersSection = () => {
         { key: 'grid', label: 'Grid' },
         { key: 'roadModule', label: 'Road Module' },
         { key: 'roadIntersections', label: 'Road Intersections' },
-        { key: 'unifiedRoadPreview', label: 'Road: Unified Preview' },
         { key: 'annotationLabels', label: 'Annotation Labels' },
         { key: 'labelLotNames', label: '  Lot Names' },
         { key: 'labelLotEdges', label: '  Lot Edges' },
@@ -1316,117 +1322,147 @@ const RoadModuleStylesSection = () => {
     const roadModuleStyles = useStore((s) => s.roadModuleStyles)
     const setRoadModuleStyle = useStore((s) => s.setRoadModuleStyle)
     const setAllRoadLineWidths = useStore((s) => s.setAllRoadLineWidths)
+    const setAllRoadZoneColor = useStore((s) => s.setAllRoadZoneColor)
+    const setAllRoadZoneOpacity = useStore((s) => s.setAllRoadZoneOpacity)
+
+    const [collapsedZones, setCollapsedZones] = useState({})
+    const toggleZone = (key) => setCollapsedZones(prev => ({ ...prev, [key]: !prev[key] }))
 
     if (!roadModuleStyles) return null
 
     // Use roadWidth lineWidth as the reference for the universal slider
     const universalLineWidth = roadModuleStyles.roadWidth?.lineWidth ?? 1
 
+    const renderZoneHeader = (zoneKey, label) => (
+        <div
+            onClick={() => toggleZone(zoneKey)}
+            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '8px', marginBottom: '4px', borderTop: '1px solid var(--ui-bg-primary)' }}
+        >
+            <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ui-text-muted)' }}>{label}</span>
+            {collapsedZones[zoneKey] ? <ChevronDown size={12} style={{ color: 'var(--ui-text-muted)' }} /> : <ChevronUp size={12} style={{ color: 'var(--ui-text-muted)' }} />}
+        </div>
+    )
+
+    const renderSideZoneGroup = (zones, sideLabel, sideColor) => (
+        <div style={{ paddingTop: '8px', marginBottom: '12px', borderTop: '1px solid var(--ui-bg-primary)' }}>
+            <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '8px', fontWeight: 'bold', color: sideColor }}>
+                {sideLabel}
+            </span>
+            {zones.map(({ key, label, defaultFill }) => (
+                <div key={key} style={{ marginBottom: '4px', paddingLeft: '8px', borderLeft: '2px solid var(--ui-border)' }}>
+                    <div
+                        onClick={() => toggleZone(key)}
+                        style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}
+                    >
+                        <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ui-text-muted)' }}>{label}</span>
+                        {collapsedZones[key] ? <ChevronDown size={10} style={{ color: 'var(--ui-text-muted)' }} /> : <ChevronUp size={10} style={{ color: 'var(--ui-text-muted)' }} />}
+                    </div>
+                    {!collapsedZones[key] && (
+                        <div style={{ marginBottom: '8px' }}>
+                            <ControlRow label="Line Color">
+                                <ColorPicker value={roadModuleStyles[key]?.lineColor ?? '#000000'} onChange={(c) => setRoadModuleStyle(key, 'lineColor', c)} />
+                            </ControlRow>
+                            <ControlRow label="Line Width">
+                                <SliderInput value={roadModuleStyles[key]?.lineWidth ?? 1} onChange={(v) => setRoadModuleStyle(key, 'lineWidth', v)} min={0.5} max={5} step={0.5} />
+                            </ControlRow>
+                            <ControlRow label="Fill Color">
+                                <ColorPicker value={roadModuleStyles[key]?.fillColor ?? defaultFill} onChange={(c) => setRoadModuleStyle(key, 'fillColor', c)} />
+                            </ControlRow>
+                            <ControlRow label="Fill Opacity">
+                                <SliderInput value={roadModuleStyles[key]?.fillOpacity ?? 0.7} onChange={(v) => setRoadModuleStyle(key, 'fillOpacity', v)} min={0} max={1} step={0.05} />
+                            </ControlRow>
+                        </div>
+                    )}
+                </div>
+            ))}
+        </div>
+    )
+
     return (
         <Section title="Road Module Styles" icon={<Palette className="w-4 h-4" />} defaultOpen={false}>
-            {/* Universal Line Width */}
+            {/* Global Controls */}
             <div style={{ marginBottom: '12px' }}>
-                <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '4px', color: 'var(--ui-text-muted)' }}>All Lines</span>
+                <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '4px', fontWeight: 'bold', color: 'var(--ui-accent)' }}>Global</span>
+                <ControlRow label="Color">
+                    <ColorPicker value={roadModuleStyles.roadWidth?.fillColor ?? '#666666'} onChange={(c) => setAllRoadZoneColor(c)} />
+                </ControlRow>
+                <ControlRow label="Opacity">
+                    <SliderInput value={roadModuleStyles.roadWidth?.fillOpacity ?? 1} onChange={(v) => setAllRoadZoneOpacity(v)} min={0} max={1} step={0.05} />
+                </ControlRow>
                 <ControlRow label="Line Width">
                     <SliderInput value={universalLineWidth} onChange={(v) => setAllRoadLineWidths(v)} min={0.5} max={5} step={0.5} />
                 </ControlRow>
             </div>
 
             {/* Right-of-Way Lines */}
-            <div style={{ paddingTop: '8px', marginBottom: '12px', borderTop: '1px solid var(--ui-bg-primary)' }}>
-                <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '4px', color: 'var(--ui-text-muted)' }}>Right-of-Way Lines</span>
-                <ControlRow label="Color">
-                    <ColorPicker value={roadModuleStyles.rightOfWay?.color ?? '#000000'} onChange={(c) => setRoadModuleStyle('rightOfWay', 'color', c)} />
-                </ControlRow>
-                <ControlRow label="Width">
-                    <SliderInput value={roadModuleStyles.rightOfWay?.width ?? 1} onChange={(v) => setRoadModuleStyle('rightOfWay', 'width', v)} min={0.5} max={5} step={0.5} />
-                </ControlRow>
-                <ControlRow label="Opacity">
-                    <SliderInput value={roadModuleStyles.rightOfWay?.opacity ?? 1} onChange={(v) => setRoadModuleStyle('rightOfWay', 'opacity', v)} min={0} max={1} step={0.05} />
-                </ControlRow>
-                <div style={{ paddingTop: '4px' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer', color: 'var(--ui-text-muted)' }}>
-                        <input
-                            type="checkbox"
-                            checked={roadModuleStyles.rightOfWay?.dashed ?? true}
-                            onChange={(e) => setRoadModuleStyle('rightOfWay', 'dashed', e.target.checked)}
-                            style={{ borderColor: 'var(--ui-border)' }}
-                        />
-                        Dashed
-                    </label>
+            {renderZoneHeader('rightOfWay', 'Right-of-Way Lines')}
+            {!collapsedZones.rightOfWay && (
+                <div style={{ marginBottom: '12px' }}>
+                    <ControlRow label="Color">
+                        <ColorPicker value={roadModuleStyles.rightOfWay?.color ?? '#000000'} onChange={(c) => setRoadModuleStyle('rightOfWay', 'color', c)} />
+                    </ControlRow>
+                    <ControlRow label="Width">
+                        <SliderInput value={roadModuleStyles.rightOfWay?.width ?? 1} onChange={(v) => setRoadModuleStyle('rightOfWay', 'width', v)} min={0.5} max={5} step={0.5} />
+                    </ControlRow>
+                    <ControlRow label="Opacity">
+                        <SliderInput value={roadModuleStyles.rightOfWay?.opacity ?? 1} onChange={(v) => setRoadModuleStyle('rightOfWay', 'opacity', v)} min={0} max={1} step={0.05} />
+                    </ControlRow>
+                    <div style={{ paddingTop: '4px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer', color: 'var(--ui-text-muted)' }}>
+                            <input
+                                type="checkbox"
+                                checked={roadModuleStyles.rightOfWay?.dashed ?? true}
+                                onChange={(e) => setRoadModuleStyle('rightOfWay', 'dashed', e.target.checked)}
+                                style={{ borderColor: 'var(--ui-border)' }}
+                            />
+                            Dashed
+                        </label>
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* Road Surface */}
-            <div style={{ paddingTop: '8px', marginBottom: '12px', borderTop: '1px solid var(--ui-bg-primary)' }}>
-                <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '4px', color: 'var(--ui-text-muted)' }}>Road Surface</span>
-                <ControlRow label="Line Color">
-                    <ColorPicker value={roadModuleStyles.roadWidth?.lineColor ?? '#000000'} onChange={(c) => setRoadModuleStyle('roadWidth', 'lineColor', c)} />
-                </ControlRow>
-                <ControlRow label="Line Width">
-                    <SliderInput value={roadModuleStyles.roadWidth?.lineWidth ?? 1} onChange={(v) => setRoadModuleStyle('roadWidth', 'lineWidth', v)} min={0.5} max={5} step={0.5} />
-                </ControlRow>
-                <ControlRow label="Fill Color">
-                    <ColorPicker value={roadModuleStyles.roadWidth?.fillColor ?? '#666666'} onChange={(c) => setRoadModuleStyle('roadWidth', 'fillColor', c)} />
-                </ControlRow>
-                <ControlRow label="Fill Opacity">
-                    <SliderInput value={roadModuleStyles.roadWidth?.fillOpacity ?? 0.8} onChange={(v) => setRoadModuleStyle('roadWidth', 'fillOpacity', v)} min={0} max={1} step={0.05} />
-                </ControlRow>
-            </div>
+            {renderZoneHeader('roadSurface', 'Road Surface')}
+            {!collapsedZones.roadSurface && (
+                <div style={{ marginBottom: '12px' }}>
+                    <ControlRow label="Line Color">
+                        <ColorPicker value={roadModuleStyles.roadWidth?.lineColor ?? '#000000'} onChange={(c) => setRoadModuleStyle('roadWidth', 'lineColor', c)} />
+                    </ControlRow>
+                    <ControlRow label="Line Width">
+                        <SliderInput value={roadModuleStyles.roadWidth?.lineWidth ?? 1} onChange={(v) => setRoadModuleStyle('roadWidth', 'lineWidth', v)} min={0.5} max={5} step={0.5} />
+                    </ControlRow>
+                    <ControlRow label="Fill Color">
+                        <ColorPicker value={roadModuleStyles.roadWidth?.fillColor ?? '#666666'} onChange={(c) => setRoadModuleStyle('roadWidth', 'fillColor', c)} />
+                    </ControlRow>
+                    <ControlRow label="Fill Opacity">
+                        <SliderInput value={roadModuleStyles.roadWidth?.fillOpacity ?? 0.8} onChange={(v) => setRoadModuleStyle('roadWidth', 'fillOpacity', v)} min={0} max={1} step={0.05} />
+                    </ControlRow>
+                </div>
+            )}
 
             {/* Left Side Elements */}
-            <div style={{ paddingTop: '8px', marginBottom: '12px', borderTop: '1px solid var(--ui-bg-primary)' }}>
-                <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '8px', fontWeight: 'bold', color: 'var(--ui-accent)' }}>Left Side</span>
-                {[
+            {renderSideZoneGroup(
+                [
                     { key: 'leftParking', label: 'Parking', defaultFill: '#888888' },
                     { key: 'leftVerge', label: 'Verge', defaultFill: '#c4a77d' },
                     { key: 'leftSidewalk', label: 'Sidewalk', defaultFill: '#90EE90' },
                     { key: 'leftTransitionZone', label: 'Transition Zone', defaultFill: '#98D8AA' },
-                ].map(({ key, label, defaultFill }) => (
-                    <div key={key} style={{ marginBottom: '12px', paddingLeft: '8px', borderLeft: '2px solid var(--ui-border)' }}>
-                        <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '4px', color: 'var(--ui-text-muted)' }}>{label}</span>
-                        <ControlRow label="Line Color">
-                            <ColorPicker value={roadModuleStyles[key]?.lineColor ?? '#000000'} onChange={(c) => setRoadModuleStyle(key, 'lineColor', c)} />
-                        </ControlRow>
-                        <ControlRow label="Line Width">
-                            <SliderInput value={roadModuleStyles[key]?.lineWidth ?? 1} onChange={(v) => setRoadModuleStyle(key, 'lineWidth', v)} min={0.5} max={5} step={0.5} />
-                        </ControlRow>
-                        <ControlRow label="Fill Color">
-                            <ColorPicker value={roadModuleStyles[key]?.fillColor ?? defaultFill} onChange={(c) => setRoadModuleStyle(key, 'fillColor', c)} />
-                        </ControlRow>
-                        <ControlRow label="Fill Opacity">
-                            <SliderInput value={roadModuleStyles[key]?.fillOpacity ?? 0.7} onChange={(v) => setRoadModuleStyle(key, 'fillOpacity', v)} min={0} max={1} step={0.05} />
-                        </ControlRow>
-                    </div>
-                ))}
-            </div>
+                ],
+                'Left Side',
+                'var(--ui-accent)'
+            )}
 
             {/* Right Side Elements */}
-            <div style={{ paddingTop: '8px', borderTop: '1px solid var(--ui-bg-primary)' }}>
-                <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '8px', fontWeight: 'bold', color: 'var(--ui-success, var(--ui-accent))' }}>Right Side</span>
-                {[
+            {renderSideZoneGroup(
+                [
                     { key: 'rightParking', label: 'Parking', defaultFill: '#888888' },
                     { key: 'rightVerge', label: 'Verge', defaultFill: '#c4a77d' },
                     { key: 'rightSidewalk', label: 'Sidewalk', defaultFill: '#90EE90' },
                     { key: 'rightTransitionZone', label: 'Transition Zone', defaultFill: '#98D8AA' },
-                ].map(({ key, label, defaultFill }) => (
-                    <div key={key} style={{ marginBottom: '12px', paddingLeft: '8px', borderLeft: '2px solid var(--ui-border)' }}>
-                        <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '4px', color: 'var(--ui-text-muted)' }}>{label}</span>
-                        <ControlRow label="Line Color">
-                            <ColorPicker value={roadModuleStyles[key]?.lineColor ?? '#000000'} onChange={(c) => setRoadModuleStyle(key, 'lineColor', c)} />
-                        </ControlRow>
-                        <ControlRow label="Line Width">
-                            <SliderInput value={roadModuleStyles[key]?.lineWidth ?? 1} onChange={(v) => setRoadModuleStyle(key, 'lineWidth', v)} min={0.5} max={5} step={0.5} />
-                        </ControlRow>
-                        <ControlRow label="Fill Color">
-                            <ColorPicker value={roadModuleStyles[key]?.fillColor ?? defaultFill} onChange={(c) => setRoadModuleStyle(key, 'fillColor', c)} />
-                        </ControlRow>
-                        <ControlRow label="Fill Opacity">
-                            <SliderInput value={roadModuleStyles[key]?.fillOpacity ?? 0.7} onChange={(v) => setRoadModuleStyle(key, 'fillOpacity', v)} min={0} max={1} step={0.05} />
-                        </ControlRow>
-                    </div>
-                ))}
-            </div>
+                ],
+                'Right Side',
+                'var(--ui-success, var(--ui-accent))'
+            )}
         </Section>
     )
 }
@@ -1774,7 +1810,7 @@ const InlineStyleControls = ({ lotId, category, style }) => {
     }
 
     // Mesh-only categories: only color + opacity (no line width/dashed)
-    const isMeshCategory = category === 'btzPlanes' || category === 'lotAccessArrows'
+    const isMeshCategory = ['btzPlanes', 'lotAccessArrows', 'principalBuildingFaces', 'accessoryBuildingFaces', 'buildingFaces', 'roofFaces', 'maxHeightPlane'].includes(category)
 
     return (
         <div
@@ -1846,9 +1882,6 @@ const InlineStyleControls = ({ lotId, category, style }) => {
 
 const ModelParametersSection = () => {
     const lotIds = useLotIds()
-    const [styleCategory, setStyleCategory] = useState(null)
-    const [styleLotId, setStyleLotId] = useState(null)
-    const entityStyles = useStore((s) => s.entityStyles ?? {})
     const duplicateLot = useStore((s) => s.duplicateLot)
     const removeLot = useStore((s) => s.removeLot)
     const selectEntity = useStore((s) => s.selectEntity)
@@ -1895,67 +1928,8 @@ const ModelParametersSection = () => {
         )
     }
 
-    // Toggle inline style for a section
-    const toggleStyle = (cat, lotId) => {
-        if (styleCategory === cat && styleLotId === lotId) {
-            setStyleCategory(null)
-            setStyleLotId(null)
-        } else {
-            setStyleCategory(cat)
-            setStyleLotId(lotId)
-        }
-    }
-
-    // Style categories that can be edited per-section
-    const styleCategories = [
-        { key: 'lotLines', label: 'Lot Lines' },
-        { key: 'setbacks', label: 'Setbacks' },
-        { key: 'accessorySetbacks', label: 'Accessory Setbacks' },
-        { key: 'maxSetbacks', label: 'Max Setbacks' },
-        { key: 'btzPlanes', label: 'BTZ Planes' },
-        { key: 'lotAccessArrows', label: 'Lot Access Arrows' },
-        { key: 'buildingEdges', label: 'Building Edges' },
-        { key: 'buildingFaces', label: 'Building Faces' },
-        { key: 'roofFaces', label: 'Roof' },
-        { key: 'maxHeightPlane', label: 'Max Height Plane' },
-    ]
-
-    // Use first lot for style palette toggles
-    const defaultStyleLotId = activeLotId || lotIds[0]
-
     return (
-        <Section
-            title="Model Parameters"
-            defaultOpen={true}
-            headerRight={
-                defaultStyleLotId && (
-                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                        {styleCategories.map(({ key }) => (
-                            <StyleToggle
-                                key={key}
-                                isOpen={styleCategory === key && styleLotId === defaultStyleLotId}
-                                onClick={() => toggleStyle(key, defaultStyleLotId)}
-                            />
-                        ))}
-                    </div>
-                )
-            }
-        >
-            {/* Inline style editor (when a palette is toggled) */}
-            {styleCategory && styleLotId && entityStyles[styleLotId] && (
-                <div className="mb-2">
-                    <div className="text-[10px] mb-1" style={{ color: 'var(--ui-text-muted)' }}>
-                        Editing: <strong style={{ color: 'var(--ui-text-secondary)' }}>{styleCategories.find(c => c.key === styleCategory)?.label}</strong>
-                        {' '}for Lot {lotIds.indexOf(styleLotId) + 1}
-                    </div>
-                    <InlineStyleControls
-                        lotId={styleLotId}
-                        category={styleCategory}
-                        style={entityStyles[styleLotId][styleCategory]}
-                    />
-                </div>
-            )}
-
+        <Section title="Model Parameters" defaultOpen={true}>
             {renderLotHeader()}
 
             {lotIds.length > 0 ? (
@@ -1963,6 +1937,70 @@ const ModelParametersSection = () => {
             ) : (
                 <p className="text-xs italic" style={{ color: 'var(--ui-text-muted)' }}>No lots. Use Model Setup to add lots.</p>
             )}
+        </Section>
+    )
+}
+
+// ============================================
+// STYLES SECTION (per-lot style editing)
+// ============================================
+
+const StylesSection = () => {
+    const lotIds = useLotIds()
+    const activeLotId = useActiveLotId()
+    const entityStyles = useStore((s) => s.entityStyles ?? {})
+    const [expandedCategory, setExpandedCategory] = useState(null)
+
+    const styleLotId = activeLotId || lotIds[0]
+    if (!styleLotId || !entityStyles[styleLotId]) return null
+
+    const styleCategories = [
+        { key: 'lotLines', label: 'Lot Lines' },
+        { key: 'setbacks', label: 'Setbacks' },
+        { key: 'accessorySetbacks', label: 'Accessory Setbacks' },
+        { key: 'maxSetbacks', label: 'Max Setbacks' },
+        { key: 'btzPlanes', label: 'BTZ Planes' },
+        { key: 'lotAccessArrows', label: 'Lot Access Arrows' },
+        { key: 'principalBuildingEdges', label: 'Principal Building Edges' },
+        { key: 'principalBuildingFaces', label: 'Principal Building Faces' },
+        { key: 'accessoryBuildingEdges', label: 'Accessory Building Edges' },
+        { key: 'accessoryBuildingFaces', label: 'Accessory Building Faces' },
+        { key: 'roofFaces', label: 'Roof' },
+        { key: 'maxHeightPlane', label: 'Max Height Plane' },
+    ]
+
+    return (
+        <Section title="Styles" icon={<Palette className="w-4 h-4" />} defaultOpen={false}>
+            <div className="text-[10px] mb-2" style={{ color: 'var(--ui-text-muted)' }}>
+                Editing styles for Lot {lotIds.indexOf(styleLotId) + 1}
+            </div>
+            <div className="space-y-0.5">
+                {styleCategories.map(({ key, label }) => (
+                    <div key={key}>
+                        <button
+                            onClick={() => setExpandedCategory(expandedCategory === key ? null : key)}
+                            className="w-full flex items-center justify-between px-2 py-1.5 rounded text-xs transition-colors"
+                            style={{
+                                backgroundColor: expandedCategory === key ? 'var(--ui-accent-muted)' : 'transparent',
+                                color: expandedCategory === key ? 'var(--ui-accent)' : 'var(--ui-text-secondary)',
+                            }}
+                        >
+                            <div className="flex items-center gap-2">
+                                <Palette className="w-3 h-3" />
+                                <span>{label}</span>
+                            </div>
+                            {expandedCategory === key ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                        </button>
+                        {expandedCategory === key && (
+                            <InlineStyleControls
+                                lotId={styleLotId}
+                                category={key}
+                                style={entityStyles[styleLotId][key]}
+                            />
+                        )}
+                    </div>
+                ))}
+            </div>
         </Section>
     )
 }
@@ -2075,6 +2113,7 @@ const DistrictParameterPanel = () => {
                 <AnnotationSettingsSection />
                 <DistrictParametersSection />
                 <ModelParametersSection />
+                <StylesSection />
                 <BuildingRoofSection />
                 <RoadModulesSection />
                 <RoadModuleStylesSection />

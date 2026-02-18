@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
+import { useStore } from '../store/useStore'
 
 /**
  * Creates a 2D arrow silhouette (shaft + triangular arrowhead) pointing in +Y.
@@ -97,6 +98,7 @@ const createSharedDriveShape = (
  */
 const LotAccessArrow = ({
     direction = 'front',
+    lotId,
     // eslint-disable-next-line no-unused-vars
     lotWidth, lotDepth, // accepted for API consistency — parent uses for default positions
     streetSides = {},
@@ -112,6 +114,13 @@ const LotAccessArrow = ({
     const isTransparent = opacity < 1
     const [dragging, setDragging] = useState(false)
     const { controls } = useThree()
+
+    // Move mode state
+    const moveMode = useStore((s) => s.moveMode)
+    const setMoveTarget = useStore((s) => s.setMoveTarget)
+    const setMoveBasePoint = useStore((s) => s.setMoveBasePoint)
+    const exitMoveMode = useStore((s) => s.exitMoveMode)
+    const isMoveModeTarget = moveMode?.active && moveMode.targetType === 'lotAccessArrow' && moveMode.targetLotId === lotId && moveMode.targetDirection === direction
 
     // Drag on Z=0 ground plane
     const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), [])
@@ -167,6 +176,35 @@ const LotAccessArrow = ({
     // Drag handlers (following DraggableLabel pattern)
     const handlePointerDown = (e) => {
         e.stopPropagation()
+
+        // Move mode: select object phase
+        if (moveMode?.active && moveMode.phase === 'selectObject') {
+            setMoveTarget('lotAccessArrow', lotId, null, direction)
+            return
+        }
+
+        // Move mode: select base point phase
+        if (moveMode?.active && moveMode.phase === 'selectBase' && isMoveModeTarget) {
+            if (e.ray.intersectPlane(plane, planeIntersectPoint.current)) {
+                setMoveBasePoint(
+                    [planeIntersectPoint.current.x, planeIntersectPoint.current.y],
+                    [...position]
+                )
+            }
+            if (controls) controls.enabled = false
+            e.target.setPointerCapture(e.pointerId)
+            return
+        }
+
+        // Move mode: finalize placement
+        if (moveMode?.active && moveMode.phase === 'moving' && isMoveModeTarget) {
+            if (controls) controls.enabled = true
+            e.target.releasePointerCapture(e.pointerId)
+            exitMoveMode()
+            return
+        }
+
+        // Normal drag
         if (controls) controls.enabled = false // eslint-disable-line react-hooks/immutability
         setDragging(true)
         e.target.setPointerCapture(e.pointerId)
@@ -183,12 +221,28 @@ const LotAccessArrow = ({
 
     const handlePointerUp = (e) => {
         e.stopPropagation()
+        if (moveMode?.active) return
         setDragging(false)
         if (controls) controls.enabled = true // eslint-disable-line react-hooks/immutability
         e.target.releasePointerCapture(e.pointerId)
     }
 
     const handlePointerMove = (e) => {
+        // Move mode: moving phase
+        if (moveMode?.active && moveMode.phase === 'moving' && isMoveModeTarget && moveMode.basePoint) {
+            e.stopPropagation()
+            if (!e.ray.intersectPlane(plane, planeIntersectPoint.current)) return
+            const dx = planeIntersectPoint.current.x - moveMode.basePoint[0]
+            const dy = planeIntersectPoint.current.y - moveMode.basePoint[1]
+            const newPos = [
+                (moveMode.originalPosition?.[0] ?? position[0]) + dx,
+                (moveMode.originalPosition?.[1] ?? position[1]) + dy,
+                position[2],
+            ]
+            if (onPositionChange) onPositionChange(newPos)
+            return
+        }
+
         if (!dragging) return
         e.stopPropagation()
 
@@ -218,11 +272,11 @@ const LotAccessArrow = ({
                 onPointerMove={handlePointerMove}
             >
                 <meshBasicMaterial
-                    color={color}
+                    color={isMoveModeTarget ? '#00ff88' : (moveMode?.active && moveMode.phase === 'selectObject') ? '#88ccff' : color}
                     side={THREE.DoubleSide}
-                    opacity={opacity}
-                    transparent={isTransparent}
-                    depthWrite={!isTransparent}
+                    opacity={isMoveModeTarget ? 0.9 : opacity}
+                    transparent={isMoveModeTarget || isTransparent}
+                    depthWrite={isMoveModeTarget ? false : !isTransparent}
                 />
             </mesh>
 

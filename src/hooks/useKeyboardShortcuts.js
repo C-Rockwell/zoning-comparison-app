@@ -7,7 +7,9 @@ import * as api from '../services/api'
  * - Ctrl/Cmd+Z: Undo
  * - Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y: Redo
  * - Ctrl/Cmd+S: Save project
- * - Delete/Backspace: Delete selected entity (if applicable)
+ * - Delete/Backspace: Delete selected building
+ * - M: Enter move mode (AutoCAD-style, district module only)
+ * - Escape: Exit move mode / cancel move
  */
 export function useKeyboardShortcuts() {
   const currentProject = useStore(state => state.currentProject)
@@ -52,6 +54,53 @@ export function useKeyboardShortcuts() {
           showToast?.('Project saved', 'success')
         } catch (err) {
           showToast?.(`Save failed: ${err.message}`, 'error')
+        }
+        return
+      }
+
+      // Delete/Backspace: Delete selected building
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const { selectedBuildingType, activeEntityId, activeModule, deleteEntityBuilding } = useStore.getState()
+        if (activeModule === 'district' && selectedBuildingType && activeEntityId) {
+          e.preventDefault()
+          deleteEntityBuilding(activeEntityId, selectedBuildingType)
+          showToast?.(`${selectedBuildingType === 'principal' ? 'Principal' : 'Accessory'} building deleted`, 'info')
+        }
+        return
+      }
+
+      // M: Enter Move Mode (district module only)
+      if ((e.key === 'm' || e.key === 'M') && !isMod) {
+        const { activeModule, moveMode, enterMoveMode } = useStore.getState()
+        if (activeModule === 'district' && !moveMode?.active) {
+          e.preventDefault()
+          enterMoveMode()
+          showToast?.('Move mode: click an object to move', 'info')
+        }
+        return
+      }
+
+      // Escape: Exit Move Mode / cancel move
+      if (e.key === 'Escape') {
+        const { moveMode, exitMoveMode, setEntityBuildingPosition, setAnnotationPosition } = useStore.getState()
+        if (moveMode?.active) {
+          e.preventDefault()
+          // Restore original position if in 'moving' phase
+          if (moveMode.phase === 'moving' && moveMode.originalPosition) {
+            if (moveMode.targetType === 'building') {
+              setEntityBuildingPosition(
+                moveMode.targetLotId, moveMode.targetBuildingType,
+                moveMode.originalPosition[0], moveMode.originalPosition[1]
+              )
+            } else if (moveMode.targetType === 'lotAccessArrow') {
+              setAnnotationPosition(
+                `lot-${moveMode.targetLotId}-access-${moveMode.targetDirection}`,
+                moveMode.originalPosition
+              )
+            }
+          }
+          exitMoveMode()
+          showToast?.('Move cancelled', 'info')
         }
         return
       }

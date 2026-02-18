@@ -37,6 +37,10 @@
 | Global layers | `useStore.js:2275`, `viewSettings.layers` | `toggleLayer(layer)`, 26+ keys |
 | Per-lot visibility | `useStore.js:2203` | `setLotVisibility(lotId, key, value)` |
 | Sun simulation | `SunControls.jsx`, `hooks/useSunPosition.js` | Sun position + directional light |
+| Move mode (M key) | `useStore.js`, `useKeyboardShortcuts.js`, `BuildingEditor/index.jsx`, `LotAccessArrow.jsx` | `enterMoveMode`, 3-phase move |
+| Delete/regenerate buildings | `useStore.js`, `useKeyboardShortcuts.js`, `DistrictParameterPanel.jsx` | `deleteEntityBuilding`, `regenerateEntityBuilding` |
+| Styles section | `DistrictParameterPanel.jsx` (StylesSection) | 12 labeled rows, accordion, per-lot styles |
+| Road module global styles | `DistrictParameterPanel.jsx`, `useStore.js` | `setAllRoadZoneColor`, `setAllRoadZoneOpacity` |
 | Projects CRUD | `ProjectManager.jsx`, `services/api.js` | REST endpoints on port 3001 |
 | Snapshots | `StateManager.jsx`, `useStore.js:2666` | `getSnapshotData()`, `applySnapshot()` |
 | Theme system | `App.jsx`, CSS variables `var(--ui-*)` | `setUiTheme('standard'|'modern')` |
@@ -59,10 +63,10 @@
 ### State Management
 | File | Lines | Purpose |
 |------|-------|---------|
-| `src/store/useStore.js` | ~3,461 | Zustand store: ALL state + 100+ actions + migrations v1-v20 |
+| `src/store/useStore.js` | ~3,550 | Zustand store: ALL state + 100+ actions + migrations v1-v22 |
 | `src/hooks/useEntityStore.js` | 145 | Memoized selectors: `useLot`, `useLotIds`, `useActiveLot`, etc. |
 | `src/hooks/useAutoSave.js` | 45 | Periodic save when dirty |
-| `src/hooks/useKeyboardShortcuts.js` | 63 | Cmd+Z/Y/S shortcuts |
+| `src/hooks/useKeyboardShortcuts.js` | ~107 | Cmd+Z/Y/S, M (move), Delete, Escape shortcuts |
 | `src/hooks/useSunPosition.js` | 121 | SunCalc sun position + 12 city presets |
 
 ### Services
@@ -89,14 +93,14 @@
 | `src/components/Viewer3D.jsx` | ~449 | Comparison canvas container |
 | `src/components/RoadModule.jsx` | ~343 | Parametric road with zones (S1/S2/S3) |
 | `src/components/SharedCanvas.jsx` | ~271 | Shared R3F Canvas (lighting, post-processing) |
-| `src/components/DistrictViewer.jsx` | ~203 | District canvas container |
+| `src/components/DistrictViewer.jsx` | ~206 | District canvas container + SunControls |
 | `src/components/RoadIntersectionFillet.jsx` | ~120 | Curved corner arcs |
 | `src/components/LotAccessArrow.jsx` | ~190 | Draggable access direction arrows |
 
 ### Parameter Panels
 | File | Lines | Purpose |
 |------|-------|---------|
-| `src/components/DistrictParameterPanel.jsx` | ~2,087 | District sidebar (model setup, per-lot params, styles) |
+| `src/components/DistrictParameterPanel.jsx` | ~2,140 | District sidebar (model setup, per-lot params, styles section, road styles) |
 | `src/components/ParameterPanel.jsx` | ~1,809 | Comparison sidebar (existing/proposed params, styles) |
 
 ### Dimensions & Annotations
@@ -215,6 +219,8 @@
 | `updateBuildingParam` | 1580 | `(lotId, buildingType, key, value)` |
 | `setEntityRoofSetting` | 1604 | `(lotId, buildingType, key, value)` |
 | `setEntityBuildingTotalHeight` | 1631 | `(lotId, buildingType, newTotalHeight)` |
+| `deleteEntityBuilding` | ~1610 | `(lotId, buildingType)` — reset to zero dims |
+| `regenerateEntityBuilding` | ~1630 | `(lotId, buildingType)` — restore defaults |
 | `selectEntity` | 1662 | `(lotId)` |
 | `deselectEntity` | 1663 | `()` |
 
@@ -262,6 +268,8 @@
 | `setEntityStyleOverride` | 2164 | `(lotId, category, side, key, value)` |
 | `applyStyleToAllLots` | 2186 | `(category, property, value)` |
 | `setLotVisibility` | 2203 | `(lotId, key, value)` |
+| `setAllRoadZoneColor` | ~2525 | `(color)` — update all road zone colors |
+| `setAllRoadZoneOpacity` | ~2545 | `(opacity)` — update all road zone opacities |
 
 ### View, Style & Render
 | Action | ~Line | Signature |
@@ -307,6 +315,15 @@
 | `applyLayerState` | 2750 | `(layerStateData)` |
 | `getProjectState` | 2761 | `()` → full serialized state |
 | `applyProjectState` | 2787 | `(projectState)` |
+
+### Move Mode (District Module)
+
+| Action | ~Line | Signature |
+|--------|-------|-----------|
+| `enterMoveMode` | ~2560 | `()` — activate selectObject phase |
+| `exitMoveMode` | ~2570 | `()` — clear all move state |
+| `setMoveTarget` | ~2580 | `(type, lotId, buildingType\|direction)` |
+| `setMoveBasePoint` | ~2590 | `(point)` — [x, y] base reference |
 
 ### Auto-Save & UI
 | Action | ~Line | Signature |
@@ -409,9 +426,9 @@ App.jsx → MainLayout
 ```
 App.jsx → MainLayout
   ├── ProjectManager.jsx (navbar)
-  ├── DistrictViewer.jsx (canvas)
+  ├── DistrictViewer.jsx (canvas + SunControls)
   │   └── SharedCanvas.jsx
-  │       └── DistrictSceneContent.jsx
+  │       └── DistrictSceneContent.jsx (+MoveModeCapturePlane)
   │           ├── LotEntity.jsx (per lot ×5)
   │           │   ├── RectLot / PolygonLot
   │           │   ├── SetbackLines / MaxSetbackLines / AccessorySetbackLines
@@ -426,7 +443,8 @@ App.jsx → MainLayout
   ├── DistrictParameterPanel.jsx (sidebar)
   │   ├── Model Setup (lots, streets, road types)
   │   ├── Model Parameters Table (per-lot columns)
-  │   ├── Road Modules, Road Styles, Lot Styles
+  │   ├── Styles Section (12 categories, accordion)
+  │   ├── Road Modules, Road Styles (global + collapsible zones)
   │   ├── Layers, Annotations, Dimensions
   └── Exporter.jsx
 ```
@@ -457,6 +475,8 @@ App.jsx → MainLayout
 | v18 | Max setback lines with independent style/visibility/layer toggles |
 | v19 | Internal |
 | v20 | BTZ planes, accessory setback lines, lot access arrows, new style categories |
+| v21 | Backfill migration for v20 keys added after version bump |
+| v22 | Principal/accessory building style variants (principalBuildingEdges/Faces, accessoryBuildingEdges/Faces) |
 
 ---
 

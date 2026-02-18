@@ -85,7 +85,7 @@ zoning-comparison-app/
 │   │   ├── useSunPosition.js         # SunCalc-based sun position hook (122 lines)
 │   │   ├── useEntityStore.js         # Entity system selector hooks (146 lines)
 │   │   ├── useAutoSave.js            # Periodic auto-save hook
-│   │   └── useKeyboardShortcuts.js   # Cmd+Z/S/Shift+Z global shortcuts
+│   │   └── useKeyboardShortcuts.js   # Cmd+Z/S/Shift+Z, M (move), Delete, Escape shortcuts
 │   ├── utils/
 │   │   ├── ifcGenerator.js           # IFC4 BIM generator: generateIFC + generateDistrictIFC
 │   │   ├── roofGeometry.js           # Roof geometry computation (shed/gabled/hipped)
@@ -128,6 +128,8 @@ zoning-comparison-app/
 - Lot layout: Lot 1 extends in positive X from origin (0,0 = front-left corner), Lots 2+ extend in negative X
 - Layer visibility: global layer toggles (Layers panel) override per-lot visibility (`layers.X && visibility.X`)
 - MODEL PARAMETERS subsections are collapsible with chevron toggle
+- Sun Controls: `<SunControls />` floating overlay in `DistrictViewer.jsx`
+- Sidebar sections: Model Setup → Layers → Annotations → District Parameters → Model Parameters → **Styles** → Building/Roof → Road Modules → Road Module Styles → Views
 
 ### State Structure (useStore.js)
 
@@ -164,9 +166,10 @@ Additional top-level state:
 - **roadModule**: shared front road parameters + per-zone left/right styles
 - **roadModuleStyles**: 10 style categories for road zone colors/widths/opacity
 - **sunSettings**: lat/long, date, time, animation, intensity
+- **moveMode**: transient state for AutoCAD-style move command — `{ active, phase ('selectObject'|'selectBase'|'moving'), targetType ('building'|'lotAccessArrow'), targetLotId, targetBuildingType, targetDirection, basePoint, originalPosition }`. Excluded from both persist and Zundo partialize (transient UI state).
 - **Project state**: currentProject, projects list, snapshots, layerStates
 
-**Store version**: 21 (with migration system for backward compat from v1-v20; v15 added entity system, accessory buildings, comparison roads; v16 added annotation system, enhanced dimensions, road intersection fillets; v17 fixed fillOpacity defaults to 1.0 for all road zone and roadWidth styles; v18 added max setback lines with independent style/visibility/layer toggles; v19 internal; v20 added BTZ planes, accessory setback lines, lot access arrows — new style categories, visibility keys, layer toggles, accessory defaults to zero/null; v21 backfill migration for v20 keys that were added after version bump). Persist config includes a custom `merge` function that patches missing `entityStyles`, `lotVisibility`, and `viewSettings.layers` keys on every hydration — ensures forward compatibility without relying solely on version-gated migrations.
+**Store version**: 22 (with migration system for backward compat from v1-v21; v15 added entity system, accessory buildings, comparison roads; v16 added annotation system, enhanced dimensions, road intersection fillets; v17 fixed fillOpacity defaults to 1.0 for all road zone and roadWidth styles; v18 added max setback lines with independent style/visibility/layer toggles; v19 internal; v20 added BTZ planes, accessory setback lines, lot access arrows — new style categories, visibility keys, layer toggles, accessory defaults to zero/null; v21 backfill migration for v20 keys; v22 added principal/accessory building style variants — `principalBuildingEdges`, `principalBuildingFaces`, `accessoryBuildingEdges`, `accessoryBuildingFaces`). Persist config includes a custom `merge` function that patches missing `entityStyles`, `lotVisibility`, and `viewSettings.layers` keys on every hydration — ensures forward compatibility without relying solely on version-gated migrations.
 
 **Undo/redo via Zundo**: tracks existing, proposed, viewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, entities, entityOrder, entityStyles, lotVisibility, comparisonRoads, annotationSettings, annotationPositions. Excludes exportRequested flag.
 
@@ -254,7 +257,7 @@ const { undo, redo } = useStore.temporal.getState()
 - **Custom Dimension Labels**: Replace numeric values with arbitrary text
 - **Camera Presets**: 5 saved view slots + standard views (top, front, side, iso)
 - **Undo/Redo**: 50-step history via Zundo middleware + Cmd/Ctrl+Z/Shift+Z keyboard shortcuts
-- **Keyboard Shortcuts**: Cmd+Z (undo), Cmd+Shift+Z (redo), Cmd+S (save project)
+- **Keyboard Shortcuts**: Cmd+Z (undo), Cmd+Shift+Z (redo), Cmd+S (save project), M (move mode — district only), Delete/Backspace (delete selected building — district only), Escape (cancel move mode)
 - **Auto-Save**: Configurable periodic save when project is open and changes are dirty
 - **Project Management**: Save/load projects, full-state views (snapshots), style-only layer states
 - **Project Setup**: Start screen with Sandbox/New Project/Open Existing, module selection, district count
@@ -360,6 +363,41 @@ Both Structures Principal and Structures Accessory sections in `DistrictParamete
 - **Accessory**: Height (computed, read-only), Width (ft), Depth (ft), Stories, First Story Height, Upper Floor Height, Show Roof, Show Max Height Plane
 
 All editable fields use `updateBuildingParam(lotId, buildingType, key, value)`. Building rendering in `LotEntity.jsx` uses `??` (nullish coalescing) for fallback values to ensure `0` is treated as a valid user-entered value.
+
+### Styles Section (added v22)
+
+Dedicated "Styles" section in `DistrictParameterPanel.jsx` below Model Parameters. Contains 12 labeled, clickable rows with accordion behavior (one open at a time). Each row expands to show `InlineStyleControls` for that category.
+
+**Style categories**: Lot Lines, Setbacks, Accessory Setbacks, Max Setbacks, BTZ Planes, Lot Access Arrows, Principal Building Edges, Principal Building Faces, Accessory Building Edges, Accessory Building Faces, Roof, Max Height Plane.
+
+**Principal/Accessory building style split** (v22):
+- `principalBuildingEdges` / `principalBuildingFaces` — style keys for principal building
+- `accessoryBuildingEdges` / `accessoryBuildingFaces` — style keys for accessory building
+- In `LotEntity.jsx`, wired with `??` fallback: `style.principalBuildingEdges ?? style.buildingEdges`
+
+### Move Mode — M Key (District Module)
+
+AutoCAD-style move command with 3 phases:
+1. **selectObject**: Press M → click a building or lot access arrow to select it
+2. **selectBase**: Click a base point (reference position)
+3. **moving**: Move mouse to preview new position → click to place (or Escape to cancel and restore)
+
+**State**: `moveMode` in `useStore.js` — transient (excluded from persist/Zundo).
+**Actions**: `enterMoveMode()`, `exitMoveMode()`, `setMoveTarget(type, lotId, buildingType|direction)`, `setMoveBasePoint(point)`
+**Visual feedback**: Green highlight on move target, light blue on selectable objects during selectObject phase.
+**Scene capture**: `MoveModeCapturePlane` in `DistrictSceneContent.jsx` — invisible 2000×2000 plane for free pointer movement during 'moving' phase.
+**Components modified**: `BuildingEditor/index.jsx` (accepts `buildingType` prop), `LotAccessArrow.jsx` (accepts `lotId` prop), `useKeyboardShortcuts.js`
+
+### Delete/Regenerate Buildings (District Module)
+
+- **Delete**: Press Delete or Backspace with a building selected → calls `deleteEntityBuilding(lotId, buildingType)` which resets width=0, depth=0, stories=0
+- **Regenerate**: When a building is deleted (width===0 && stories===0), a `+` button appears in the Structures section header → calls `regenerateEntityBuilding(lotId, buildingType)` with sensible defaults (principal: 30×40, 2 stories; accessory: 15×20, 1 story)
+
+### Road Module Styles — Global Controls + Collapsible Zones
+
+`RoadModuleStylesSection` in `DistrictParameterPanel.jsx` has:
+- **Global** subsection: master Color (`setAllRoadZoneColor`), Opacity (`setAllRoadZoneOpacity`), Line Width (`setAllRoadLineWidths`) — affects all road zones at once
+- **Collapsible zone groups**: Each zone (ROW Lines, Road Surface, Left/Right Parking/Verge/Sidewalk/Transition) has a chevron toggle to collapse/expand its individual controls. Uses `collapsedZones` local state.
 
 ## Road Intersection System — WORKING (All 4 Directions)
 
