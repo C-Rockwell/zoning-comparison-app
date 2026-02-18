@@ -2598,6 +2598,13 @@ export const useStore = create(
                         fillColor: '#666666',
                         fillOpacity: 1.0,
                     },
+                    // Alley-specific zone styles (null = use regular style)
+                    alleyRoadWidth: null,
+                    alleyRightOfWay: null,
+                    alleyVerge: null,
+                    alleyParking: null,
+                    alleySidewalk: null,
+                    alleyTransitionZone: null,
                 },
                 // ============================================
                 // Comparison Roads (multi-direction, left/right/rear)
@@ -2651,6 +2658,12 @@ export const useStore = create(
                     for (const key of zoneKeys) {
                         if (updated[key]) updated[key] = { ...updated[key], lineWidth: width }
                     }
+                    // Update alley zone lineWidths (only when non-null)
+                    const alleyZoneKeys = ['alleyRoadWidth', 'alleyParking', 'alleyVerge', 'alleySidewalk', 'alleyTransitionZone']
+                    for (const key of alleyZoneKeys) {
+                        if (updated[key]) updated[key] = { ...updated[key], lineWidth: width }
+                    }
+                    if (updated.alleyRightOfWay) updated.alleyRightOfWay = { ...updated.alleyRightOfWay, width }
                     return { roadModuleStyles: updated }
                 }),
                 setAllRoadZoneColor: (color) => set((state) => {
@@ -2662,6 +2675,12 @@ export const useStore = create(
                     }
                     if (updated.intersectionFill) updated.intersectionFill = { ...updated.intersectionFill, fillColor: color }
                     if (updated.alleyIntersectionFill) updated.alleyIntersectionFill = { ...updated.alleyIntersectionFill, fillColor: color }
+                    // Update alley zone colors (only when non-null)
+                    const alleyZoneKeys = ['alleyRoadWidth', 'alleyParking', 'alleyVerge', 'alleySidewalk', 'alleyTransitionZone']
+                    for (const key of alleyZoneKeys) {
+                        if (updated[key]) updated[key] = { ...updated[key], fillColor: color, lineColor: color }
+                    }
+                    if (updated.alleyRightOfWay) updated.alleyRightOfWay = { ...updated.alleyRightOfWay, color }
                     return { roadModuleStyles: updated }
                 }),
 
@@ -2674,7 +2693,24 @@ export const useStore = create(
                     }
                     if (updated.intersectionFill) updated.intersectionFill = { ...updated.intersectionFill, fillOpacity: opacity }
                     if (updated.alleyIntersectionFill) updated.alleyIntersectionFill = { ...updated.alleyIntersectionFill, fillOpacity: opacity }
+                    const alleyZoneKeys = ['alleyRoadWidth', 'alleyParking', 'alleyVerge', 'alleySidewalk', 'alleyTransitionZone']
+                    for (const key of alleyZoneKeys) {
+                        if (updated[key]) updated[key] = { ...updated[key], fillOpacity: opacity }
+                    }
                     return { roadModuleStyles: updated }
+                }),
+
+                // Road Module Styles Snapshot (for global toggle revert)
+                roadModuleStylesSnapshot: null,
+                snapshotRoadModuleStyles: () => set((state) => ({
+                    roadModuleStylesSnapshot: JSON.parse(JSON.stringify(state.roadModuleStyles))
+                })),
+                restoreRoadModuleStyles: () => set((state) => {
+                    if (!state.roadModuleStylesSnapshot) return {}
+                    return {
+                        roadModuleStyles: JSON.parse(JSON.stringify(state.roadModuleStylesSnapshot)),
+                        roadModuleStylesSnapshot: null,
+                    }
                 }),
 
                 // Comparison Roads Actions
@@ -3692,6 +3728,15 @@ export const useStore = create(
                     }
                     if (merged.roadModuleStyles && !merged.roadModuleStyles.alleyIntersectionFill) {
                         merged.roadModuleStyles.alleyIntersectionFill = { fillColor: '#666666', fillOpacity: 1.0 };
+                    }
+                    // Patch missing alley zone style keys
+                    if (merged.roadModuleStyles) {
+                        const alleyKeys = ['alleyRoadWidth', 'alleyRightOfWay', 'alleyVerge', 'alleyParking', 'alleySidewalk', 'alleyTransitionZone'];
+                        for (const key of alleyKeys) {
+                            if (merged.roadModuleStyles[key] === undefined) {
+                                merged.roadModuleStyles[key] = null;
+                            }
+                        }
                     }
                     // Reset transient batch export state on hydration
                     if (merged.viewSettings) {

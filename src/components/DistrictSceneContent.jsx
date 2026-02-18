@@ -369,7 +369,7 @@ const EntityRoadModules = ({ lotPositions }) => {
                         }
 
                         return (
-                            <group key={roadId} position={[posX, posY, 0]}>
+                            <group key={roadId} position={[posX, posY, isOwnS3 ? 0.042 : 0]}>
                                 <RoadModule
                                     lotWidth={spanWidth}
                                     roadModule={road}
@@ -408,7 +408,7 @@ const EntityRoadModules = ({ lotPositions }) => {
                         const intColor = roadModuleStyles.alleyIntersectionFill?.fillColor ?? roadModuleStyles.intersectionFill?.fillColor ?? '#666666'
                         const intOpacity = roadModuleStyles.alleyIntersectionFill?.fillOpacity ?? roadModuleStyles.intersectionFill?.fillOpacity ?? 1.0
                         return (
-                            <mesh key={rect.key} position={[rect.cx, rect.cy, 0.035]} receiveShadow renderOrder={1}>
+                            <mesh key={rect.key} position={[rect.cx, rect.cy, 0.077]} receiveShadow renderOrder={1}>
                                 <planeGeometry args={[rect.w, rect.h]} />
                                 <meshStandardMaterial
                                     color={intColor}
@@ -496,11 +496,12 @@ const MoveModeCapturePlane = () => {
         for (let i = 0; i < lotIds.length; i++) {
             const lot = getLotData(lotIds[i])
             const lotWidth = lot?.lotWidth || 50
+            const lotDepth = lot?.lotDepth || 100
             if (i === 0) {
-                positions[lotIds[i]] = lotWidth / 2
+                positions[lotIds[i]] = { x: lotWidth / 2, y: lotDepth / 2 }
             } else {
                 negOffset -= lotWidth
-                positions[lotIds[i]] = negOffset + lotWidth / 2
+                positions[lotIds[i]] = { x: negOffset + lotWidth / 2, y: lotDepth / 2 }
             }
         }
         return positions
@@ -512,9 +513,9 @@ const MoveModeCapturePlane = () => {
         if (!e.ray.intersectPlane(plane, planeIntersectPoint)) return
 
         if (moveMode.targetType === 'building') {
-            const offsetGroupX = lotPositions[moveMode.targetLotId] ?? 0
-            const localX = planeIntersectPoint.x - offsetGroupX
-            const localY = planeIntersectPoint.y
+            const lotPos = lotPositions[moveMode.targetLotId] ?? { x: 0, y: 0 }
+            const localX = planeIntersectPoint.x - lotPos.x
+            const localY = planeIntersectPoint.y - lotPos.y
             const dx = localX - moveMode.basePoint[0]
             const dy = localY - moveMode.basePoint[1]
             const newX = Math.round((moveMode.originalPosition?.[0] ?? 0) + dx)

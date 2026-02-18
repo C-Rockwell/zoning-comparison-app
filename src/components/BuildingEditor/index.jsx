@@ -8,6 +8,7 @@ import VertexHandle from '../LotEditor/VertexHandle'
 import MidpointHandle from '../LotEditor/MidpointHandle'
 import EdgeHandle from '../LotEditor/EdgeHandle'
 import HeightHandle from './HeightHandle'
+import MoveHandle from './MoveHandle'
 import PolygonBuilding from './PolygonBuilding'
 import RoofMesh from './RoofMesh'
 import Dimension from '../Dimension'
@@ -55,6 +56,7 @@ const BuildingEditor = ({
     heightDimensionKey = 'buildingHeight',
     // Layout
     offsetGroupX = 0,
+    offsetGroupY = 0,
     // Callbacks
     onSelect,
     enableBuildingPolygonMode,
@@ -62,6 +64,7 @@ const BuildingEditor = ({
     splitBuildingEdge,
     extrudeBuildingEdge,
     setBuildingTotalHeight,
+    onBuildingMove,
 }) => {
     const { faces, edges } = styles
     const [hovered, setHovered] = useState(false)
@@ -161,7 +164,7 @@ const BuildingEditor = ({
             e.stopPropagation()
             if (e.ray.intersectPlane(plane, planeIntersectPoint)) {
                 const localX = planeIntersectPoint.x - offsetGroupX
-                const localY = planeIntersectPoint.y
+                const localY = planeIntersectPoint.y - offsetGroupY
                 setMoveBasePoint([localX, localY], [x, y])
             }
             useStore.temporal.getState().pause()
@@ -251,6 +254,8 @@ const BuildingEditor = ({
                     styles={styles}
                     lineScale={lineScale}
                     scaleFactor={scaleFactor}
+                    isMoveModeTarget={isMoveModeTarget}
+                    moveMode={moveMode}
                     onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
                     onPointerOut={() => setHovered(false)}
                     onPointerDown={handlePointerDown}
@@ -416,6 +421,17 @@ const BuildingEditor = ({
                         totalHeight={totalBuildingHeight}
                         onHeightChange={handleHeightChange}
                         offsetGroupX={offsetGroupX}
+                    />
+
+                    {/* Move handle at footprint center, raised above building + offset from HeightHandle */}
+                    <MoveHandle
+                        position={[bounds.cx, bounds.cy]}
+                        zPosition={totalBuildingHeight + 0.5}
+                        displayOffset={[-bounds.w * 0.25, -bounds.d * 0.25]}
+                        offsetGroupX={offsetGroupX}
+                        offsetGroupY={offsetGroupY}
+                        onDrag={(newX, newY) => { if (onBuildingMove) onBuildingMove(newX, newY) }}
+                        onDragEnd={() => {}}
                     />
 
                     {/* Footprint edge dimensions */}

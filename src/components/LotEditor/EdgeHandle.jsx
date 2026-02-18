@@ -42,7 +42,7 @@ const EdgeHandle = ({ v1, v2, edgeIndex, onExtrude, offsetGroupX = 0 }) => {
     if (edgeLength < 10) return null
 
     // Arrow position (offset from edge center along perpendicular)
-    const arrowOffset = 4
+    const arrowOffset = 5
     const arrowPosition = {
         x: midpoint.x + perpDir.x * arrowOffset,
         y: midpoint.y + perpDir.y * arrowOffset,
@@ -103,7 +103,7 @@ const EdgeHandle = ({ v1, v2, edgeIndex, onExtrude, offsetGroupX = 0 }) => {
         }
     }
 
-    const size = dragging ? 1.5 : (hovered ? 1.3 : 1.0)
+    const size = dragging ? 2.0 : (hovered ? 1.75 : 1.4)
     const color = dragging ? '#ffff00' : (hovered ? '#00aaff' : '#4488ff')
 
     return (
@@ -120,7 +120,7 @@ const EdgeHandle = ({ v1, v2, edgeIndex, onExtrude, offsetGroupX = 0 }) => {
                     onPointerUp={handlePointerUp}
                     onPointerMove={handlePointerMove}
                 >
-                    <coneGeometry args={[size * 0.8, size * 2, 8]} />
+                    <coneGeometry args={[size * 0.9, size * 2.2, 8]} />
                     <meshBasicMaterial
                         color={color}
                         transparent

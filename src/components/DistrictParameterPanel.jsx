@@ -1438,32 +1438,54 @@ const RoadModuleStylesSection = () => {
     const setAllRoadLineWidths = useStore((s) => s.setAllRoadLineWidths)
     const setAllRoadZoneColor = useStore((s) => s.setAllRoadZoneColor)
     const setAllRoadZoneOpacity = useStore((s) => s.setAllRoadZoneOpacity)
+    const roadModuleStylesSnapshot = useStore((s) => s.roadModuleStylesSnapshot)
+    const snapshotRoadModuleStyles = useStore((s) => s.snapshotRoadModuleStyles)
+    const restoreRoadModuleStyles = useStore((s) => s.restoreRoadModuleStyles)
 
-    const [collapsedZones, setCollapsedZones] = useState({})
+    // All zones collapsed by default
+    const allZoneKeys = [
+        'rightOfWay', 'roadSurface', 'intersectionFill', 'alleyIntersectionFill',
+        'alleyRightOfWay', 'alleyRoadWidth', 'alleyVerge', 'alleyParking', 'alleySidewalk', 'alleyTransitionZone',
+        'leftSide', 'leftParking', 'leftVerge', 'leftSidewalk', 'leftTransitionZone',
+        'rightSide', 'rightParking', 'rightVerge', 'rightSidewalk', 'rightTransitionZone',
+    ]
+    const [collapsedZones, setCollapsedZones] = useState(() => {
+        const init = {}
+        for (const k of allZoneKeys) init[k] = true
+        return init
+    })
     const toggleZone = (key) => setCollapsedZones(prev => ({ ...prev, [key]: !prev[key] }))
-    const [savedSnapshot, setSavedSnapshot] = useState(null)
+    const allCollapsed = allZoneKeys.every(k => collapsedZones[k])
+    const toggleAllZones = () => {
+        const newVal = !allCollapsed
+        setCollapsedZones(() => {
+            const next = {}
+            for (const k of allZoneKeys) next[k] = newVal
+            return next
+        })
+    }
+
+    // Global style toggle
+    const [globalStylesEnabled, setGlobalStylesEnabled] = useState(false)
+    const handleToggleGlobal = () => {
+        if (!globalStylesEnabled) {
+            snapshotRoadModuleStyles()
+            setGlobalStylesEnabled(true)
+        } else {
+            restoreRoadModuleStyles()
+            setGlobalStylesEnabled(false)
+        }
+    }
+    const handleResetGlobal = () => {
+        if (!roadModuleStylesSnapshot) return
+        restoreRoadModuleStyles()
+        snapshotRoadModuleStyles()
+    }
 
     if (!roadModuleStyles) return null
 
     // Use roadWidth lineWidth as the reference for the universal slider
     const universalLineWidth = roadModuleStyles.roadWidth?.lineWidth ?? 1
-
-    // Snapshot current styles before applying global changes
-    const snapshotAndApply = (fn) => {
-        if (!savedSnapshot) setSavedSnapshot(JSON.parse(JSON.stringify(roadModuleStyles)))
-        fn()
-    }
-    const handleResetGlobal = () => {
-        if (!savedSnapshot) return
-        for (const [key, val] of Object.entries(savedSnapshot)) {
-            if (typeof val === 'object' && val !== null) {
-                for (const [prop, propVal] of Object.entries(val)) {
-                    setRoadModuleStyle(key, prop, propVal)
-                }
-            }
-        }
-        setSavedSnapshot(null)
-    }
 
     const renderZoneHeader = (zoneKey, label) => (
         <div
@@ -1475,12 +1497,18 @@ const RoadModuleStylesSection = () => {
         </div>
     )
 
-    const renderSideZoneGroup = (zones, sideLabel, sideColor) => (
+    const renderSideZoneGroup = (zones, sideLabel, sideColor, sideKey) => (
         <div style={{ paddingTop: '8px', marginBottom: '12px', borderTop: '1px solid var(--ui-bg-primary)' }}>
-            <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '8px', fontWeight: 'bold', color: sideColor }}>
-                {sideLabel}
-            </span>
-            {zones.map(({ key, label, defaultFill }) => (
+            <div
+                onClick={() => toggleZone(sideKey)}
+                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}
+            >
+                <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 'bold', color: sideColor }}>
+                    {sideLabel}
+                </span>
+                {collapsedZones[sideKey] ? <ChevronDown size={12} style={{ color: sideColor }} /> : <ChevronUp size={12} style={{ color: sideColor }} />}
+            </div>
+            {!collapsedZones[sideKey] && zones.map(({ key, label, defaultFill }) => (
                 <div key={key} style={{ marginBottom: '4px', paddingLeft: '8px', borderLeft: '2px solid var(--ui-border)' }}>
                     <div
                         onClick={() => toggleZone(key)}
@@ -1510,13 +1538,60 @@ const RoadModuleStylesSection = () => {
         </div>
     )
 
+    // Alley zone controls — show fallback from regular key when alley key is null
+    const renderAlleyZoneControls = (alleyKey, fallbackKey, label, defaultFill) => {
+        const alleyStyle = roadModuleStyles[alleyKey]
+        const fallback = roadModuleStyles[fallbackKey]
+        return (
+            <div style={{ marginBottom: '4px', paddingLeft: '8px', borderLeft: '2px solid var(--ui-border)' }}>
+                <div
+                    onClick={() => toggleZone(alleyKey)}
+                    style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}
+                >
+                    <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ui-text-muted)' }}>{label}</span>
+                    {collapsedZones[alleyKey] ? <ChevronDown size={10} style={{ color: 'var(--ui-text-muted)' }} /> : <ChevronUp size={10} style={{ color: 'var(--ui-text-muted)' }} />}
+                </div>
+                {!collapsedZones[alleyKey] && (
+                    <div style={{ marginBottom: '8px' }}>
+                        <ControlRow label="Line Color">
+                            <ColorPicker value={alleyStyle?.lineColor ?? fallback?.lineColor ?? '#000000'} onChange={(c) => setRoadModuleStyle(alleyKey, 'lineColor', c)} />
+                        </ControlRow>
+                        <ControlRow label="Line Width">
+                            <SliderInput value={alleyStyle?.lineWidth ?? fallback?.lineWidth ?? 1} onChange={(v) => setRoadModuleStyle(alleyKey, 'lineWidth', v)} min={0.5} max={5} step={0.5} />
+                        </ControlRow>
+                        <ControlRow label="Fill Color">
+                            <ColorPicker value={alleyStyle?.fillColor ?? fallback?.fillColor ?? defaultFill} onChange={(c) => setRoadModuleStyle(alleyKey, 'fillColor', c)} />
+                        </ControlRow>
+                        <ControlRow label="Fill Opacity">
+                            <SliderInput value={alleyStyle?.fillOpacity ?? fallback?.fillOpacity ?? 1.0} onChange={(v) => setRoadModuleStyle(alleyKey, 'fillOpacity', v)} min={0} max={1} step={0.05} />
+                        </ControlRow>
+                    </div>
+                )}
+            </div>
+        )
+    }
+
     return (
         <Section title="Road Module Styles" icon={<Palette className="w-4 h-4" />} defaultOpen={false}>
+            {/* Expand All / Collapse All */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '4px' }}>
+                <button
+                    onClick={toggleAllZones}
+                    className="text-[9px] px-1.5 py-0.5 rounded transition-colors"
+                    style={{ color: 'var(--ui-text-muted)', border: '1px solid var(--ui-border)' }}
+                >
+                    {allCollapsed ? 'Expand All' : 'Collapse All'}
+                </button>
+            </div>
+
             {/* Global Controls */}
             <div style={{ marginBottom: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 'bold', color: 'var(--ui-accent)' }}>Global</span>
-                    {savedSnapshot && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={globalStylesEnabled} onChange={handleToggleGlobal} style={{ borderColor: 'var(--ui-border)' }} />
+                        <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 'bold', color: 'var(--ui-accent)' }}>Global</span>
+                    </label>
+                    {globalStylesEnabled && roadModuleStylesSnapshot && (
                         <button
                             onClick={handleResetGlobal}
                             className="text-[9px] px-1.5 py-0.5 rounded transition-colors"
@@ -1526,15 +1601,19 @@ const RoadModuleStylesSection = () => {
                         </button>
                     )}
                 </div>
-                <ControlRow label="Color">
-                    <ColorPicker value={roadModuleStyles.roadWidth?.fillColor ?? '#666666'} onChange={(c) => snapshotAndApply(() => setAllRoadZoneColor(c))} />
-                </ControlRow>
-                <ControlRow label="Opacity">
-                    <SliderInput value={roadModuleStyles.roadWidth?.fillOpacity ?? 1} onChange={(v) => snapshotAndApply(() => setAllRoadZoneOpacity(v))} min={0} max={1} step={0.05} />
-                </ControlRow>
-                <ControlRow label="Line Width">
-                    <SliderInput value={universalLineWidth} onChange={(v) => snapshotAndApply(() => setAllRoadLineWidths(v))} min={0.5} max={5} step={0.5} />
-                </ControlRow>
+                {globalStylesEnabled && (
+                    <>
+                        <ControlRow label="Color">
+                            <ColorPicker value={roadModuleStyles.roadWidth?.fillColor ?? '#666666'} onChange={(c) => setAllRoadZoneColor(c)} />
+                        </ControlRow>
+                        <ControlRow label="Opacity">
+                            <SliderInput value={roadModuleStyles.roadWidth?.fillOpacity ?? 1} onChange={(v) => setAllRoadZoneOpacity(v)} min={0} max={1} step={0.05} />
+                        </ControlRow>
+                        <ControlRow label="Line Width">
+                            <SliderInput value={universalLineWidth} onChange={(v) => setAllRoadLineWidths(v)} min={0.5} max={5} step={0.5} />
+                        </ControlRow>
+                    </>
+                )}
             </div>
 
             {/* Right-of-Way Lines */}
@@ -1609,6 +1688,41 @@ const RoadModuleStylesSection = () => {
                 </div>
             )}
 
+            {/* Alley Zones */}
+            <div style={{ paddingTop: '8px', marginBottom: '12px', borderTop: '1px solid var(--ui-bg-primary)' }}>
+                <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '8px', fontWeight: 'bold', color: 'var(--ui-warning)' }}>
+                    Alley Zones
+                </span>
+                {/* Alley ROW Lines — uses color/width/opacity format like rightOfWay */}
+                <div style={{ marginBottom: '4px', paddingLeft: '8px', borderLeft: '2px solid var(--ui-border)' }}>
+                    <div
+                        onClick={() => toggleZone('alleyRightOfWay')}
+                        style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}
+                    >
+                        <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ui-text-muted)' }}>ROW Lines</span>
+                        {collapsedZones.alleyRightOfWay ? <ChevronDown size={10} style={{ color: 'var(--ui-text-muted)' }} /> : <ChevronUp size={10} style={{ color: 'var(--ui-text-muted)' }} />}
+                    </div>
+                    {!collapsedZones.alleyRightOfWay && (
+                        <div style={{ marginBottom: '8px' }}>
+                            <ControlRow label="Color">
+                                <ColorPicker value={roadModuleStyles.alleyRightOfWay?.color ?? roadModuleStyles.rightOfWay?.color ?? '#000000'} onChange={(c) => setRoadModuleStyle('alleyRightOfWay', 'color', c)} />
+                            </ControlRow>
+                            <ControlRow label="Width">
+                                <SliderInput value={roadModuleStyles.alleyRightOfWay?.width ?? roadModuleStyles.rightOfWay?.width ?? 1} onChange={(v) => setRoadModuleStyle('alleyRightOfWay', 'width', v)} min={0.5} max={5} step={0.5} />
+                            </ControlRow>
+                            <ControlRow label="Opacity">
+                                <SliderInput value={roadModuleStyles.alleyRightOfWay?.opacity ?? roadModuleStyles.rightOfWay?.opacity ?? 1} onChange={(v) => setRoadModuleStyle('alleyRightOfWay', 'opacity', v)} min={0} max={1} step={0.05} />
+                            </ControlRow>
+                        </div>
+                    )}
+                </div>
+                {renderAlleyZoneControls('alleyRoadWidth', 'roadWidth', 'Road Surface', '#666666')}
+                {renderAlleyZoneControls('alleyVerge', 'leftVerge', 'Verge', '#c4a77d')}
+                {renderAlleyZoneControls('alleyParking', 'leftParking', 'Parking', '#888888')}
+                {renderAlleyZoneControls('alleySidewalk', 'leftSidewalk', 'Sidewalk', '#90EE90')}
+                {renderAlleyZoneControls('alleyTransitionZone', 'leftTransitionZone', 'Transition Zone', '#98D8AA')}
+            </div>
+
             {/* Left Side Elements */}
             {renderSideZoneGroup(
                 [
@@ -1618,7 +1732,8 @@ const RoadModuleStylesSection = () => {
                     { key: 'leftTransitionZone', label: 'Transition Zone', defaultFill: '#98D8AA' },
                 ],
                 'Left Side',
-                'var(--ui-accent)'
+                'var(--ui-accent)',
+                'leftSide'
             )}
 
             {/* Right Side Elements */}
@@ -1630,7 +1745,8 @@ const RoadModuleStylesSection = () => {
                     { key: 'rightTransitionZone', label: 'Transition Zone', defaultFill: '#98D8AA' },
                 ],
                 'Right Side',
-                'var(--ui-success, var(--ui-accent))'
+                'var(--ui-success, var(--ui-accent))',
+                'rightSide'
             )}
         </Section>
     )

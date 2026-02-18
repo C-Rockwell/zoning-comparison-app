@@ -26,8 +26,8 @@ const MidpointHandle = ({ v1, v2, edgeIndex, onSplit }) => {
         }
     }
 
-    const size = hovered ? 1.2 : 1.0
-    const color = hovered ? '#00ff00' : '#888888'
+    const size = hovered ? 1.6 : 1.35
+    const color = hovered ? '#00ff00' : '#6699cc'
 
     return (
         <mesh
@@ -41,7 +41,7 @@ const MidpointHandle = ({ v1, v2, edgeIndex, onSplit }) => {
             <meshBasicMaterial
                 color={color}
                 transparent
-                opacity={hovered ? 0.9 : 0.5}
+                opacity={hovered ? 0.9 : 0.75}
                 depthTest={false}
             />
         </mesh>

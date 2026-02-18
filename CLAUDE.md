@@ -46,7 +46,7 @@ React 19 + Vite 7 + Three.js 0.182 via @react-three/fiber 9.4 | Zustand 5 + Zund
 - `districtParameters` — informational zoning data (not visualized)
 - Factory functions: `createDefaultLot()`, `createDefaultLotStyle()`, `createDefaultRoadModule()`, `createDefaultLotVisibility()`
 
-**Other key state**: `viewSettings` (camera, export, batch queue), `layerVisibility` (26+ layers), `dimensionSettings`, `annotationSettings`, `annotationPositions`, `styleSettings`, `roadModule`, `roadModuleStyles` (11 categories), `sunSettings`, `moveMode` (transient, excluded from persist/Zundo)
+**Other key state**: `viewSettings` (camera, export, batch queue), `layerVisibility` (26+ layers), `dimensionSettings`, `annotationSettings`, `annotationPositions`, `styleSettings`, `roadModule`, `roadModuleStyles` (17 categories: 11 base + 6 alley-specific), `sunSettings`, `moveMode` (transient, excluded from persist/Zundo), `roadModuleStylesSnapshot` (transient — global style toggle revert)
 
 **Store version 24**: Migrations v1–v23. Persist `merge` function patches missing `entityStyles`, `lotVisibility`, `viewSettings.layers`, `roadModuleStyles` keys on every hydration.
 
@@ -77,7 +77,7 @@ const { undo, redo } = useStore.temporal.getState()
 - **4-place update** for new style/visibility/layer keys: `createDefaultLotStyle()`, `createDefaultLotVisibility()`, `viewSettings.layers`, persist `merge` function
 
 ### renderOrder Map
-Road zones=0, intersection fill=1, alley fill=1, fillet fills=2, fillet lines=3, building faces=4, roof=4, BTZ planes=5, max height plane=6, height handle ring=9, sphere=10. **Note**: `renderOrder` doesn't work reliably on drei `<Line>` — use z-offset separation instead.
+Road zones=0, intersection fill=1, alley fill=1, fillet fills=2, fillet lines=3, building faces=4, roof=4, BTZ planes=5, max height plane=6, move handle=8, height handle ring=9, sphere=10. **Note**: `renderOrder` doesn't work reliably on drei `<Line>` — use z-offset separation instead.
 
 ### Z-Layer Map (Lot Geometry)
 Lot fill (z=0.02) → lot lines (0.03) → min setbacks (0.1) → accessory setbacks (0.11) → max setbacks (0.12) → lot access arrows (0.15) → BTZ planes (vertical)
@@ -88,7 +88,9 @@ Lot fill (z=0.02) → lot lines (0.03) → min setbacks (0.1) → accessory setb
 ### Road Intersection System
 Roads stop at lot boundaries. Intersection fills use notched `THREE.Shape` geometry (z=0.04, renderOrder=1) with concave quarter-circle cutouts matching fillet outer radii — prevents z-fighting with fillet arcs. Utilities in `intersectionGeometry.js`: `computeFilletOuterRadius()` returns total zone depth, `createNotchedRectShape()` creates centered shape with per-corner notch radii. Fillet arcs (z=0.05, renderOrder=2) handle curved corners with arc lines at z=0.055. End-edge lines suppressed via `suppressLeftEnd`/`suppressRightEnd` on RoadModule.
 
-**S3 (Alley) T-Junctions**: When S3 meets non-S3, fillets/fills suppressed. Non-S3 road extends through S3 ROW. Small alley fill rects connect alley pavement to cross-street. Alley fills use independent `alleyIntersectionFill` style (with `?? intersectionFill` fallback).
+**S3 (Alley) T-Junctions**: When S3 meets non-S3, fillets/fills suppressed. Non-S3 road extends through S3 ROW. Small alley fill rects connect alley pavement to cross-street (z=0.077). Alley fills use independent `alleyIntersectionFill` style (with `?? intersectionFill` fallback). All S3 road geometry raised by z=0.042ft (0.5 inches) to prevent z-fighting with perpendicular roads.
+
+**Alley-Specific Styles**: 6 keys (`alleyRoadWidth`, `alleyRightOfWay`, `alleyVerge`, `alleyParking`, `alleySidewalk`, `alleyTransitionZone`) — all default `null` (use regular style). When set, `RoadModule.jsx` merges alley overrides onto base styles: `{ ...baseStyle, ...alleyOverride }`. Alley keys are symmetric (same style for both sides of alley). Global style actions update alley keys only when non-null.
 
 **Road types**: S1 (Primary, ROW 50', road 24'), S2 (Secondary, ROW 40', road 24'), S3 (Alley, ROW 20', road 16')
 
@@ -116,6 +118,11 @@ Endpoints: `/api/health`, `/api/config` (GET/PUT), `/api/projects/:id` (CRUD), `
 
 - **Batch Export**: Queue saved views × camera angles → ZIP download. Uses `exportQueue`/`isBatchExporting` in viewSettings, JSZip in Exporter.jsx, BatchExportSection in DistrictParameterPanel.
 - **District Parameter CSV Import**: Auto-detects lot vs district CSV. `DISTRICT_FIELDS` in importParser.js (~67 fields). ImportWizard with `importType` toggle.
+- **Road Module Styles Overhaul** (4 changes, builds but not runtime-tested):
+  - Global style toggle: checkbox enables/disables global Color/Opacity/Line Width controls; snapshot stored in Zustand (`roadModuleStylesSnapshot`, transient) for revert on toggle-off or Reset
+  - Alley-specific zone styles: 6 new `roadModuleStyles` keys with `null` defaults, merge-based resolution in `RoadModule.jsx`, "Alley Zones" UI section in panel
+  - S3 z-offset: alley road groups raised z=0.042, alley fill rects z=0.077 (was 0.035)
+  - Collapsible defaults: all zone sections start collapsed, Left/Right Side group toggles, Expand All / Collapse All button
 
 ## Known Limitations
 

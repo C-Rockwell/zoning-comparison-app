@@ -618,6 +618,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     scaleFactor={1}
                     onSelect={() => selectEntityBuilding(lotId, 'principal')}
                     offsetGroupX={offset + lotWidth / 2}
+                    offsetGroupY={lotDepth / 2}
                     stories={principal.stories ?? 1}
                     firstFloorHeight={principal.firstFloorHeight ?? 12}
                     upperFloorHeight={principal.upperFloorHeight ?? 10}
@@ -635,6 +636,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     splitBuildingEdge={(_model, edgeIndex) => splitEntityBuildingEdge(lotId, 'principal', edgeIndex)}
                     extrudeBuildingEdge={(_model, edgeIndex, distance) => extrudeEntityBuildingEdge(lotId, 'principal', edgeIndex, distance)}
                     setBuildingTotalHeight={(_model, newHeight) => setEntityBuildingTotalHeight(lotId, 'principal', newHeight)}
+                    onBuildingMove={(newX, newY) => setEntityBuildingPosition(lotId, 'principal', newX, newY)}
                 />
             )}
 
@@ -655,6 +657,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     scaleFactor={1}
                     onSelect={() => selectEntityBuilding(lotId, 'accessory')}
                     offsetGroupX={offset + lotWidth / 2}
+                    offsetGroupY={lotDepth / 2}
                     stories={accessory.stories ?? 1}
                     firstFloorHeight={accessory.firstFloorHeight ?? 10}
                     upperFloorHeight={accessory.upperFloorHeight ?? 10}
@@ -672,6 +675,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     splitBuildingEdge={(_model, edgeIndex) => splitEntityBuildingEdge(lotId, 'accessory', edgeIndex)}
                     extrudeBuildingEdge={(_model, edgeIndex, distance) => extrudeEntityBuildingEdge(lotId, 'accessory', edgeIndex, distance)}
                     setBuildingTotalHeight={(_model, newHeight) => setEntityBuildingTotalHeight(lotId, 'accessory', newHeight)}
+                    onBuildingMove={(newX, newY) => setEntityBuildingPosition(lotId, 'accessory', newX, newY)}
                 />
             )}
 

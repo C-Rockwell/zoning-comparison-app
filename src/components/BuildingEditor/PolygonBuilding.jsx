@@ -9,6 +9,8 @@ const PolygonBuilding = ({
     styles,
     lineScale = 1,
     scaleFactor = 1,
+    isMoveModeTarget = false,
+    moveMode = null,
     onPointerDown,
     onPointerUp,
     onPointerMove,
@@ -16,6 +18,10 @@ const PolygonBuilding = ({
     onPointerOut,
 }) => {
     const { faces, edges } = styles
+
+    // Move mode highlight: green if target, blue if selectObject phase, else normal
+    const effectiveColor = isMoveModeTarget ? '#00ff88' : (moveMode?.active && moveMode.phase === 'selectObject') ? '#88ccff' : faces.color
+    const effectiveOpacity = isMoveModeTarget ? 0.7 : (moveMode?.active && moveMode.phase === 'selectObject') ? 0.8 : faces.opacity
 
     // Create THREE.Shape from building footprint vertices
     const shape = useMemo(() => {
@@ -52,11 +58,11 @@ const PolygonBuilding = ({
                     >
                         <extrudeGeometry args={[shape, extrudeSettings]} />
                         <meshStandardMaterial
-                            color={faces.color}
-                            transparent={faces.opacity < 1}
-                            opacity={faces.opacity}
+                            color={effectiveColor}
+                            transparent={effectiveOpacity < 1}
+                            opacity={effectiveOpacity}
                             side={THREE.DoubleSide}
-                            depthWrite={faces.opacity >= 0.95}
+                            depthWrite={effectiveOpacity >= 0.95}
                             roughness={0.7}
                             metalness={0.1}
                         />
