@@ -219,26 +219,51 @@ const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, s
 // Front uses maxFront; street-facing sides use maxSideStreet.
 // ============================================
 const MaxSetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, lineScale = 1 }) => {
-    const { maxFront, maxSideStreet } = setbacks
+    const { maxFront, maxSideStreet, front, rear, sideInterior, minSideStreet } = setbacks
     const z = 0.12 // Above min setback lines at z=0.1
+
+    // Resolve per-side min setback values (same logic as SetbackLines)
+    const leftMinValue = streetSides.left ? minSideStreet : sideInterior
+    const rightMinValue = streetSides.right ? minSideStreet : sideInterior
+
+    // Compute clipped boundaries from min setbacks (fall back to lot edge if no min setback)
+    const hasMinLeft = leftMinValue != null && leftMinValue > 0
+    const hasMinRight = rightMinValue != null && rightMinValue > 0
+    const hasMinFront = front != null && front > 0
+    const hasRear = rear != null && rear > 0
+
+    const x1 = hasMinLeft ? -lotWidth / 2 + leftMinValue : -lotWidth / 2
+    const x2 = hasMinRight ? lotWidth / 2 - rightMinValue : lotWidth / 2
+    const y1 = hasMinFront ? -lotDepth / 2 + front : -lotDepth / 2
+    const y2 = hasRear ? lotDepth / 2 - rear : lotDepth / 2
+
+    // Max side street lines start at the max front line (L corner), not the min front line
+    const yMaxFront = (maxFront != null && maxFront > 0)
+        ? -lotDepth / 2 + maxFront
+        : y1
 
     const lines = []
 
-    // Max front setback line (horizontal, spans full lot width)
+    // Max front setback line (horizontal, clipped at max side street position on street side)
     if (maxFront != null && maxFront > 0) {
         const y = -lotDepth / 2 + maxFront
-        lines.push({ start: [-lotWidth / 2, y, z], end: [lotWidth / 2, y, z], side: 'front' })
+        // On the street side, clip at max side street position (L corner) instead of min side setback
+        const hasMaxLeft = streetSides.left && maxSideStreet != null && maxSideStreet > 0
+        const hasMaxRight = streetSides.right && maxSideStreet != null && maxSideStreet > 0
+        const fx1 = hasMaxLeft ? -lotWidth / 2 + maxSideStreet : x1
+        const fx2 = hasMaxRight ? lotWidth / 2 - maxSideStreet : x2
+        lines.push({ start: [fx1, y, z], end: [fx2, y, z], side: 'front' })
     }
 
-    // Max side street setback lines (vertical, on street-facing side(s))
+    // Max side street setback lines (vertical, from L-corner to rear setback)
     if (maxSideStreet != null && maxSideStreet > 0) {
         if (streetSides.left) {
             const x = -lotWidth / 2 + maxSideStreet
-            lines.push({ start: [x, -lotDepth / 2, z], end: [x, lotDepth / 2, z], side: 'left' })
+            lines.push({ start: [x, yMaxFront, z], end: [x, y2, z], side: 'left' })
         }
         if (streetSides.right) {
             const x = lotWidth / 2 - maxSideStreet
-            lines.push({ start: [x, -lotDepth / 2, z], end: [x, lotDepth / 2, z], side: 'right' })
+            lines.push({ start: [x, yMaxFront, z], end: [x, y2, z], side: 'right' })
         }
     }
 
@@ -353,21 +378,33 @@ const BTZPlanes = ({ principal, setbacks, streetSides = {}, style }) => {
         // Building front face y for left-alignment (front corner of side face)
         const buildingFrontY = py - buildingDepth / 2
 
+        // Helper: create a BufferGeometry quad in the YZ plane (no rotation needed)
+        const createSideQuad = (w, h) => {
+            const positions = new Float32Array([
+                0, 0, 0,
+                0, w, 0,
+                0, w, h,
+                0, 0, h,
+            ])
+            const indices = new Uint16Array([0, 1, 2, 0, 2, 3])
+            const geo = new THREE.BufferGeometry()
+            geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+            geo.setIndex(new THREE.BufferAttribute(indices, 1))
+            geo.computeVertexNormals()
+            return geo
+        }
+
         // Left street side
         if (streetSides.left) {
             const buildingLeftX = px - buildingWidth / 2
             const planeX = buildingLeftX - 0.021
 
-            // Left-aligned from front corner: starts at buildingFrontY, extends toward rear (+Y)
-            const planeCenterY = buildingFrontY + planeWidth / 2
-
             planes.push(
                 <mesh
                     key="btz-side-left"
-                    position={[planeX, planeCenterY, planeHeight / 2]}
-                    rotation={[Math.PI / 2, 0, Math.PI / 2]}
+                    position={[planeX, buildingFrontY, 0]}
+                    geometry={createSideQuad(planeWidth, planeHeight)}
                 >
-                    <planeGeometry args={[planeWidth, planeHeight]} />
                     <meshStandardMaterial
                         color={style.color}
                         opacity={style.opacity}
@@ -386,16 +423,12 @@ const BTZPlanes = ({ principal, setbacks, streetSides = {}, style }) => {
             const buildingRightX = px + buildingWidth / 2
             const planeX = buildingRightX + 0.021
 
-            // Left-aligned from front corner: starts at buildingFrontY, extends toward rear (+Y)
-            const planeCenterY = buildingFrontY + planeWidth / 2
-
             planes.push(
                 <mesh
                     key="btz-side-right"
-                    position={[planeX, planeCenterY, planeHeight / 2]}
-                    rotation={[Math.PI / 2, 0, Math.PI / 2]}
+                    position={[planeX, buildingFrontY, 0]}
+                    geometry={createSideQuad(planeWidth, planeHeight)}
                 >
-                    <planeGeometry args={[planeWidth, planeHeight]} />
                     <meshStandardMaterial
                         color={style.color}
                         opacity={style.opacity}
@@ -720,8 +753,8 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                             style={style?.lotAccessArrows}
                             bidirectional={true}
                             position={annotationPositions[`lot-${lotId}-access-shareddrive`] || [
-                                streetSides.right ? -lotWidth / 2 + 3 : lotWidth / 2 - 3,
-                                0, 0
+                                streetSides.right ? -lotWidth / 2 : lotWidth / 2,
+                                -lotDepth / 2, 0
                             ]}
                             onPositionChange={(pos) => setAnnotationPosition(`lot-${lotId}-access-shareddrive`, pos)}
                         />

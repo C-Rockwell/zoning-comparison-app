@@ -23,6 +23,67 @@ const createArrowShape = (length = 8, headWidth = 4, headLength = 3, shaftWidth 
 }
 
 /**
+ * Creates a T-junction symbol for shared drive access:
+ * - Thick rectangle stem from bottom (front street) up to junction point
+ * - Double-ended horizontal arrow (left arrowhead + shaft + right arrowhead) crossing at junction
+ * Single continuous path so ShapeGeometry produces one draggable mesh.
+ */
+const createSharedDriveShape = (
+    stemLength = 12,
+    stemWidth = 2,
+    crossbarLength = 14,
+    headWidth = 4,
+    headLength = 2.5,
+    crossbarShaftWidth = 1.5
+) => {
+    const shape = new THREE.Shape()
+    const halfStem = stemWidth / 2
+    const halfCrossShaft = crossbarShaftWidth / 2
+    const halfCrossbar = crossbarLength / 2
+    const halfHead = headWidth / 2
+    const junctionY = stemLength // Where crossbar meets top of stem
+
+    // Start at bottom-left of stem, trace clockwise
+    shape.moveTo(-halfStem, 0)
+
+    // Up left side of stem to junction
+    shape.lineTo(-halfStem, junctionY - halfCrossShaft)
+
+    // Left crossbar shaft outward
+    shape.lineTo(-(halfCrossbar - headLength), junctionY - halfCrossShaft)
+
+    // Left arrowhead (pointing left)
+    shape.lineTo(-(halfCrossbar - headLength), junctionY - halfHead)
+    shape.lineTo(-halfCrossbar, junctionY)
+    shape.lineTo(-(halfCrossbar - headLength), junctionY + halfHead)
+    shape.lineTo(-(halfCrossbar - headLength), junctionY + halfCrossShaft)
+
+    // Across top of crossbar to left side of stem
+    shape.lineTo(-halfStem, junctionY + halfCrossShaft)
+
+    // Across top of stem to right side
+    shape.lineTo(halfStem, junctionY + halfCrossShaft)
+
+    // Right crossbar shaft outward
+    shape.lineTo(halfCrossbar - headLength, junctionY + halfCrossShaft)
+
+    // Right arrowhead (pointing right)
+    shape.lineTo(halfCrossbar - headLength, junctionY + halfHead)
+    shape.lineTo(halfCrossbar, junctionY)
+    shape.lineTo(halfCrossbar - headLength, junctionY - halfHead)
+    shape.lineTo(halfCrossbar - headLength, junctionY - halfCrossShaft)
+
+    // Back across bottom of crossbar to right side of stem
+    shape.lineTo(halfStem, junctionY - halfCrossShaft)
+
+    // Down right side of stem
+    shape.lineTo(halfStem, 0)
+
+    shape.closePath()
+    return shape
+}
+
+/**
  * LotAccessArrow — large flat 2D arrow on the ground plane, draggable.
  *
  * Props:
@@ -69,6 +130,22 @@ const LotAccessArrow = ({
         return geo
     }, [])
 
+    // Create the shared drive T-junction geometry (dynamic stem length based on lotDepth)
+    const sharedDriveGeometry = useMemo(() => {
+        const stemLen = (lotDepth || 100) / 2
+        const shape = createSharedDriveShape(stemLen, 2, 14, 4, 2.5, 1.5)
+        const geo = new THREE.ShapeGeometry(shape)
+        geo.computeBoundingBox()
+        const center = new THREE.Vector3()
+        geo.boundingBox.getCenter(center)
+        // Only center X — keep Y origin at bottom of stem so position Y = front edge
+        geo.translate(-center.x, 0, 0)
+        return geo
+    }, [lotDepth])
+
+    const isSharedDrive = direction === 'sharedDrive'
+    const activeGeometry = isSharedDrive ? sharedDriveGeometry : arrowGeometry
+
     // Compute rotation based on direction
     const rotation = useMemo(() => {
         switch (direction) {
@@ -77,15 +154,11 @@ const LotAccessArrow = ({
             case 'rear':
                 return Math.PI
             case 'sideStreet':
-                return streetSides.left ? Math.PI / 2 : -Math.PI / 2
+                return streetSides.left ? -Math.PI / 2 : Math.PI / 2
             case 'sharedDrive':
-                // Interior side is the one that is NOT a street side
-                // If right is street, interior is left → arrow points left (Math.PI / 2)
-                // If left is street, interior is right → arrow points right (-Math.PI / 2)
-                // If neither, default to right side
-                if (streetSides.right) return Math.PI / 2
-                if (streetSides.left) return -Math.PI / 2
-                return -Math.PI / 2
+                // T-junction: stem points from front street into lot (+Y = toward rear)
+                // Rotation 0 means stem goes in +Y direction (front toward rear)
+                return 0
             default:
                 return 0
         }
@@ -136,9 +209,9 @@ const LotAccessArrow = ({
 
     return (
         <group position={[position[0], position[1], arrowZ]}>
-            {/* Primary arrow */}
+            {/* Primary shape */}
             <mesh
-                geometry={arrowGeometry}
+                geometry={activeGeometry}
                 rotation={[0, 0, rotation]}
                 onPointerDown={handlePointerDown}
                 onPointerUp={handlePointerUp}
@@ -153,10 +226,10 @@ const LotAccessArrow = ({
                 />
             </mesh>
 
-            {/* Second arrow for bidirectional (rotated 180 degrees) */}
-            {bidirectional && (
+            {/* Second arrow for bidirectional (only for non-sharedDrive directions) */}
+            {bidirectional && !isSharedDrive && (
                 <mesh
-                    geometry={arrowGeometry}
+                    geometry={activeGeometry}
                     rotation={[0, 0, rotation + Math.PI]}
                     onPointerDown={handlePointerDown}
                     onPointerUp={handlePointerUp}

@@ -283,11 +283,12 @@ const { undo, redo } = useStore.temporal.getState()
 
 **Status**: IMPLEMENTED — working correctly. Required v21 migration to backfill `maxSetbacks` style key into existing lots' `entityStyles`.
 
-Max setback lines visualize `maxFront` and `maxSideStreet` from `setbacks.principal` as individual dashed lines in the 3D scene (NOT a closed rectangle — only sides with values get lines).
+Max setback lines visualize `maxFront` and `maxSideStreet` from `setbacks.principal` as individual dashed lines forming an "L" shape on corner lots (NOT a closed rectangle — only sides with values get lines). Lines are clipped to min setback and rear setback boundaries.
 
 **Components & files**:
 
 - `MaxSetbackLines` component in `LotEntity.jsx` — renders individual lines at z=0.12, with `!= null && > 0` guards
+- **L-shape trimming**: max front line clips at max side street position on the street side; max side street line starts at max front line (L corner) and ends at rear setback. On non-street sides, max front line clips at min side setback instead.
 - `streetSides` prop computed in `DistrictSceneContent.jsx` — auto-detects which lot sides face streets from `modelSetup.streetEdges` (Lot 1 right edge → right road, last lot left edge → left road, interior lots → no street sides)
 - `maxSetbacks` style in `createDefaultLotStyle()` — own style category with shorter dash pattern (dashSize=0.5, gapSize=0.3) vs min setbacks (1/0.5)
 - `maxSetbacks` visibility in `createDefaultLotVisibility()` — per-lot toggle, defaults to `true`
@@ -305,8 +306,8 @@ BTZ (Build-To Zone) planes are vertical `THREE.PlaneGeometry` meshes on building
 **Components & files**:
 
 - `BTZPlanes` component in `LotEntity.jsx` — renders vertical planes at 0.25" (0.021 ft) offset from building face
-- **BTZ Front**: left-aligned on front face, width = `(btzFront / 100) * buildingWidth`, height = `firstFloorHeight`
-- **BTZ Side Street**: corner lots only (when `streetSides.left` or `streetSides.right`), left-aligned from front corner of side face, width = `(btzSideStreet / 100) * buildingDepth`
+- **BTZ Front**: uses `<planeGeometry>` with Euler rotation `[π/2, 0, 0]`, left-aligned on front face, width = `(btzFront / 100) * buildingWidth`, height = `firstFloorHeight`
+- **BTZ Side Street**: corner lots only (when `streetSides.left` or `streetSides.right`), uses manually constructed `BufferGeometry` quad in the YZ plane (no mesh rotation — vertices directly encode Y and Z extents), left-aligned from front corner of side face, width = `(btzSideStreet / 100) * buildingDepth`
 - `btzPlanes` style in `createDefaultLotStyle()` — `{ color: '#AA00FF', opacity: 1.0 }` (magenta)
 - `btzPlanes` visibility in `createDefaultLotVisibility()` — per-lot toggle, defaults to `true`
 - `btzPlanes` layer toggle in `viewSettings.layers`
@@ -340,9 +341,9 @@ Lot access arrows are flat 2D arrow shapes on the ground plane indicating vehicu
 
 **Components & files**:
 
-- `LotAccessArrow.jsx` — standalone component using `THREE.ShapeGeometry` (shaft + triangular arrowhead)
-- Direction-based rotation: front (+Y), rear (-Y/PI), sideStreet (±PI/2 based on `streetSides`), sharedDrive (toward interior side)
-- **Bidirectional**: `sideInterior` / "Shared Drive" renders two arrows back-to-back
+- `LotAccessArrow.jsx` — standalone component using `THREE.ShapeGeometry` (shaft + triangular arrowhead for regular arrows, T-junction shape for shared drive)
+- Direction-based rotation: front (0), rear (PI), sideStreet (±PI/2 based on `streetSides`), sharedDrive (0, no rotation — T-junction shape encodes both directions)
+- **Shared Drive**: T-junction symbol with `createSharedDriveShape()` — thick stem from front street to mid-lot + double-ended horizontal arrow crossbar. Dynamic stem length = `lotDepth / 2`. Geometry only centered on X (Y origin at stem bottom for front-edge positioning). Default position on property line (`±lotWidth/2`) at front lot edge (`-lotDepth/2`).
 - **Draggable**: pointer capture + ray-plane intersection pattern (same as `DraggableLabel`), position persistence via `annotationPositions`
 - Z-offset: 0.15, color: `#FF00FF` (magenta), `meshBasicMaterial` with `THREE.DoubleSide`
 - Default positions computed from lot geometry (e.g., front: `[0, -lotDepth/2 + 5, 0]`)
