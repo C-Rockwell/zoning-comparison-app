@@ -142,7 +142,7 @@ export const PostProcessing = ({ renderSettings }) => {
                 <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
             )}
             {antialiasing && <SMAA />}
-            <Outline blur edgeStrength={100} width={1000} visibleEdgeColor="white" hiddenEdgeColor="white" />
+            <Outline blur edgeStrength={10} width={500} visibleEdgeColor="white" hiddenEdgeColor="white" />
         </EffectComposer>
     )
 }

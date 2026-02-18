@@ -9,7 +9,6 @@ const PolygonBuilding = ({
     styles,
     lineScale = 1,
     scaleFactor = 1,
-    dragging = false,
     onPointerDown,
     onPointerUp,
     onPointerMove,
@@ -53,9 +52,9 @@ const PolygonBuilding = ({
                     >
                         <extrudeGeometry args={[shape, extrudeSettings]} />
                         <meshStandardMaterial
-                            color={dragging ? '#ffff00' : faces.color}
-                            transparent={true}
-                            opacity={dragging ? 0.8 : faces.opacity}
+                            color={faces.color}
+                            transparent={faces.opacity < 1}
+                            opacity={faces.opacity}
                             side={THREE.DoubleSide}
                             depthWrite={faces.opacity >= 0.95}
                             roughness={0.7}

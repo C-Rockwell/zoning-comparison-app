@@ -361,9 +361,9 @@ const BTZPlanes = ({ principal, setbacks, streetSides = {}, style }) => {
                 <meshStandardMaterial
                     color={style.color}
                     opacity={style.opacity}
-                    transparent={true}
-                    side={THREE.DoubleSide}
-                    depthWrite={false}
+                    transparent={style.opacity < 1}
+                    side={THREE.FrontSide}
+                    depthWrite={style.opacity >= 0.95}
                     polygonOffset
                     polygonOffsetFactor={-1}
                     polygonOffsetUnits={-1}
@@ -413,9 +413,9 @@ const BTZPlanes = ({ principal, setbacks, streetSides = {}, style }) => {
                     <meshStandardMaterial
                         color={style.color}
                         opacity={style.opacity}
-                        transparent={true}
-                        side={THREE.DoubleSide}
-                        depthWrite={false}
+                        transparent={style.opacity < 1}
+                        side={THREE.FrontSide}
+                        depthWrite={style.opacity >= 0.95}
                         polygonOffset
                         polygonOffsetFactor={-1}
                         polygonOffsetUnits={-1}
@@ -441,9 +441,9 @@ const BTZPlanes = ({ principal, setbacks, streetSides = {}, style }) => {
                     <meshStandardMaterial
                         color={style.color}
                         opacity={style.opacity}
-                        transparent={true}
-                        side={THREE.DoubleSide}
-                        depthWrite={false}
+                        transparent={style.opacity < 1}
+                        side={THREE.FrontSide}
+                        depthWrite={style.opacity >= 0.95}
                         polygonOffset
                         polygonOffsetFactor={-1}
                         polygonOffsetUnits={-1}
@@ -617,7 +617,6 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     styles={{ faces: style.principalBuildingFaces ?? style.buildingFaces, edges: style.principalBuildingEdges ?? style.buildingEdges }}
                     scaleFactor={1}
                     onSelect={() => selectEntityBuilding(lotId, 'principal')}
-                    onPositionChange={(x, y) => setEntityBuildingPosition(lotId, 'principal', x, y)}
                     offsetGroupX={offset + lotWidth / 2}
                     stories={principal.stories ?? 1}
                     firstFloorHeight={principal.firstFloorHeight ?? 12}
@@ -655,7 +654,6 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     styles={{ faces: style.accessoryBuildingFaces ?? style.buildingFaces, edges: style.accessoryBuildingEdges ?? style.buildingEdges }}
                     scaleFactor={1}
                     onSelect={() => selectEntityBuilding(lotId, 'accessory')}
-                    onPositionChange={(x, y) => setEntityBuildingPosition(lotId, 'accessory', x, y)}
                     offsetGroupX={offset + lotWidth / 2}
                     stories={accessory.stories ?? 1}
                     firstFloorHeight={accessory.firstFloorHeight ?? 10}

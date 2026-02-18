@@ -61,6 +61,7 @@ const HeightHandle = ({ position, totalHeight, onHeightChange, offsetGroupX = 0 
             {/* Height handle sphere */}
             <mesh
                 position={position}
+                renderOrder={10}
                 onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
                 onPointerOut={() => setHovered(false)}
                 onPointerDown={handlePointerDown}
@@ -77,7 +78,7 @@ const HeightHandle = ({ position, totalHeight, onHeightChange, offsetGroupX = 0 
             </mesh>
 
             {/* Outline ring */}
-            <mesh position={position}>
+            <mesh position={position} renderOrder={9}>
                 <ringGeometry args={[size * 0.8, size, 16]} />
                 <meshBasicMaterial
                     color="#000000"

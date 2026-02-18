@@ -39,11 +39,11 @@ const RoofMesh = ({
 
     return (
         <group>
-            <mesh castShadow receiveShadow>
+            <mesh castShadow receiveShadow renderOrder={4}>
                 <primitive object={geometry} attach="geometry" />
                 <meshStandardMaterial
                     color={roofFaces.color}
-                    transparent={true}
+                    transparent={roofFaces.opacity < 1}
                     opacity={roofFaces.opacity}
                     side={THREE.DoubleSide}
                     depthWrite={roofFaces.opacity >= 0.95}

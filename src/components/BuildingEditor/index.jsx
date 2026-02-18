@@ -57,7 +57,6 @@ const BuildingEditor = ({
     offsetGroupX = 0,
     // Callbacks
     onSelect,
-    onPositionChange,
     enableBuildingPolygonMode,
     updateBuildingVertex,
     splitBuildingEdge,
@@ -66,7 +65,6 @@ const BuildingEditor = ({
 }) => {
     const { faces, edges } = styles
     const [hovered, setHovered] = useState(false)
-    const [dragging, setDragging] = useState(false)
     const { controls } = useThree()
     const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), [])
     const planeIntersectPoint = new THREE.Vector3()
@@ -75,8 +73,6 @@ const BuildingEditor = ({
     const moveMode = useStore((s) => s.moveMode)
     const setMoveTarget = useStore((s) => s.setMoveTarget)
     const setMoveBasePoint = useStore((s) => s.setMoveBasePoint)
-    const exitMoveMode = useStore((s) => s.exitMoveMode)
-
     // Is this building the current move target?
     const isMoveModeTarget = moveMode?.active && moveMode.targetType === 'building' && moveMode.targetLotId === model && moveMode.targetBuildingType === buildingType
 
@@ -170,68 +166,18 @@ const BuildingEditor = ({
             }
             useStore.temporal.getState().pause()
             if (controls) controls.enabled = false
-            e.target.setPointerCapture(e.pointerId)
             return
         }
 
-        // Move mode: finalize placement
-        if (moveMode?.active && moveMode.phase === 'moving' && isMoveModeTarget) {
-            useStore.temporal.getState().resume()
-            if (controls) controls.enabled = true
-            e.target.releasePointerCapture(e.pointerId)
-            exitMoveMode()
-            return
-        }
-
-        // Normal drag mode
-        if (onSelect) onSelect()
-        if (controls) controls.enabled = false
-        setDragging(true)
-        useStore.temporal.getState().pause()
-        e.target.setPointerCapture(e.pointerId)
-    }
-
-    const handlePointerUp = (e) => {
-        e.stopPropagation()
-        // Skip normal pointer up during move mode
+        // During moving phase, clicks are handled by MoveModeCapturePlane
         if (moveMode?.active) return
-        setDragging(false)
-        useStore.temporal.getState().resume()
-        if (controls) controls.enabled = true
-        e.target.releasePointerCapture(e.pointerId)
+
+        // No normal drag — buildings are only moved via M key (move mode)
+        if (onSelect) onSelect()
     }
 
-    const handlePointerMove = (e) => {
-        // Move mode: moving phase — update building position relative to base point
-        if (moveMode?.active && moveMode.phase === 'moving' && isMoveModeTarget && moveMode.basePoint) {
-            e.stopPropagation()
-            if (!e.ray.intersectPlane(plane, planeIntersectPoint)) return
-            const localX = planeIntersectPoint.x - offsetGroupX
-            const localY = planeIntersectPoint.y
-            const dx = localX - moveMode.basePoint[0]
-            const dy = localY - moveMode.basePoint[1]
-            const newX = Math.round((moveMode.originalPosition?.[0] ?? x) + dx)
-            const newY = Math.round((moveMode.originalPosition?.[1] ?? y) + dy)
-            if (onPositionChange && (newX !== x || newY !== y)) {
-                onPositionChange(newX, newY)
-            }
-            return
-        }
-
-        if (!dragging) return
-        e.stopPropagation()
-
-        if (!e.ray.intersectPlane(plane, planeIntersectPoint)) return
-
-        const localX = planeIntersectPoint.x - offsetGroupX
-        const localY = planeIntersectPoint.y
-        const snappedX = Math.round(localX)
-        const snappedY = Math.round(localY)
-
-        if (onPositionChange && (snappedX !== x || snappedY !== y)) {
-            onPositionChange(snappedX, snappedY)
-        }
-    }
+    const handlePointerUp = () => {}
+    const handlePointerMove = () => {}
 
     // ============================================
     // Handle callbacks for polygon editing
@@ -304,7 +250,6 @@ const BuildingEditor = ({
                     styles={styles}
                     lineScale={lineScale}
                     scaleFactor={scaleFactor}
-                    dragging={dragging}
                     onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
                     onPointerOut={() => setHovered(false)}
                     onPointerDown={handlePointerDown}
@@ -313,7 +258,9 @@ const BuildingEditor = ({
                 />
             ) : (
                 // Rectangle mode: use boxGeometry (existing behavior)
-                floors.map((floor, index) => (
+                floors.map((floor, index) => {
+                    const effectiveOpacity = isMoveModeTarget ? 0.7 : (moveMode?.active && moveMode.phase === 'selectObject') ? 0.8 : faces.opacity
+                    return (
                     <Select key={floor.index} enabled={hovered && index === 0}>
                         <mesh
                             position={[x, y, floor.zCenter]}
@@ -328,11 +275,11 @@ const BuildingEditor = ({
                         >
                             <boxGeometry args={[width, depth, floor.height]} />
                             <meshStandardMaterial
-                                color={isMoveModeTarget ? '#00ff88' : dragging ? '#ffff00' : (moveMode?.active && moveMode.phase === 'selectObject') ? '#88ccff' : faces.color}
-                                transparent={true}
-                                opacity={isMoveModeTarget ? 0.7 : dragging ? 0.8 : (moveMode?.active && moveMode.phase === 'selectObject') ? 0.8 : faces.opacity}
+                                color={isMoveModeTarget ? '#00ff88' : (moveMode?.active && moveMode.phase === 'selectObject') ? '#88ccff' : faces.color}
+                                transparent={effectiveOpacity < 1}
+                                opacity={effectiveOpacity}
                                 side={THREE.DoubleSide}
-                                depthWrite={faces.opacity >= 0.95}
+                                depthWrite={effectiveOpacity >= 0.95}
                                 roughness={0.7}
                                 metalness={0.1}
                             />
@@ -347,7 +294,8 @@ const BuildingEditor = ({
                             )}
                         </mesh>
                     </Select>
-                ))
+                    )
+                })
             )}
 
             {/* ============================================ */}
@@ -371,13 +319,13 @@ const BuildingEditor = ({
             {/* ============================================ */}
 
             {showMaxHeightPlane && maxHeight > 0 && (
-                <group position={[bounds.cx, bounds.cy, maxHeight]}>
-                    <mesh>
+                <group position={[bounds.cx, bounds.cy, maxHeight + 0.05]}>
+                    <mesh renderOrder={6}>
                         <planeGeometry args={[bounds.w, bounds.d]} />
                         <meshStandardMaterial
-                            color={maxHeightPlaneStyle.color || '#FF6B6B'}
+                            color={maxHeightPlaneStyle.color ?? '#FF6B6B'}
                             transparent={true}
-                            opacity={maxHeightPlaneStyle.opacity || 0.3}
+                            opacity={maxHeightPlaneStyle.opacity ?? 0.3}
                             side={THREE.DoubleSide}
                             depthWrite={false}
                         />
@@ -486,17 +434,6 @@ const BuildingEditor = ({
                 </>
             )}
 
-            {/* Capture Plane for smooth dragging outside the box */}
-            {dragging && (
-                <mesh
-                    visible={false}
-                    position={[0, 0, 0]}
-                    onPointerMove={handlePointerMove}
-                    onPointerUp={handlePointerUp}
-                >
-                    <planeGeometry args={[1000, 1000]} />
-                </mesh>
-            )}
         </group>
     )
 }

@@ -269,10 +269,11 @@ const { undo, redo } = useStore.temporal.getState()
 ## Conventions
 
 - **Material opacity defaults to 1.0 (100%)**: All `fillOpacity`, `lineOpacity`, and material `opacity` values must default to 1.0 unless the user explicitly requests transparency. Sub-1.0 defaults cause color mismatches between overlapping geometry layers and complicate z-ordering with Three.js transparent object sorting.
-- **renderOrder for layered geometry**: When multiple transparent/overlapping meshes exist at different z-offsets, use Three.js `renderOrder` prop to control draw sequence (not just z-position). Road zones = 0, intersection fill = 1, fillet arc fills = 2, fillet arc lines = 3, building faces = 4, BTZ planes = 5. **Note**: `renderOrder` does NOT reliably work on drei `<Line>` (Line2) components for transparent sorting — use z-offset separation instead (e.g., arc lines at zOffset+0.005 above fills).
+- **renderOrder for layered geometry**: When multiple transparent/overlapping meshes exist at different z-offsets, use Three.js `renderOrder` prop to control draw sequence (not just z-position). Road zones = 0, intersection fill = 1, alley fill = 1, fillet arc fills = 2, fillet arc lines = 3, building faces = 4, roof = 4, BTZ planes = 5, max height plane = 6, height handle ring = 9, height handle sphere = 10. **Note**: `renderOrder` does NOT reliably work on drei `<Line>` (Line2) components for transparent sorting — use z-offset separation instead (e.g., arc lines at zOffset+0.005 above fills).
+- **Conditional transparent/depthWrite on materials**: Never hardcode `transparent={true}` — use `transparent={opacity < 1}` so geometry at full opacity renders in the opaque pass (reliable z-buffer sorting) instead of the transparent pass (unreliable centroid-based sorting). Pair with `depthWrite={opacity >= 0.95}`. This prevents perspective view rendering artifacts (z-fighting, bleed-through, floating geometry).
 - **Undo batching for drag operations**: All drag operations (building, height handle, lot access arrows, labels, polygon vertices, edge extrude) use Zundo's `pause()` / `resume()` API to batch intermediate pointer-move state updates. Call `useStore.temporal.getState().pause()` on pointer down and `resume()` on pointer up. This ensures one Ctrl+Z undoes the entire drag, not each pixel movement.
 - **Road intersection system**: Roads stop at lot boundaries (no ROW extensions). Intersection fill rectangles (z=0.04, renderOrder=1) cover the ROW overlap area with conditional `transparent`/`depthWrite` based on fillOpacity (opaque when >= 0.95, ensuring correct render pass ordering). Fillet arcs (z=0.05, renderOrder=2) handle curved zone corners with arc border lines at z=0.055. Road module zone end-edge lines are suppressed at intersection boundaries via `suppressLeftEnd`/`suppressRightEnd` props on RoadModule (direction-to-end mapping computed in DistrictSceneContent). Road Module Style Editor in DistrictParameterPanel allows customizing all zone colors.
-- **S3 (alley) T-junctions**: When an S3 road meets a non-S3 road at a corner, fillets and intersection fill rects are suppressed. Instead, the non-S3 road extends its span through the S3 road's ROW so its zone bands (sidewalk, verge, pavement) continue through the alley area. Small alley fill rectangles (z=0.03, width = perpendicular road's sidewalk+verge inset) connect the alley pavement to the cross-street at each corner. **Known limitation**: the cross-street sidewalk is not yet rendered on top of the alley fill rects (future TODO).
+- **S3 (alley) T-junctions**: When an S3 road meets a non-S3 road at a corner, fillets and intersection fill rects are suppressed. Instead, the non-S3 road extends its span through the S3 road's ROW so its zone bands (sidewalk, verge, pavement) continue through the alley area. Small alley fill rectangles (z=0.035, renderOrder=1, width = perpendicular road's sidewalk+verge inset) connect the alley pavement to the cross-street at each corner. **Known limitation**: the cross-street sidewalk is not yet rendered on top of the alley fill rects (future TODO).
 - **Parameter-to-rendering integrity**: Every piece of visible geometry MUST correspond to a parameter the user can see and edit. If a parameter field is null/empty/cleared, the corresponding geometry must NOT render. Use `!= null && > 0` guards before rendering any line or dimension. Use `??` (nullish coalescing) instead of `||` for building prop fallbacks so that explicit `0` values are respected.
 - **Street-aware setback rendering**: `SetbackLines`, `AccessorySetbackLines`, `MaxSetbackLines`, and annotation labels use `streetSides` to determine which sides face streets. Street-facing sides use `minSideStreet`; interior sides use `sideInterior`. This is critical for corner lots where one side faces a street — that side's setback is a side street setback, not a side interior setback. The `streetSides` prop is computed in `DistrictSceneContent.jsx` from `modelSetup.streetEdges`.
 - **Z-layer map for lot geometry**: Lot fill (z=0.02) → lot lines (z=0.03) → min setback lines (z=0.1) → accessory setback lines (z=0.11) → max setback lines (z=0.12) → lot access arrows (z=0.15) → BTZ planes (vertical, z=0 to firstFloorHeight).
@@ -311,7 +312,7 @@ BTZ (Build-To Zone) planes are vertical `THREE.PlaneGeometry` meshes on building
 
 **Components & files**:
 
-- `BTZPlanes` component in `LotEntity.jsx` — renders vertical planes at ~1.2" (0.1 ft) offset from building face with `polygonOffset`, `renderOrder={5}`, `transparent={true}`, `depthWrite={false}` to prevent z-fighting in perspective mode
+- `BTZPlanes` component in `LotEntity.jsx` — renders vertical planes at ~1.2" (0.1 ft) offset from building face with `polygonOffset`, `renderOrder={5}`, conditional `transparent={style.opacity < 1}`, `depthWrite={style.opacity >= 0.95}`, `side={THREE.FrontSide}` for clean perspective rendering
 - **BTZ Front**: uses `<planeGeometry>` with Euler rotation `[π/2, 0, 0]`, left-aligned on front face, width = `(btzFront / 100) * buildingWidth`, height = `firstFloorHeight`
 - **BTZ Side Street**: corner lots only (when `streetSides.left` or `streetSides.right`), uses manually constructed `BufferGeometry` quad in the YZ plane (no mesh rotation — vertices directly encode Y and Z extents), left-aligned from front corner of side face, width = `(btzSideStreet / 100) * buildingDepth`
 - `btzPlanes` style in `createDefaultLotStyle()` — `{ color: '#AA00FF', opacity: 1.0 }` (magenta)
@@ -380,16 +381,16 @@ Dedicated "Styles" section in `DistrictParameterPanel.jsx` below Model Parameter
 
 ### Move Mode — M Key (District Module)
 
-AutoCAD-style move command with 3 phases:
+Buildings and lot access arrows can ONLY be moved via the M key move command (no free-drag). AutoCAD-style move command with 3 phases:
 1. **selectObject**: Press M → click a building or lot access arrow to select it
-2. **selectBase**: Click a base point (reference position)
-3. **moving**: Move mouse to preview new position → click to place (or Escape to cancel and restore)
+2. **selectBase**: Click the selected object to set a base point (reference position). Undo tracking is paused and camera controls are disabled.
+3. **moving**: Move mouse to preview new position → click to place (or Escape to cancel and restore). `MoveModeCapturePlane` handles all movement and finalization (resumes undo, re-enables controls, exits move mode).
 
 **State**: `moveMode` in `useStore.js` — transient (excluded from persist/Zundo).
 **Actions**: `enterMoveMode()`, `exitMoveMode()`, `setMoveTarget(type, lotId, buildingType|direction)`, `setMoveBasePoint(point)`
 **Visual feedback**: Green highlight on move target, light blue on selectable objects during selectObject phase.
-**Scene capture**: `MoveModeCapturePlane` in `DistrictSceneContent.jsx` — invisible 2000×2000 plane for free pointer movement during 'moving' phase.
-**Components modified**: `BuildingEditor/index.jsx` (accepts `buildingType` prop), `LotAccessArrow.jsx` (accepts `lotId` prop), `useKeyboardShortcuts.js`
+**Scene capture**: `MoveModeCapturePlane` in `DistrictSceneContent.jsx` — invisible 2000×2000 plane that is the SOLE handler for pointer movement and click-to-place during 'moving' phase. Handles undo resume and camera re-enable on finalization.
+**Components**: `BuildingEditor/index.jsx` handles selectObject and selectBase phases only (no drag logic). `LotAccessArrow.jsx` handles its own move mode phases. `useKeyboardShortcuts.js` handles M key and Escape.
 
 ### Delete/Regenerate Buildings (District Module)
 
@@ -469,3 +470,7 @@ Extends the existing CSV ImportWizard to auto-detect and import district zoning 
 - **Remote**: https://github.com/C-Rockwell/zoning-comparison-app.git
 - **Branches**: `gemini-fix` (active development), `main` (stable)
 - **Abandoned branch**: `origin/codex-fix` (failed unified road polygon approach, 15 commits — do not use)
+
+## User Shortcuts
+
+- **/PUCP** — "Please Update, Commit, and Push". When the user types `/PUCP`, perform these 3 steps in order: (1) Update CLAUDE.md with any changes from the current session, (2) Commit all changes with an appropriate message, (3) Push to GitHub.

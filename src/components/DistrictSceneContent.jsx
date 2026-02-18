@@ -1,5 +1,6 @@
 import { useMemo, useCallback } from 'react'
 import * as THREE from 'three'
+import { useThree } from '@react-three/fiber'
 import { useStore } from '../store/useStore'
 import { useLotIds, useRoadModules, getLotData } from '../hooks/useEntityStore'
 import { useShallow } from 'zustand/react/shallow'
@@ -372,7 +373,7 @@ const EntityRoadModules = ({ lotPositions }) => {
                     ))}
 
                     {(layers.roadIntersections !== false) && alleyFillRects.map(rect => (
-                        <mesh key={rect.key} position={[rect.cx, rect.cy, 0.03]} receiveShadow>
+                        <mesh key={rect.key} position={[rect.cx, rect.cy, 0.035]} receiveShadow renderOrder={1}>
                             <planeGeometry args={[rect.w, rect.h]} />
                             <meshStandardMaterial
                                 color={roadModuleStyles.roadWidth?.fillColor || '#666666'}
@@ -447,6 +448,7 @@ const MoveModeCapturePlane = () => {
     const setEntityBuildingPosition = useStore((s) => s.setEntityBuildingPosition)
     const setAnnotationPosition = useStore((s) => s.setAnnotationPosition)
     const exitMoveMode = useStore((s) => s.exitMoveMode)
+    const { controls } = useThree()
     const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), [])
     const planeIntersectPoint = useMemo(() => new THREE.Vector3(), [])
 
@@ -496,8 +498,10 @@ const MoveModeCapturePlane = () => {
 
     const handlePointerDown = useCallback((e) => {
         e.stopPropagation()
+        useStore.temporal.getState().resume()
+        if (controls) controls.enabled = true
         exitMoveMode()
-    }, [exitMoveMode])
+    }, [exitMoveMode, controls])
 
     return (
         <mesh
