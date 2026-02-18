@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore'
 import * as api from '../services/api'
 import { FolderOpen, Plus, Save, FolderCog, ChevronDown, Home } from 'lucide-react'
+import SunControls from './SunControls'
 
 const ProjectManager = () => {
   const navigate = useNavigate()
@@ -273,6 +274,9 @@ const ProjectManager = () => {
             District
           </button>
         </div>
+
+        {/* Sun Settings */}
+        <SunControls />
 
         {/* Project path display */}
         {currentProject && (

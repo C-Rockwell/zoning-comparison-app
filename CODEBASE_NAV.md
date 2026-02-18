@@ -63,11 +63,11 @@
 ### State Management
 | File | Lines | Purpose |
 |------|-------|---------|
-| `src/store/useStore.js` | ~3,550 | Zustand store: ALL state + 100+ actions + migrations v1-v22 |
-| `src/hooks/useEntityStore.js` | 145 | Memoized selectors: `useLot`, `useLotIds`, `useActiveLot`, etc. |
-| `src/hooks/useAutoSave.js` | 45 | Periodic save when dirty |
-| `src/hooks/useKeyboardShortcuts.js` | ~107 | Cmd+Z/Y/S, M (move), Delete, Escape shortcuts |
-| `src/hooks/useSunPosition.js` | 121 | SunCalc sun position + 12 city presets |
+| `src/store/useStore.js` | ~3,653 | Zustand store: ALL state + 100+ actions + migrations v1-v22 |
+| `src/hooks/useEntityStore.js` | ~145 | Memoized selectors: `useLot`, `useLotIds`, `useActiveLot`, etc. |
+| `src/hooks/useAutoSave.js` | ~45 | Periodic save when dirty |
+| `src/hooks/useKeyboardShortcuts.js` | ~114 | Cmd+Z/Y/S, M (move), Delete, Escape shortcuts |
+| `src/hooks/useSunPosition.js` | ~121 | SunCalc sun position + 12 city presets |
 
 ### Services
 | File | Lines | Purpose |
@@ -78,7 +78,7 @@
 | File | Lines | Purpose |
 |------|-------|---------|
 | `src/utils/ifcGenerator.js` | 755 | IFC4 BIM file generation |
-| `src/utils/importParser.js` | 371 | CSV parsing + field mapping |
+| `src/utils/importParser.js` | ~502 | CSV parsing + field mapping + district params |
 | `src/utils/roofGeometry.js` | 301 | Roof mesh generation (flat/shed/gabled/hipped) |
 | `src/utils/intersectionGeometry.js` | 266 | Road fillet arc computation |
 | `src/utils/dimensionLayout.js` | 95 | Auto-stacking parallel dimensions |
@@ -88,19 +88,19 @@
 | File | Lines | Purpose |
 |------|-------|---------|
 | `src/components/SceneContent.jsx` | ~833 | Comparison Module 3D scene (lots, buildings, roads) |
-| `src/components/LotEntity.jsx` | ~735 | District lot renderer (setbacks, buildings, BTZ, arrows) |
-| `src/components/DistrictSceneContent.jsx` | ~533 | District multi-lot orchestrator (roads, intersections, fillets) |
+| `src/components/LotEntity.jsx` | ~786 | District lot renderer (setbacks, buildings, BTZ, arrows) |
+| `src/components/DistrictSceneContent.jsx` | ~615 | District multi-lot orchestrator (roads, intersections, fillets) |
 | `src/components/Viewer3D.jsx` | ~449 | Comparison canvas container |
 | `src/components/RoadModule.jsx` | ~343 | Parametric road with zones (S1/S2/S3) |
-| `src/components/SharedCanvas.jsx` | ~271 | Shared R3F Canvas (lighting, post-processing) |
-| `src/components/DistrictViewer.jsx` | ~206 | District canvas container + SunControls |
-| `src/components/RoadIntersectionFillet.jsx` | ~120 | Curved corner arcs |
-| `src/components/LotAccessArrow.jsx` | ~190 | Draggable access direction arrows |
+| `src/components/SharedCanvas.jsx` | ~316 | Shared R3F Canvas (lighting, sun/studio toggle, post-processing) |
+| `src/components/DistrictViewer.jsx` | ~203 | District canvas container |
+| `src/components/RoadIntersectionFillet.jsx` | ~122 | Curved corner arcs |
+| `src/components/LotAccessArrow.jsx` | ~321 | Draggable access direction arrows |
 
 ### Parameter Panels
 | File | Lines | Purpose |
 |------|-------|---------|
-| `src/components/DistrictParameterPanel.jsx` | ~2,140 | District sidebar (model setup, per-lot params, styles section, road styles) |
+| `src/components/DistrictParameterPanel.jsx` | ~2,359 | District sidebar (model setup, per-lot params, styles section, road styles) |
 | `src/components/ParameterPanel.jsx` | ~1,809 | Comparison sidebar (existing/proposed params, styles) |
 
 ### Dimensions & Annotations
@@ -109,7 +109,7 @@
 | `src/components/LotAnnotations.jsx` | ~250 | Lot/setback/building labels |
 | `src/components/RoadAnnotations.jsx` | ~232 | Road name + zone labels |
 | `src/components/Dimension.jsx` | ~231 | Dimension line with text + background |
-| `src/components/DraggableLabel.jsx` | ~168 | Drag-to-reposition with leader line |
+| `src/components/DraggableLabel.jsx` | ~171 | Drag-to-reposition with leader line |
 | `src/components/AngularDimension.jsx` | ~154 | Arc dimension for angles |
 | `src/components/AnnotationText.jsx` | ~143 | Shared text renderer (billboard/follow-line/fixed) |
 | `src/components/LeaderCallout.jsx` | ~98 | Leader line with arrow |
@@ -117,26 +117,26 @@
 ### Building/Lot Editors
 | File | Lines | Purpose |
 |------|-------|---------|
-| `src/components/BuildingEditor/index.jsx` | ~442 | Building polygon editor orchestrator |
-| `src/components/BuildingEditor/HeightHandle.jsx` | ~103 | Draggable height sphere |
-| `src/components/BuildingEditor/PolygonBuilding.jsx` | ~79 | Building polygon renderer |
+| `src/components/BuildingEditor/index.jsx` | ~504 | Building polygon editor orchestrator |
+| `src/components/BuildingEditor/HeightHandle.jsx` | ~106 | Draggable height sphere |
+| `src/components/BuildingEditor/PolygonBuilding.jsx` | ~80 | Building polygon renderer |
 | `src/components/BuildingEditor/RoofMesh.jsx` | ~67 | Roof geometry renderer |
 | `src/components/LotEditor/index.jsx` | ~112 | Lot polygon editor wrapper |
 | `src/components/LotEditor/PolygonLot.jsx` | ~106 | Lot polygon + handles |
-| `src/components/LotEditor/VertexHandle.jsx` | ~96 | Draggable vertex sphere |
-| `src/components/LotEditor/EdgeHandle.jsx` | ~144 | Edge manipulation handle |
+| `src/components/LotEditor/VertexHandle.jsx` | ~99 | Draggable vertex sphere |
+| `src/components/LotEditor/EdgeHandle.jsx` | ~147 | Edge manipulation handle |
 | `src/components/LotEditor/MidpointHandle.jsx` | ~51 | Edge split click target |
 
 ### Project Management
 | File | Lines | Purpose |
 |------|-------|---------|
-| `src/components/ProjectManager.jsx` | ~446 | Top navbar, project CRUD, module switcher |
+| `src/components/ProjectManager.jsx` | ~450 | Top navbar, project CRUD, module switcher, sun controls |
 | `src/components/StartScreen.jsx` | ~438 | Entry: Sandbox / New / Open |
-| `src/components/Exporter.jsx` | ~448 | Multi-format export engine |
+| `src/components/Exporter.jsx` | ~554 | Multi-format export + batch ZIP engine |
 | `src/components/StateManager.jsx` | ~320 | Snapshots + layer states UI |
-| `src/components/ImportWizard.jsx` | ~710 | CSV import wizard |
+| `src/components/ImportWizard.jsx` | ~822 | CSV import wizard (lots + district params) |
 | `src/components/CameraHandler.jsx` | ~91 | Camera presets |
-| `src/components/SunControls.jsx` | ~260 | Sun simulation UI |
+| `src/components/SunControls.jsx` | ~139 | Sun controls dropdown (rotation, angle, intensity, shadows) |
 
 ### UI Atoms
 | File | Lines | Purpose |

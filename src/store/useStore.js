@@ -454,14 +454,11 @@ export const useStore = create(
                     },
                 },
 
-                // Sun Simulation Settings (optional, for time-of-day shadows)
+                // Sun Settings (simple azimuth/altitude controls)
                 sunSettings: {
                     enabled: false,
-                    latitude: 37.7749,
-                    longitude: -122.4194,
-                    date: new Date().toISOString().split('T')[0],
-                    time: 12,
-                    animating: false,
+                    azimuth: 45,
+                    altitude: 45,
                     intensity: 1.5,
                     ambientIntensity: 0.4,
                     shadowsEnabled: true,
@@ -1494,7 +1491,16 @@ export const useStore = create(
                 // Lot CRUD
                 addLot: (initialData) => set((state) => {
                     const lotId = generateEntityId('lot');
-                    const lot = createDefaultLot(initialData);
+                    // Copy dimensions from the last lot when no explicit overrides provided
+                    let overrides = initialData;
+                    if (!initialData && state.entityOrder.length > 0) {
+                        const lastLotId = state.entityOrder[state.entityOrder.length - 1];
+                        const lastLot = state.entities.lots[lastLotId];
+                        if (lastLot) {
+                            overrides = { lotWidth: lastLot.lotWidth, lotDepth: lastLot.lotDepth };
+                        }
+                    }
+                    const lot = createDefaultLot(overrides);
                     const style = createDefaultLotStyle();
                     const visibility = createDefaultLotVisibility();
                     return {

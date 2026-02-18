@@ -44,55 +44,56 @@ zoning-comparison-app/
 ├── src/
 │   ├── components/
 │   │   ├── Viewer3D.jsx              # Comparison 3D canvas, controls, export panel (~449 lines)
-│   │   ├── SceneContent.jsx          # Comparison 3D rendering: lots, buildings, roads, annotations, fillets (~816 lines)
-│   │   ├── ParameterPanel.jsx        # Comparison sidebar: params, inline styles, layers, annotations (~1,750 lines)
-│   │   ├── Exporter.jsx              # Multi-format export engine, module-aware IFC, batch export orchestrator (~510 lines)
-│   │   ├── ProjectManager.jsx        # Project CRUD, module switcher, Home button (~446 lines)
-│   │   ├── StateManager.jsx          # Views (snapshots) + layer states UI (~309 lines)
-│   │   ├── RoadModule.jsx            # Parametric road with direction prop (front/left/right/rear)
-│   │   ├── Dimension.jsx             # Enhanced dimension lines: multi-plane, billboard, backgrounds (~230 lines)
+│   │   ├── SceneContent.jsx          # Comparison 3D rendering: lots, buildings, roads, annotations, fillets (~833 lines)
+│   │   ├── ParameterPanel.jsx        # Comparison sidebar: params, inline styles, layers, annotations (~1,809 lines)
+│   │   ├── Exporter.jsx              # Multi-format export engine, module-aware IFC, batch export orchestrator (~554 lines)
+│   │   ├── ProjectManager.jsx        # Project CRUD, module switcher, Sun controls, Home button (~450 lines)
+│   │   ├── StateManager.jsx          # Views (snapshots) + layer states UI (~320 lines)
+│   │   ├── RoadModule.jsx            # Parametric road with direction prop (front/left/right/rear) (~343 lines)
+│   │   ├── Dimension.jsx             # Enhanced dimension lines: multi-plane, billboard, backgrounds (~231 lines)
 │   │   ├── CameraHandler.jsx         # Camera preset handling (91 lines)
-│   │   ├── SunControls.jsx           # Sun simulation UI (260 lines)
-│   │   ├── StartScreen.jsx           # App entry: Sandbox / New Project / Open Existing (~380 lines)
-│   │   ├── DistrictViewer.jsx        # District 3D viewer with SharedCanvas (~200 lines)
-│   │   ├── DistrictSceneContent.jsx  # District 3D: multi-lot layout, roads, intersection fills, fillets, S3 T-junctions (~460 lines)
-│   │   ├── DistrictParameterPanel.jsx # District sidebar: model setup, params, styles, road styles, annotations, batch export (~2,230 lines)
-│   │   ├── SharedCanvas.jsx          # Shared R3F Canvas infra: lighting, post-processing (~230 lines)
-│   │   ├── LotEntity.jsx             # Single lot entity renderer with annotations (~730 lines)
-│   │   ├── ImportWizard.jsx          # 3-step CSV import wizard: lot data + district parameters (~890 lines)
-│   │   ├── AnnotationText.jsx        # Shared text component: billboard/follow-line/fixed modes (~130 lines)
-│   │   ├── DraggableLabel.jsx        # Drag-to-reposition label with leader lines (~155 lines)
-│   │   ├── LotAnnotations.jsx        # Lot/setback/building annotation labels (~210 lines)
-│   │   ├── RoadAnnotations.jsx       # Road name and zone annotation labels (~230 lines)
-│   │   ├── LotAccessArrow.jsx         # Draggable 2D arrow for lot access directions (~186 lines)
-│   │   ├── RoadIntersectionFillet.jsx # Curved corner geometry at road intersections (~100 lines)
-│   │   ├── LeaderCallout.jsx         # Leader line with arrow pointing to feature (~100 lines)
-│   │   ├── AngularDimension.jsx      # Arc dimension for angles/pitch (~145 lines)
-│   │   ├── LotEditor/               # Polygon lot vertex editing (index + PolygonLot + handles)
+│   │   ├── SunControls.jsx           # Sun controls dropdown: rotation, angle, intensity, shadows (~139 lines)
+│   │   ├── StartScreen.jsx           # App entry: Sandbox / New Project / Open Existing (~438 lines)
+│   │   ├── DistrictViewer.jsx        # District 3D viewer with SharedCanvas (~203 lines)
+│   │   ├── DistrictSceneContent.jsx  # District 3D: multi-lot layout, roads, intersection fills, fillets, S3 T-junctions (~615 lines)
+│   │   ├── DistrictParameterPanel.jsx # District sidebar: model setup, params, styles, road styles, annotations, batch export (~2,359 lines)
+│   │   ├── SharedCanvas.jsx          # Shared R3F Canvas infra: lighting, sun/studio toggle, post-processing (~316 lines)
+│   │   ├── LotEntity.jsx             # Single lot entity renderer with annotations (~786 lines)
+│   │   ├── ImportWizard.jsx          # 3-step CSV import wizard: lot data + district parameters (~822 lines)
+│   │   ├── AnnotationText.jsx        # Shared text component: billboard/follow-line/fixed modes (~143 lines)
+│   │   ├── DraggableLabel.jsx        # Drag-to-reposition label with leader lines (~171 lines)
+│   │   ├── LotAnnotations.jsx        # Lot/setback/building annotation labels (~250 lines)
+│   │   ├── RoadAnnotations.jsx       # Road name and zone annotation labels (~232 lines)
+│   │   ├── LotAccessArrow.jsx         # Draggable 2D arrow for lot access directions (~321 lines)
+│   │   ├── RoadIntersectionFillet.jsx # Curved corner geometry at road intersections (~122 lines)
+│   │   ├── LeaderCallout.jsx         # Leader line with arrow pointing to feature (~98 lines)
+│   │   ├── AngularDimension.jsx      # Arc dimension for angles/pitch (~154 lines)
+│   │   ├── StyleEditor.jsx           # Comparison module inline style controls (~1,174 lines, not imported — legacy)
+│   │   ├── LotEditor/               # Polygon lot vertex editing (index + PolygonLot + handles + EdgeHandle + MidpointHandle + VertexHandle)
 │   │   ├── BuildingEditor/           # Polygon building editing + roof rendering
-│   │   │   ├── index.jsx            # Orchestrator: rect/polygon floors, handles, dimensions
-│   │   │   ├── HeightHandle.jsx     # Draggable sphere for vertical height adjustment
-│   │   │   ├── PolygonBuilding.jsx  # ExtrudeGeometry per-floor renderer
-│   │   │   └── RoofMesh.jsx         # Roof geometry renderer (shed/gabled/hipped)
+│   │   │   ├── index.jsx            # Orchestrator: rect/polygon floors, handles, dimensions (~504 lines)
+│   │   │   ├── HeightHandle.jsx     # Draggable sphere for vertical height adjustment (~106 lines)
+│   │   │   ├── PolygonBuilding.jsx  # ExtrudeGeometry per-floor renderer (~80 lines)
+│   │   │   └── RoofMesh.jsx         # Roof geometry renderer (shed/gabled/hipped) (~67 lines)
 │   │   └── ui/                       # Reusable UI atoms
 │   │       ├── Section.jsx           # Collapsible section wrapper
 │   │       ├── ColorPicker.jsx       # Color input with ring overlay
 │   │       ├── SliderInput.jsx       # Range + number input combo
 │   │       └── LineStyleSelector.jsx # Solid/dashed line style toggle
-│   ├── store/useStore.js             # Centralized Zustand store (~3,450 lines, v22)
-│   ├── services/api.js               # REST API client for backend (151 lines)
+│   ├── store/useStore.js             # Centralized Zustand store (~3,653 lines, v22)
+│   ├── services/api.js               # REST API client for backend (~150 lines)
 │   ├── hooks/
-│   │   ├── useSunPosition.js         # SunCalc-based sun position hook (122 lines)
-│   │   ├── useEntityStore.js         # Entity system selector hooks (146 lines)
-│   │   ├── useAutoSave.js            # Periodic auto-save hook
-│   │   └── useKeyboardShortcuts.js   # Cmd+Z/S/Shift+Z, M (move), Delete, Escape shortcuts
+│   │   ├── useSunPosition.js         # SunCalc-based sun position hook (~121 lines)
+│   │   ├── useEntityStore.js         # Entity system selector hooks (~145 lines)
+│   │   ├── useAutoSave.js            # Periodic auto-save hook (~45 lines)
+│   │   └── useKeyboardShortcuts.js   # Cmd+Z/S/Shift+Z, M (move), Delete, Escape shortcuts (~114 lines)
 │   ├── utils/
-│   │   ├── ifcGenerator.js           # IFC4 BIM generator: generateIFC + generateDistrictIFC
-│   │   ├── roofGeometry.js           # Roof geometry computation (shed/gabled/hipped)
-│   │   ├── importParser.js           # CSV parser + field mapping + auto-match + district params (~530 lines)
-│   │   ├── formatUnits.js            # Unit formatting: feet, feet-inches, meters (~35 lines)
+│   │   ├── ifcGenerator.js           # IFC4 BIM generator: generateIFC + generateDistrictIFC (~755 lines)
+│   │   ├── roofGeometry.js           # Roof geometry computation (shed/gabled/hipped) (~301 lines)
+│   │   ├── importParser.js           # CSV parser + field mapping + auto-match + district params (~502 lines)
+│   │   ├── formatUnits.js            # Unit formatting: feet, feet-inches, meters (~36 lines)
 │   │   ├── dimensionLayout.js        # Auto-stacking parallel dimensions (~95 lines)
-│   │   └── intersectionGeometry.js   # Road corner fillet arc geometry (~267 lines)
+│   │   └── intersectionGeometry.js   # Road corner fillet arc geometry (~266 lines)
 │   ├── App.jsx                       # Root: routing, theme, toast, auto-save, keyboard shortcuts
 │   └── main.jsx                      # React entry point with HashRouter
 ├── server/
@@ -118,7 +119,7 @@ zoning-comparison-app/
 - Route: `/app` with `activeModule === 'comparison'`
 - Components: `Viewer3D` + `ParameterPanel` + `SceneContent`
 - State: `existing` / `proposed` objects with accessory buildings + comparison roads
-- Inline style controls (StyleEditor.jsx removed, all controls now in ParameterPanel)
+- Inline style controls in ParameterPanel (StyleEditor.jsx exists but is unused/legacy)
 
 **District Module** (new, entity-based):
 - Route: `/app` with `activeModule === 'district'`
@@ -128,7 +129,7 @@ zoning-comparison-app/
 - Lot layout: Lot 1 extends in positive X from origin (0,0 = front-left corner), Lots 2+ extend in negative X
 - Layer visibility: global layer toggles (Layers panel) override per-lot visibility (`layers.X && visibility.X`)
 - MODEL PARAMETERS subsections are collapsible with chevron toggle
-- Sun Controls: `<SunControls />` floating overlay in `DistrictViewer.jsx`
+- Sun Controls: `<SunControls />` dropdown in `ProjectManager.jsx` top bar (rotation, angle, intensity, shadows)
 - Sidebar sections: Model Setup → Layers → Annotations → District Parameters → Model Parameters → **Styles** → Building/Roof → Road Modules → Road Module Styles → Views → Batch Export
 
 ### State Structure (useStore.js)
@@ -165,7 +166,7 @@ Additional top-level state:
 - **styleSettings**: per-condition colors/opacity/line styles with per-side overrides
 - **roadModule**: shared front road parameters + per-zone left/right styles
 - **roadModuleStyles**: 10 style categories for road zone colors/widths/opacity
-- **sunSettings**: lat/long, date, time, animation, intensity
+- **sunSettings**: azimuth (0-360 rotation), altitude (0-90 angle), intensity, ambientIntensity, shadowsEnabled
 - **moveMode**: transient state for AutoCAD-style move command — `{ active, phase ('selectObject'|'selectBase'|'moving'), targetType ('building'|'lotAccessArrow'), targetLotId, targetBuildingType, targetDirection, basePoint, originalPosition }`. Excluded from both persist and Zundo partialize (transient UI state).
 - **Project state**: currentProject, projects list, snapshots, layerStates
 
@@ -250,7 +251,7 @@ const { undo, redo } = useStore.temporal.getState()
 - **Road Intersection Fillets**: Curved corner geometry where perpendicular roads meet. Each intersection generates **4 sub-corners** (lot corner, far-A, far-B, far corner) using toward-lot and away-from-lot zone sides (`sideA`/`sideB` params). Per-zone arc rendering (transition, sidewalk, verge, parking) with annular arc sectors via THREE.Shape `absarc()`. Fillets render at z=0.05 (fills) with arc border lines at z=0.055 (zOffset+0.005) to ensure lines render above fills in the transparent pass. Arc lines use renderOrder=3 (above fill renderOrder=2). Road module end-edge lines are suppressed at intersection boundaries via `suppressLeftEnd`/`suppressRightEnd` props. Angle quadrant mapping uses flipA (front↔rear) and flipB (left↔right) for correct arc direction per sub-corner. Works in both District and Comparison modules.
 - **Enhanced Dimensions**: Multi-plane support (XY/XZ/YZ/auto), billboard text mode (camera-facing), text backgrounds with configurable color/opacity, unit formatting (feet/feet-inches/meters), auto-stacking parallel dimensions, angular dimensions for roof pitch
 - **Annotation Labels**: Draggable text labels for lots (name, edges, setbacks), buildings (principal/accessory), roads (name, zone labels). Per-category visibility toggles, leader lines when displaced, position persistence via annotationPositions state, reset functionality. Components: AnnotationText (shared text renderer), DraggableLabel (drag wrapper), LotAnnotations, RoadAnnotations, LeaderCallout
-- **Sun Simulation**: SunCalc-powered directional light with 12 city presets, date/time control, animation mode
+- **Sun Simulation**: Directional light with rotation (0-360), angle (0-90), intensity control, shadow toggle. Dropdown in top bar. SunLighting component in SharedCanvas converts azimuth/altitude to 3D position
 - **Multi-Format Export**: PNG, JPG, SVG (raster/vector), OBJ, GLB, DAE, DXF, IFC (BIM). IFC is module-aware (uses `generateDistrictIFC` for district, `generateIFC` for comparison)
 - **CSV Import**: 3-step wizard with auto-matching CSV headers to app fields, preview, and batch lot creation. Also supports district parameter import with auto-detection (lot vs district mode)
 - **Batch Export**: Queue multiple saved view presets × camera angles (ISO/Top/Front/Side/Left), export all at once as a ZIP file via JSZip. BatchExportSection in district sidebar with checkbox grid, format (PNG/JPG), and resolution selector
@@ -455,7 +456,7 @@ Extends the existing CSV ImportWizard to auto-detect and import district zoning 
 - Setback visualization only works with rectangular lots, not polygon lots
 - No 3D model import
 - No test suite
-- Store is ~3,450 lines — large but functional; entity system, annotation system, and legacy state coexist
+- Store is ~3,653 lines — large but functional; entity system, annotation system, and legacy state coexist
 - ImportWizard supports CSV only (no Excel/XLSX — would need external library)
 - Batch export and district parameter CSV import are implemented but NOT YET TESTED — may have runtime issues
 - District Module lots are positioned in a simple row layout (no arbitrary placement)

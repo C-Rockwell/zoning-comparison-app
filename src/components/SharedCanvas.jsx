@@ -75,6 +75,49 @@ export const StudioLighting = () => {
 }
 
 // ============================================
+// SunLighting — Simple azimuth/altitude light
+// ============================================
+export const SunLighting = () => {
+    const sunSettings = useStore(useShallow(state => state.sunSettings))
+    const { azimuth: azDeg, altitude: altDeg, intensity, shadowsEnabled, ambientIntensity } = sunSettings
+
+    const azRad = (azDeg ?? 45) * Math.PI / 180
+    const altRad = (altDeg ?? 45) * Math.PI / 180
+    const distance = 500
+
+    const x = Math.sin(azRad) * Math.cos(altRad) * distance
+    const y = Math.cos(azRad) * Math.cos(altRad) * distance
+    const z = Math.sin(altRad) * distance
+
+    return (
+        <>
+            <directionalLight
+                position={[x, y, z]}
+                intensity={intensity ?? 1.5}
+                castShadow={shadowsEnabled}
+                shadow-mapSize-width={4096}
+                shadow-mapSize-height={4096}
+                shadow-camera-far={500}
+                shadow-camera-left={-150}
+                shadow-camera-right={150}
+                shadow-camera-top={150}
+                shadow-camera-bottom={-150}
+                shadow-bias={-0.0001}
+                shadow-normalBias={0.02}
+            />
+
+            <ambientLight intensity={ambientIntensity ?? 0.4} />
+
+            <hemisphereLight
+                skyColor="#87CEEB"
+                groundColor="#d4d4d4"
+                intensity={0.4}
+            />
+        </>
+    )
+}
+
+// ============================================
 // PostProcessing — AO, tone mapping, AA, outline
 // ============================================
 export const PostProcessing = ({ renderSettings }) => {
@@ -181,6 +224,7 @@ const SharedCanvas = forwardRef(({ children, onPointerMissed }, ref) => {
     const gridLayer = useStore(state => state.viewSettings.layers.grid)
     const gridSettings = useStore(state => state.viewSettings.styleSettings?.grid)
     const renderSettings = useStore(useShallow(state => state.renderSettings))
+    const sunEnabled = useStore(state => state.sunSettings?.enabled ?? false)
 
     // Expose cameraControlsRef and contentRef to parent
     useImperativeHandle(ref, () => ({
@@ -205,8 +249,8 @@ const SharedCanvas = forwardRef(({ children, onPointerMissed }, ref) => {
         >
             <color attach="background" args={[sceneBackground]} />
 
-            {/* Studio Lighting for realistic shading */}
-            <StudioLighting />
+            {/* Lighting: sun simulation or studio */}
+            {sunEnabled ? <SunLighting /> : <StudioLighting />}
 
             {/* Contact shadows for ground-level detail */}
             {renderSettings.contactShadows && (

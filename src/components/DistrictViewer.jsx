@@ -3,7 +3,6 @@ import * as THREE from 'three'
 import { useStore } from '../store/useStore'
 import SharedCanvas from './SharedCanvas'
 import DistrictSceneContent from './DistrictSceneContent'
-import SunControls from './SunControls'
 
 // ============================================
 // DistrictViewer — main 3D viewer for the
@@ -187,9 +186,6 @@ const DistrictViewer = () => {
                     </button>
                 </div>
             </div>
-
-            {/* Sun Controls */}
-            <SunControls />
 
             {/* 3D Canvas */}
             <SharedCanvas

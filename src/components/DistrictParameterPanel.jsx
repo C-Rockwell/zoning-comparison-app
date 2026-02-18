@@ -131,6 +131,22 @@ const ModelParametersTable = () => {
     const setLotVisibilityAction = useStore((s) => s.setLotVisibility)
     const lots = useStore((s) => s.entities?.lots ?? {})
     const lotVisibilityAll = useStore((s) => s.lotVisibility ?? {})
+    const modelSetup = useModelSetup()
+
+    // Compute which lots are corner lots (have a street side)
+    const lotCornerStatus = useMemo(() => {
+        const edges = modelSetup.streetEdges ?? { front: true, left: false, right: false, rear: false }
+        const status = {}
+        lotIds.forEach((lotId, index) => {
+            const isFirst = index === 0
+            const isLast = index === lotIds.length - 1
+            const isOnly = lotIds.length === 1
+            const hasLeftStreet = isOnly ? edges.left : isLast ? edges.left : false
+            const hasRightStreet = isOnly ? edges.right : isFirst ? edges.right : false
+            status[lotId] = { isCorner: hasLeftStreet || hasRightStreet }
+        })
+        return status
+    }, [lotIds, modelSetup.streetEdges])
 
     // Parameter row definitions
     const sections = useMemo(() => [
@@ -194,6 +210,7 @@ const ModelParametersTable = () => {
                 {
                     label: 'Min. Side, Street (ft)',
                     visKey: 'setbacks',
+                    cornerOnly: true,
                     getValue: (lot) => lot.setbacks?.principal?.minSideStreet,
                     setValue: (lotId, v) => updateLotSetback(lotId, 'principal', 'minSideStreet', v),
                     type: 'number', min: 0,
@@ -201,6 +218,7 @@ const ModelParametersTable = () => {
                 {
                     label: 'Max. Side, Street (ft)',
                     visKey: 'maxSetbacks',
+                    cornerOnly: true,
                     getValue: (lot) => lot.setbacks?.principal?.maxSideStreet,
                     setValue: (lotId, v) => updateLotSetback(lotId, 'principal', 'maxSideStreet', v),
                     type: 'number', min: 0,
@@ -208,6 +226,7 @@ const ModelParametersTable = () => {
                 {
                     label: 'BTZ - Side, Street (%)',
                     visKey: 'btzPlanes',
+                    cornerOnly: true,
                     getValue: (lot) => lot.setbacks?.principal?.btzSideStreet,
                     setValue: (lotId, v) => updateLotSetback(lotId, 'principal', 'btzSideStreet', v),
                     type: 'number', min: 0, max: 100,
@@ -241,6 +260,7 @@ const ModelParametersTable = () => {
                 {
                     label: 'Side, Street (ft)',
                     visKey: 'accessorySetbacks',
+                    cornerOnly: true,
                     getValue: (lot) => lot.setbacks?.accessory?.sideStreet,
                     setValue: (lotId, v) => updateLotSetback(lotId, 'accessory', 'sideStreet', v),
                     type: 'number', min: 0,
@@ -506,6 +526,7 @@ const ModelParametersTable = () => {
                             lots={lots}
                             firstLotVis={firstLotVis}
                             setLotVisibilityAction={setLotVisibilityAction}
+                            lotCornerStatus={lotCornerStatus}
                         />
                     ))}
                 </tbody>
@@ -515,7 +536,7 @@ const ModelParametersTable = () => {
 }
 
 /** A group of rows in the model parameters table with a collapsible section header */
-const SectionGroup = ({ section, lotIds, lots, firstLotVis, setLotVisibilityAction }) => {
+const SectionGroup = ({ section, lotIds, lots, firstLotVis, setLotVisibilityAction, lotCornerStatus }) => {
     const [isOpen, setIsOpen] = useState(true)
     const regenerateEntityBuilding = useStore((s) => s.regenerateEntityBuilding)
 
@@ -572,6 +593,15 @@ const SectionGroup = ({ section, lotIds, lots, firstLotVis, setLotVisibilityActi
                 {lotIds.map((lotId) => {
                     const lot = lots[lotId]
                     if (!lot) return <td key={lotId} />
+
+                    // Corner-only rows show -- for interior lots
+                    if (row.cornerOnly && !lotCornerStatus?.[lotId]?.isCorner) {
+                        return (
+                            <td key={lotId} className="py-1 px-1 text-center text-xs" style={{ color: 'var(--ui-text-muted)' }}>
+                                --
+                            </td>
+                        )
+                    }
 
                     const value = row.getValue(lot)
 
