@@ -85,6 +85,8 @@ export function useKeyboardShortcuts() {
         const { moveMode, exitMoveMode, setEntityBuildingPosition, setAnnotationPosition } = useStore.getState()
         if (moveMode?.active) {
           e.preventDefault()
+          // Resume undo tracking before restoring so the restore is recorded cleanly
+          useStore.temporal.getState().resume()
           // Restore original position if in 'moving' phase
           if (moveMode.phase === 'moving' && moveMode.originalPosition) {
             if (moveMode.targetType === 'building') {

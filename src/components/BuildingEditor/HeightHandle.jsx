@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
+import { useStore } from '../../store/useStore'
 
 // Draggable handle at the top of the building for adjusting total height
 const HeightHandle = ({ position, totalHeight, onHeightChange, offsetGroupX = 0 }) => {
@@ -17,6 +18,7 @@ const HeightHandle = ({ position, totalHeight, onHeightChange, offsetGroupX = 0 
         e.stopPropagation()
         if (controls) controls.enabled = false
         setDragging(true)
+        useStore.temporal.getState().pause()
         e.target.setPointerCapture(e.pointerId)
 
         // Create a vertical plane facing the camera, passing through the building center
@@ -36,6 +38,7 @@ const HeightHandle = ({ position, totalHeight, onHeightChange, offsetGroupX = 0 
     const handlePointerUp = (e) => {
         e.stopPropagation()
         setDragging(false)
+        useStore.temporal.getState().resume()
         if (controls) controls.enabled = true
         e.target.releasePointerCapture(e.pointerId)
     }

@@ -30,6 +30,98 @@ export const APP_FIELDS = [
 ]
 
 /**
+ * Available district parameter fields for CSV import.
+ * Each field maps to a dot-path in the districtParameters store object.
+ */
+export const DISTRICT_FIELDS = [
+  // Lot Dimensions
+  { key: 'lotArea.min', label: 'Min Lot Area', group: 'Lot Dimensions' },
+  { key: 'lotArea.max', label: 'Max Lot Area', group: 'Lot Dimensions' },
+  { key: 'lotCoverage.min', label: 'Min Lot Coverage', group: 'Lot Dimensions' },
+  { key: 'lotCoverage.max', label: 'Max Lot Coverage', group: 'Lot Dimensions' },
+  { key: 'lotWidth.min', label: 'Min Lot Width', group: 'Lot Dimensions' },
+  { key: 'lotWidth.max', label: 'Max Lot Width', group: 'Lot Dimensions' },
+  { key: 'lotWidthAtSetback.min', label: 'Min Width at Setback', group: 'Lot Dimensions' },
+  { key: 'lotWidthAtSetback.max', label: 'Max Width at Setback', group: 'Lot Dimensions' },
+  { key: 'lotDepth.min', label: 'Min Lot Depth', group: 'Lot Dimensions' },
+  { key: 'lotDepth.max', label: 'Max Lot Depth', group: 'Lot Dimensions' },
+
+  // Setbacks - Principal
+  { key: 'setbacksPrincipal.front.min', label: 'Min Front Setback', group: 'Setbacks Principal' },
+  { key: 'setbacksPrincipal.front.max', label: 'Max Front Setback', group: 'Setbacks Principal' },
+  { key: 'setbacksPrincipal.btzFront', label: 'BTZ Front (%)', group: 'Setbacks Principal' },
+  { key: 'setbacksPrincipal.rear.min', label: 'Min Rear Setback', group: 'Setbacks Principal' },
+  { key: 'setbacksPrincipal.rear.max', label: 'Max Rear Setback', group: 'Setbacks Principal' },
+  { key: 'setbacksPrincipal.sideInterior.min', label: 'Min Side Interior Setback', group: 'Setbacks Principal' },
+  { key: 'setbacksPrincipal.sideInterior.max', label: 'Max Side Interior Setback', group: 'Setbacks Principal' },
+  { key: 'setbacksPrincipal.sideStreet.min', label: 'Min Side Street Setback', group: 'Setbacks Principal' },
+  { key: 'setbacksPrincipal.sideStreet.max', label: 'Max Side Street Setback', group: 'Setbacks Principal' },
+  { key: 'setbacksPrincipal.btzSideStreet', label: 'BTZ Side Street (%)', group: 'Setbacks Principal' },
+  { key: 'setbacksPrincipal.distanceBetweenBuildings.min', label: 'Min Dist Between Buildings', group: 'Setbacks Principal' },
+  { key: 'setbacksPrincipal.distanceBetweenBuildings.max', label: 'Max Dist Between Buildings', group: 'Setbacks Principal' },
+
+  // Setbacks - Accessory
+  { key: 'setbacksAccessory.front.min', label: 'Acc Min Front Setback', group: 'Setbacks Accessory' },
+  { key: 'setbacksAccessory.front.max', label: 'Acc Max Front Setback', group: 'Setbacks Accessory' },
+  { key: 'setbacksAccessory.rear.min', label: 'Acc Min Rear Setback', group: 'Setbacks Accessory' },
+  { key: 'setbacksAccessory.rear.max', label: 'Acc Max Rear Setback', group: 'Setbacks Accessory' },
+  { key: 'setbacksAccessory.sideInterior.min', label: 'Acc Min Side Interior', group: 'Setbacks Accessory' },
+  { key: 'setbacksAccessory.sideInterior.max', label: 'Acc Max Side Interior', group: 'Setbacks Accessory' },
+  { key: 'setbacksAccessory.sideStreet.min', label: 'Acc Min Side Street', group: 'Setbacks Accessory' },
+  { key: 'setbacksAccessory.sideStreet.max', label: 'Acc Max Side Street', group: 'Setbacks Accessory' },
+  { key: 'setbacksAccessory.distanceBetweenBuildings.min', label: 'Acc Min Dist Between Bldgs', group: 'Setbacks Accessory' },
+  { key: 'setbacksAccessory.distanceBetweenBuildings.max', label: 'Acc Max Dist Between Bldgs', group: 'Setbacks Accessory' },
+
+  // Structures - Principal
+  { key: 'structures.principal.height.min', label: 'Min Height', group: 'Structures Principal' },
+  { key: 'structures.principal.height.max', label: 'Max Height', group: 'Structures Principal' },
+  { key: 'structures.principal.stories.min', label: 'Min Stories', group: 'Structures Principal' },
+  { key: 'structures.principal.stories.max', label: 'Max Stories', group: 'Structures Principal' },
+  { key: 'structures.principal.firstStoryHeight.min', label: 'Min 1st Story Height', group: 'Structures Principal' },
+  { key: 'structures.principal.firstStoryHeight.max', label: 'Max 1st Story Height', group: 'Structures Principal' },
+  { key: 'structures.principal.upperStoryHeight.min', label: 'Min Upper Story Height', group: 'Structures Principal' },
+  { key: 'structures.principal.upperStoryHeight.max', label: 'Max Upper Story Height', group: 'Structures Principal' },
+
+  // Structures - Accessory
+  { key: 'structures.accessory.height.min', label: 'Acc Min Height', group: 'Structures Accessory' },
+  { key: 'structures.accessory.height.max', label: 'Acc Max Height', group: 'Structures Accessory' },
+  { key: 'structures.accessory.stories.min', label: 'Acc Min Stories', group: 'Structures Accessory' },
+  { key: 'structures.accessory.stories.max', label: 'Acc Max Stories', group: 'Structures Accessory' },
+  { key: 'structures.accessory.firstStoryHeight.min', label: 'Acc Min 1st Story Height', group: 'Structures Accessory' },
+  { key: 'structures.accessory.firstStoryHeight.max', label: 'Acc Max 1st Story Height', group: 'Structures Accessory' },
+  { key: 'structures.accessory.upperStoryHeight.min', label: 'Acc Min Upper Story Height', group: 'Structures Accessory' },
+  { key: 'structures.accessory.upperStoryHeight.max', label: 'Acc Max Upper Story Height', group: 'Structures Accessory' },
+
+  // Lot Access
+  { key: 'lotAccess.primaryStreet.permitted', label: 'Primary Street Permitted', group: 'Lot Access' },
+  { key: 'lotAccess.primaryStreet.min', label: 'Min Primary Street Access', group: 'Lot Access' },
+  { key: 'lotAccess.primaryStreet.max', label: 'Max Primary Street Access', group: 'Lot Access' },
+  { key: 'lotAccess.secondaryStreet.permitted', label: 'Secondary Street Permitted', group: 'Lot Access' },
+  { key: 'lotAccess.secondaryStreet.min', label: 'Min Secondary Street Access', group: 'Lot Access' },
+  { key: 'lotAccess.secondaryStreet.max', label: 'Max Secondary Street Access', group: 'Lot Access' },
+  { key: 'lotAccess.rearAlley.permitted', label: 'Rear Alley Permitted', group: 'Lot Access' },
+  { key: 'lotAccess.rearAlley.min', label: 'Min Rear Alley Access', group: 'Lot Access' },
+  { key: 'lotAccess.rearAlley.max', label: 'Max Rear Alley Access', group: 'Lot Access' },
+  { key: 'lotAccess.sharedDrive.permitted', label: 'Shared Drive Permitted', group: 'Lot Access' },
+  { key: 'lotAccess.sharedDrive.min', label: 'Min Shared Drive Access', group: 'Lot Access' },
+  { key: 'lotAccess.sharedDrive.max', label: 'Max Shared Drive Access', group: 'Lot Access' },
+
+  // Parking Locations
+  { key: 'parkingLocations.front.permitted', label: 'Front Parking Permitted', group: 'Parking' },
+  { key: 'parkingLocations.front.min', label: 'Min Front Parking', group: 'Parking' },
+  { key: 'parkingLocations.front.max', label: 'Max Front Parking', group: 'Parking' },
+  { key: 'parkingLocations.sideInterior.permitted', label: 'Side Int Parking Permitted', group: 'Parking' },
+  { key: 'parkingLocations.sideInterior.min', label: 'Min Side Int Parking', group: 'Parking' },
+  { key: 'parkingLocations.sideInterior.max', label: 'Max Side Int Parking', group: 'Parking' },
+  { key: 'parkingLocations.sideStreet.permitted', label: 'Side St Parking Permitted', group: 'Parking' },
+  { key: 'parkingLocations.sideStreet.min', label: 'Min Side St Parking', group: 'Parking' },
+  { key: 'parkingLocations.sideStreet.max', label: 'Max Side St Parking', group: 'Parking' },
+  { key: 'parkingLocations.rear.permitted', label: 'Rear Parking Permitted', group: 'Parking' },
+  { key: 'parkingLocations.rear.min', label: 'Min Rear Parking', group: 'Parking' },
+  { key: 'parkingLocations.rear.max', label: 'Max Rear Parking', group: 'Parking' },
+]
+
+/**
  * Parse CSV text into headers and rows.
  * Handles quoted fields (fields containing commas), mixed line endings,
  * trims whitespace, and skips empty rows.
@@ -171,9 +263,10 @@ const FIELD_ALIASES = {
  * Each app field is only matched once (first match wins).
  *
  * @param {string[]} csvHeaders - Array of CSV column header strings
+ * @param {Array} fields - Optional field list to match against (defaults to APP_FIELDS)
  * @returns {{ [csvHeader: string]: string|null }} - Mapping of CSV header -> app field key or null
  */
-export function autoMatchHeaders(csvHeaders) {
+export function autoMatchHeaders(csvHeaders, fields = APP_FIELDS) {
   const mapping = {}
   const usedFields = new Set()
 
@@ -186,7 +279,7 @@ export function autoMatchHeaders(csvHeaders) {
     if (mapping[header] !== null) continue
     const normalizedHeader = normalize(header)
 
-    for (const field of APP_FIELDS) {
+    for (const field of fields) {
       if (usedFields.has(field.key)) continue
 
       // Check against normalized field key
@@ -205,21 +298,23 @@ export function autoMatchHeaders(csvHeaders) {
     }
   }
 
-  // Pass 2: Try alias matching for remaining unmatched headers
-  for (const header of csvHeaders) {
-    if (mapping[header] !== null) continue
-    const normalizedHeader = normalize(header)
+  // Pass 2: Try alias matching for remaining unmatched headers (lot fields only)
+  if (fields === APP_FIELDS) {
+    for (const header of csvHeaders) {
+      if (mapping[header] !== null) continue
+      const normalizedHeader = normalize(header)
 
-    for (const field of APP_FIELDS) {
-      if (usedFields.has(field.key)) continue
+      for (const field of fields) {
+        if (usedFields.has(field.key)) continue
 
-      const aliases = FIELD_ALIASES[field.key] || []
-      const normalizedAliases = aliases.map(normalize)
+        const aliases = FIELD_ALIASES[field.key] || []
+        const normalizedAliases = aliases.map(normalize)
 
-      if (normalizedAliases.includes(normalizedHeader)) {
-        mapping[header] = field.key
-        usedFields.add(field.key)
-        break
+        if (normalizedAliases.includes(normalizedHeader)) {
+          mapping[header] = field.key
+          usedFields.add(field.key)
+          break
+        }
       }
     }
   }
@@ -273,6 +368,42 @@ export function applyMapping(rows, mapping) {
   }
 
   return results
+}
+
+/**
+ * Apply column-index-based mapping to a single CSV row for district parameters.
+ * Returns a flat object of { 'dot.path': value } pairs ready for setDistrictParameter().
+ *
+ * For 'permitted' fields, interprets truthy string values as boolean.
+ * For all other fields, parses as float.
+ *
+ * @param {string[]} row - Single CSV data row
+ * @param {{ [colIndex: number]: string }} mapping - Column index -> district field key
+ * @returns {{ [dotPath: string]: number|boolean }}
+ */
+export function applyDistrictMapping(row, mapping) {
+  const result = {}
+
+  for (const [indexStr, fieldKey] of Object.entries(mapping)) {
+    const index = parseInt(indexStr, 10)
+    if (fieldKey === null || fieldKey === 'skip') continue
+    if (index < 0 || index >= row.length) continue
+
+    const rawValue = row[index]
+    if (rawValue === '' || rawValue === undefined) continue
+
+    if (fieldKey.endsWith('.permitted')) {
+      const lower = rawValue.toLowerCase().trim()
+      result[fieldKey] = ['true', 'yes', '1', 'y', 'permitted'].includes(lower)
+    } else {
+      const numValue = parseFloat(rawValue)
+      if (!isNaN(numValue)) {
+        result[fieldKey] = numValue
+      }
+    }
+  }
+
+  return result
 }
 
 /**

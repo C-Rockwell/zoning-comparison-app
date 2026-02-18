@@ -1,10 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import { useStore } from '../store/useStore'
 import { OBJExporter, GLTFExporter, ColladaExporter } from 'three-stdlib'
 import * as THREE from 'three'
 import { generateIFC, generateDistrictIFC } from '../utils/ifcGenerator'
 import * as api from '../services/api'
+import JSZip from 'jszip'
 
 const Exporter = ({ target }) => {
     const exportRequested = useStore(state => state.viewSettings.exportRequested)
@@ -15,7 +16,16 @@ const Exporter = ({ target }) => {
     const setExportLineScale = useStore(state => state.setExportLineScale)
     const currentProject = useStore(state => state.currentProject)
     const showToast = useStore(state => state.showToast)
+    const isBatchExporting = useStore(state => state.viewSettings.isBatchExporting)
+    const exportQueue = useStore(state => state.viewSettings.exportQueue)
+    const shiftExportQueue = useStore(state => state.shiftExportQueue)
+    const clearExportQueue = useStore(state => state.clearExportQueue)
     const { scene, gl, camera } = useThree()
+
+    // Batch export refs
+    const zipRef = useRef(null)
+    const savedLayersRef = useRef(null)
+    const batchProcessingRef = useRef(false)
 
     useEffect(() => {
         if (exportRequested) {
@@ -147,10 +157,10 @@ const Exporter = ({ target }) => {
                         objectToExport.updateMatrixWorld(true)
 
                         objectToExport.traverse((child) => {
-                            // Whitelist: Only BoxGeometry and PlaneGeometry Meshes
+                            // Whitelist: standard geometry types for 3D export
                             if (child.isMesh) {
                                 const type = child.geometry?.type
-                                if (type === 'BoxGeometry' || type === 'PlaneGeometry') {
+                                if (type === 'BoxGeometry' || type === 'PlaneGeometry' || type === 'BufferGeometry' || type === 'ShapeGeometry' || type === 'ExtrudeGeometry') {
                                     const clone = child.clone(false)
                                     clone.matrix.copy(child.matrixWorld)
                                     clone.matrix.decompose(clone.position, clone.quaternion, clone.scale)
@@ -210,7 +220,16 @@ const Exporter = ({ target }) => {
 
                         } else if (exportFormat === 'png') {
                             const url = gl.domElement.toDataURL('image/png')
-                            saveOrDownload(url, 'zoning-model.png', 'image/png', true, projectId, showToast)
+
+                            if (isBatchExporting && zipRef.current) {
+                                // Batch mode: capture to ZIP
+                                const queueItem = exportQueue[0]
+                                const base64Data = url.split(',')[1]
+                                const filename = `${queueItem?.label || 'export'}.png`
+                                zipRef.current.file(filename, base64Data, { base64: true })
+                            } else {
+                                saveOrDownload(url, 'zoning-model.png', 'image/png', true, projectId, showToast)
+                            }
 
                             // Restore background after PNG capture
                             if (originalBackground !== null) {
@@ -220,7 +239,16 @@ const Exporter = ({ target }) => {
 
                         } else if (exportFormat === 'jpg') {
                             const url = gl.domElement.toDataURL('image/jpeg', 0.9)
-                            saveOrDownload(url, 'zoning-model.jpg', 'image/jpeg', true, projectId, showToast)
+
+                            if (isBatchExporting && zipRef.current) {
+                                // Batch mode: capture to ZIP
+                                const queueItem = exportQueue[0]
+                                const base64Data = url.split(',')[1]
+                                const filename = `${queueItem?.label || 'export'}.jpg`
+                                zipRef.current.file(filename, base64Data, { base64: true })
+                            } else {
+                                saveOrDownload(url, 'zoning-model.jpg', 'image/jpeg', true, projectId, showToast)
+                            }
 
                         } else if (exportFormat === 'svg') {
                             // Use the configured width/height
@@ -269,10 +297,88 @@ const Exporter = ({ target }) => {
 
                     // Reset export state after completion (inside requestAnimationFrame callback)
                     resetExport()
+
+                    // If batch exporting, advance the queue
+                    if (isBatchExporting) {
+                        shiftExportQueue()
+                        batchProcessingRef.current = false
+                    }
                 })
             }
         }
-    }, [exportRequested, exportFormat, scene, gl, camera, resetExport, setExportLineScale, target, exportSettings, exportView, currentProject, showToast])
+    }, [exportRequested, exportFormat, scene, gl, camera, resetExport, setExportLineScale, target, exportSettings, exportView, currentProject, showToast, isBatchExporting, exportQueue, shiftExportQueue])
+
+    // Batch export orchestrator
+    useEffect(() => {
+        if (!isBatchExporting) return
+        if (exportRequested) return // Wait for current export to finish
+        if (batchProcessingRef.current) return // Already processing
+
+        if (exportQueue.length === 0) {
+            // Queue exhausted — generate ZIP and download
+            if (zipRef.current) {
+                const zip = zipRef.current
+                zipRef.current = null
+
+                zip.generateAsync({ type: 'blob' }).then((blob) => {
+                    const link = document.createElement('a')
+                    link.download = `batch-export-${new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-')}.zip`
+                    link.href = URL.createObjectURL(blob)
+                    link.click()
+                    setTimeout(() => URL.revokeObjectURL(link.href), 1000)
+                    showToast?.('Batch export complete', 'success')
+                }).catch((err) => {
+                    console.error('ZIP generation failed:', err)
+                    showToast?.(`Batch export failed: ${err.message}`, 'error')
+                })
+            }
+
+            // Restore saved layer state
+            if (savedLayersRef.current) {
+                const store = useStore.getState()
+                const savedLayers = savedLayersRef.current
+                savedLayersRef.current = null
+                for (const [key, value] of Object.entries(savedLayers)) {
+                    if (store.viewSettings.layers[key] !== value) {
+                        store.setLayer(key, value)
+                    }
+                }
+            }
+
+            clearExportQueue()
+            return
+        }
+
+        // Process next queue item
+        batchProcessingRef.current = true
+        const item = exportQueue[0]
+        const store = useStore.getState()
+
+        // Initialize ZIP on first item
+        if (!zipRef.current) {
+            zipRef.current = new JSZip()
+            // Save current layer state for restoration
+            savedLayersRef.current = { ...store.viewSettings.layers }
+        }
+
+        // Apply layer state from the queue item
+        if (item.layers) {
+            for (const [key, value] of Object.entries(item.layers)) {
+                store.setLayer(key, value)
+            }
+        }
+
+        // Set export format and view
+        store.setExportFormat(item.format || 'png')
+        store.setExportView(item.cameraView || 'current')
+
+        // Double-RAF to let React process layer/view changes, then trigger export
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                store.triggerExport()
+            })
+        })
+    }, [isBatchExporting, exportQueue, exportRequested, clearExportQueue, showToast])
 
     return null
 }

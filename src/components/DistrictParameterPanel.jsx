@@ -11,8 +11,9 @@ import SliderInput from './ui/SliderInput'
 import LineStyleSelector from './ui/LineStyleSelector'
 import {
     ChevronDown, ChevronUp, Eye, EyeOff, Palette, Plus, Minus, Trash2, Copy,
-    Layers, Settings, Building2, Route,
+    Layers, Settings, Building2, Route, Upload, Download,
 } from 'lucide-react'
+import ImportWizard from './ImportWizard'
 
 // ============================================
 // Helper Sub-Components
@@ -803,6 +804,7 @@ const DistrictParametersSection = () => {
     const districtParams = useDistrictParameters()
     const setDistrictParameter = useStore((s) => s.setDistrictParameter)
     const [collapsed, setCollapsed] = useState({})
+    const [showImportWizard, setShowImportWizard] = useState(false)
     const toggle = (key) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))
 
     const dp = (path) => {
@@ -815,7 +817,25 @@ const DistrictParametersSection = () => {
     }
 
     return (
-        <Section title="District Parameters" icon={<Building2 className="w-4 h-4" />} defaultOpen={false}>
+        <Section
+            title="District Parameters"
+            icon={<Building2 className="w-4 h-4" />}
+            defaultOpen={false}
+            headerRight={
+                <button
+                    onClick={(e) => { e.stopPropagation(); setShowImportWizard(true) }}
+                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] transition-opacity hover:opacity-80"
+                    style={{ color: 'var(--ui-accent)' }}
+                    title="Import district parameters from CSV"
+                >
+                    <Upload className="w-3 h-3" />
+                    Import CSV
+                </button>
+            }
+        >
+            {showImportWizard && (
+                <ImportWizard isOpen={showImportWizard} onClose={() => setShowImportWizard(false)} />
+            )}
             <p className="text-[10px] mb-2" style={{ color: 'var(--ui-text-muted)' }}>
                 Informational reference data. Not visualized in the 3D scene.
             </p>
@@ -1796,6 +1816,188 @@ const ViewsSection = () => {
 }
 
 // ============================================
+// BATCH EXPORT SECTION
+// ============================================
+
+const CAMERA_VIEWS = [
+    { key: 'iso', label: 'ISO' },
+    { key: 'top', label: 'Top' },
+    { key: 'front', label: 'Front' },
+    { key: 'side', label: 'Side' },
+    { key: 'left', label: 'Left' },
+]
+
+const RESOLUTION_PRESETS = [
+    { value: '1280x720', label: '720p' },
+    { value: '1920x1080', label: '1080p' },
+    { value: '3840x2160', label: '4K' },
+    { value: '7680x4320', label: '8K' },
+]
+
+const BatchExportSection = () => {
+    const savedViews = useStore((s) => s.savedViews ?? {})
+    const isBatchExporting = useStore((s) => s.viewSettings.isBatchExporting)
+    const addToExportQueue = useStore((s) => s.addToExportQueue)
+    const setIsBatchExporting = useStore((s) => s.setIsBatchExporting)
+
+    const [checked, setChecked] = useState({}) // { 'slot-view': true }
+    const [format, setFormat] = useState('png')
+    const [resolution, setResolution] = useState('1920x1080')
+
+    const populatedSlots = useMemo(() =>
+        [1, 2, 3, 4, 5].filter(slot => savedViews[slot] != null),
+    [savedViews])
+
+    const checkedCount = Object.values(checked).filter(Boolean).length
+
+    const toggleCheck = useCallback((key) => {
+        setChecked(prev => ({ ...prev, [key]: !prev[key] }))
+    }, [])
+
+    const handleExport = useCallback(() => {
+        if (checkedCount === 0 || isBatchExporting) return
+
+        const [w, h] = resolution.split('x').map(Number)
+        const queue = []
+
+        for (const slot of populatedSlots) {
+            const saved = savedViews[slot]
+            if (!saved) continue
+
+            for (const view of CAMERA_VIEWS) {
+                const key = `${slot}-${view.key}`
+                if (!checked[key]) continue
+
+                queue.push({
+                    presetSlot: slot,
+                    cameraView: view.key,
+                    layers: saved.layers ? { ...saved.layers } : undefined,
+                    format,
+                    label: `view-${slot}-${view.key}`,
+                })
+            }
+        }
+
+        if (queue.length === 0) return
+
+        // Set export settings for resolution
+        const store = useStore.getState()
+        store.setExportSettings({ width: w, height: h, label: resolution })
+
+        addToExportQueue(queue)
+        setIsBatchExporting(true)
+    }, [checkedCount, isBatchExporting, resolution, populatedSlots, savedViews, checked, format, addToExportQueue, setIsBatchExporting])
+
+    return (
+        <Section title="Batch Export" icon={<Download className="w-4 h-4" />} defaultOpen={false}>
+            {populatedSlots.length === 0 ? (
+                <p className="text-[10px]" style={{ color: 'var(--ui-text-muted)' }}>
+                    Save views in the Views section above to enable batch export.
+                </p>
+            ) : (
+                <div className="space-y-3">
+                    {/* Checkbox grid */}
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-[10px]">
+                            <thead>
+                                <tr>
+                                    <th className="text-left px-1 py-0.5" style={{ color: 'var(--ui-text-muted)' }}>View</th>
+                                    {CAMERA_VIEWS.map(v => (
+                                        <th key={v.key} className="text-center px-1 py-0.5" style={{ color: 'var(--ui-text-muted)' }}>
+                                            {v.label}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {populatedSlots.map(slot => (
+                                    <tr key={slot}>
+                                        <td className="px-1 py-0.5" style={{ color: 'var(--ui-text-secondary)' }}>
+                                            #{slot}
+                                            <span className="ml-1" style={{ color: 'var(--ui-text-muted)' }}>
+                                                {savedViews[slot]?.cameraView}
+                                            </span>
+                                        </td>
+                                        {CAMERA_VIEWS.map(v => {
+                                            const key = `${slot}-${v.key}`
+                                            return (
+                                                <td key={v.key} className="text-center px-1 py-0.5">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={!!checked[key]}
+                                                        onChange={() => toggleCheck(key)}
+                                                        className="accent-theme"
+                                                        disabled={isBatchExporting}
+                                                    />
+                                                </td>
+                                            )
+                                        })}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Format + Resolution row */}
+                    <div className="flex items-center gap-2">
+                        <select
+                            value={format}
+                            onChange={(e) => setFormat(e.target.value)}
+                            className="flex-1 text-[10px] px-1.5 py-1 rounded"
+                            style={{
+                                backgroundColor: 'var(--ui-bg-tertiary)',
+                                color: 'var(--ui-text-primary)',
+                                borderWidth: '1px',
+                                borderStyle: 'solid',
+                                borderColor: 'var(--ui-border)',
+                            }}
+                            disabled={isBatchExporting}
+                        >
+                            <option value="png">PNG</option>
+                            <option value="jpg">JPG</option>
+                        </select>
+                        <select
+                            value={resolution}
+                            onChange={(e) => setResolution(e.target.value)}
+                            className="flex-1 text-[10px] px-1.5 py-1 rounded"
+                            style={{
+                                backgroundColor: 'var(--ui-bg-tertiary)',
+                                color: 'var(--ui-text-primary)',
+                                borderWidth: '1px',
+                                borderStyle: 'solid',
+                                borderColor: 'var(--ui-border)',
+                            }}
+                            disabled={isBatchExporting}
+                        >
+                            {RESOLUTION_PRESETS.map(r => (
+                                <option key={r.value} value={r.value}>{r.label}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Export button */}
+                    <button
+                        onClick={handleExport}
+                        disabled={checkedCount === 0 || isBatchExporting}
+                        className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-opacity disabled:opacity-40"
+                        style={{
+                            backgroundColor: 'var(--ui-accent)',
+                            color: '#fff',
+                        }}
+                    >
+                        <Download className="w-3.5 h-3.5" />
+                        {isBatchExporting
+                            ? 'Exporting...'
+                            : `Export ${checkedCount} Diagram${checkedCount !== 1 ? 's' : ''}`
+                        }
+                    </button>
+                </div>
+            )}
+        </Section>
+    )
+}
+
+// ============================================
 // INLINE STYLE CONTROLS (per-lot style editing)
 // ============================================
 
@@ -2118,6 +2320,7 @@ const DistrictParameterPanel = () => {
                 <RoadModulesSection />
                 <RoadModuleStylesSection />
                 <ViewsSection />
+                <BatchExportSection />
             </div>
         </div>
     )

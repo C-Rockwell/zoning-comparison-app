@@ -44,6 +44,7 @@ const PolygonBuilding = ({
                         position={[0, 0, floor.zBottom]}
                         castShadow
                         receiveShadow
+                        renderOrder={4}
                         onPointerOver={index === 0 ? onPointerOver : undefined}
                         onPointerOut={index === 0 ? onPointerOut : undefined}
                         onPointerDown={index === 0 ? onPointerDown : undefined}

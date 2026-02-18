@@ -525,6 +525,8 @@ export const useStore = create(
                     exportSettings: { width: 1920, height: 1080, label: '1080p (1920x1080)' },
                     exportView: 'current', // 'current' | 'iso' | 'front' | 'top' | 'side' | 'left' | 'right'
                     exportLineScale: 1, // Scale factor for line widths during export (WYSIWYG)
+                    exportQueue: [],          // Array of { presetSlot, cameraView, layers, label } for batch export
+                    isBatchExporting: false,  // Batch export in progress flag
                     // Visual Customization Settings - Split for Existing and Proposed models
                     styleSettings: {
                         existing: {
@@ -2383,6 +2385,19 @@ export const useStore = create(
                 setExportLineScale: (scale) => set((state) => ({
                     viewSettings: { ...state.viewSettings, exportLineScale: scale }
                 })),
+                // Batch export actions
+                addToExportQueue: (items) => set((state) => ({
+                    viewSettings: { ...state.viewSettings, exportQueue: [...state.viewSettings.exportQueue, ...items] }
+                })),
+                shiftExportQueue: () => set((state) => ({
+                    viewSettings: { ...state.viewSettings, exportQueue: state.viewSettings.exportQueue.slice(1) }
+                })),
+                clearExportQueue: () => set((state) => ({
+                    viewSettings: { ...state.viewSettings, exportQueue: [], isBatchExporting: false }
+                })),
+                setIsBatchExporting: (bool) => set((state) => ({
+                    viewSettings: { ...state.viewSettings, isBatchExporting: bool }
+                })),
                 // Sun simulation actions
                 setSunSetting: (key, value) => set((state) => ({
                     sunSettings: { ...state.sunSettings, [key]: value }
@@ -3601,6 +3616,11 @@ export const useStore = create(
                             }
                         }
                     }
+                    // Reset transient batch export state on hydration
+                    if (merged.viewSettings) {
+                        merged.viewSettings.exportQueue = []
+                        merged.viewSettings.isBatchExporting = false
+                    }
                     // Patch missing viewSettings.layers keys
                     if (merged.viewSettings?.layers) {
                         const layerDefaults = { maxSetbacks: true, btzPlanes: true, accessorySetbacks: true, lotAccessArrows: true };
@@ -3619,7 +3639,7 @@ export const useStore = create(
             partialize: (state) => {
                 const { existing, proposed, viewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, comparisonRoads, entities, entityOrder, entityStyles, lotVisibility, modelSetup, annotationSettings, annotationPositions } = state
                 // Exclude export triggers from undo history
-                const { exportRequested, ...trackedViewSettings } = viewSettings
+                const { exportRequested: _exportRequested, exportQueue: _exportQueue, isBatchExporting: _isBatchExporting, ...trackedViewSettings } = viewSettings
                 return { existing, proposed, viewSettings: trackedViewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, comparisonRoads, entities, entityOrder, entityStyles, lotVisibility, modelSetup, annotationSettings, annotationPositions }
             }
         }

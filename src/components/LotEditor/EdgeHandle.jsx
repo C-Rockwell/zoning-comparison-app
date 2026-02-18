@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
+import { useStore } from '../../store/useStore'
 
 // Push/pull handle on edges - drag perpendicular to extrude
 const EdgeHandle = ({ v1, v2, edgeIndex, onExtrude, offsetGroupX = 0 }) => {
@@ -54,6 +55,7 @@ const EdgeHandle = ({ v1, v2, edgeIndex, onExtrude, offsetGroupX = 0 }) => {
         e.stopPropagation()
         if (controls) controls.enabled = false
         setDragging(true)
+        useStore.temporal.getState().pause()
         e.target.setPointerCapture(e.pointerId)
 
         // Store initial position
@@ -69,6 +71,7 @@ const EdgeHandle = ({ v1, v2, edgeIndex, onExtrude, offsetGroupX = 0 }) => {
     const handlePointerUp = (e) => {
         e.stopPropagation()
         setDragging(false)
+        useStore.temporal.getState().resume()
         if (controls) controls.enabled = true
         e.target.releasePointerCapture(e.pointerId)
         dragStartRef.current = null

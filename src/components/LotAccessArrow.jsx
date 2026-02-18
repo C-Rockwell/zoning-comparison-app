@@ -191,6 +191,7 @@ const LotAccessArrow = ({
                     [...position]
                 )
             }
+            useStore.temporal.getState().pause()
             if (controls) controls.enabled = false
             e.target.setPointerCapture(e.pointerId)
             return
@@ -198,6 +199,7 @@ const LotAccessArrow = ({
 
         // Move mode: finalize placement
         if (moveMode?.active && moveMode.phase === 'moving' && isMoveModeTarget) {
+            useStore.temporal.getState().resume()
             if (controls) controls.enabled = true
             e.target.releasePointerCapture(e.pointerId)
             exitMoveMode()
@@ -207,6 +209,7 @@ const LotAccessArrow = ({
         // Normal drag
         if (controls) controls.enabled = false // eslint-disable-line react-hooks/immutability
         setDragging(true)
+        useStore.temporal.getState().pause()
         e.target.setPointerCapture(e.pointerId)
 
         // Calculate offset from arrow position to click point
@@ -223,6 +226,7 @@ const LotAccessArrow = ({
         e.stopPropagation()
         if (moveMode?.active) return
         setDragging(false)
+        useStore.temporal.getState().resume()
         if (controls) controls.enabled = true // eslint-disable-line react-hooks/immutability
         e.target.releasePointerCapture(e.pointerId)
     }

@@ -3,6 +3,7 @@ import { useThree } from '@react-three/fiber'
 import { Line } from '@react-three/drei'
 import * as THREE from 'three'
 import AnnotationText from './AnnotationText'
+import { useStore } from '../store/useStore'
 
 /**
  * Wraps AnnotationText with drag-to-reposition functionality.
@@ -56,6 +57,7 @@ const DraggableLabel = ({
         e.stopPropagation()
         if (controls) controls.enabled = false
         setDragging(true)
+        useStore.temporal.getState().pause()
         e.target.setPointerCapture(e.pointerId)
 
         // Calculate offset from label position to click point
@@ -71,6 +73,7 @@ const DraggableLabel = ({
     const handlePointerUp = (e) => {
         e.stopPropagation()
         setDragging(false)
+        useStore.temporal.getState().resume()
         if (controls) controls.enabled = true
         e.target.releasePointerCapture(e.pointerId)
     }

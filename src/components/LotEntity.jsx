@@ -343,8 +343,8 @@ const BTZPlanes = ({ principal, setbacks, streetSides = {}, style }) => {
 
         // Building front face y position
         const buildingFrontY = py - buildingDepth / 2
-        // Offset 0.021 ft (0.25 in) toward front of lot (negative Y)
-        const planeY = buildingFrontY - 0.021
+        // Offset 0.1 ft (~1.2 in) toward front of lot (negative Y) for depth buffer margin
+        const planeY = buildingFrontY - 0.1
 
         // Left-aligned: starts at left edge of building
         const buildingLeftX = px - buildingWidth / 2
@@ -355,14 +355,18 @@ const BTZPlanes = ({ principal, setbacks, streetSides = {}, style }) => {
                 key="btz-front"
                 position={[planeCenterX, planeY, planeHeight / 2]}
                 rotation={[Math.PI / 2, 0, 0]}
+                renderOrder={5}
             >
                 <planeGeometry args={[planeWidth, planeHeight]} />
                 <meshStandardMaterial
                     color={style.color}
                     opacity={style.opacity}
-                    transparent={style.opacity < 1}
+                    transparent={true}
                     side={THREE.DoubleSide}
-                    depthWrite={style.opacity >= 0.95}
+                    depthWrite={false}
+                    polygonOffset
+                    polygonOffsetFactor={-1}
+                    polygonOffsetUnits={-1}
                     roughness={1}
                     metalness={0}
                 />
@@ -397,20 +401,24 @@ const BTZPlanes = ({ principal, setbacks, streetSides = {}, style }) => {
         // Left street side
         if (streetSides.left) {
             const buildingLeftX = px - buildingWidth / 2
-            const planeX = buildingLeftX - 0.021
+            const planeX = buildingLeftX - 0.1
 
             planes.push(
                 <mesh
                     key="btz-side-left"
                     position={[planeX, buildingFrontY, 0]}
                     geometry={createSideQuad(planeWidth, planeHeight)}
+                    renderOrder={5}
                 >
                     <meshStandardMaterial
                         color={style.color}
                         opacity={style.opacity}
-                        transparent={style.opacity < 1}
+                        transparent={true}
                         side={THREE.DoubleSide}
-                        depthWrite={style.opacity >= 0.95}
+                        depthWrite={false}
+                        polygonOffset
+                        polygonOffsetFactor={-1}
+                        polygonOffsetUnits={-1}
                         roughness={1}
                         metalness={0}
                     />
@@ -421,20 +429,24 @@ const BTZPlanes = ({ principal, setbacks, streetSides = {}, style }) => {
         // Right street side
         if (streetSides.right) {
             const buildingRightX = px + buildingWidth / 2
-            const planeX = buildingRightX + 0.021
+            const planeX = buildingRightX + 0.1
 
             planes.push(
                 <mesh
                     key="btz-side-right"
                     position={[planeX, buildingFrontY, 0]}
                     geometry={createSideQuad(planeWidth, planeHeight)}
+                    renderOrder={5}
                 >
                     <meshStandardMaterial
                         color={style.color}
                         opacity={style.opacity}
-                        transparent={style.opacity < 1}
+                        transparent={true}
                         side={THREE.DoubleSide}
-                        depthWrite={style.opacity >= 0.95}
+                        depthWrite={false}
+                        polygonOffset
+                        polygonOffsetFactor={-1}
+                        polygonOffsetUnits={-1}
                         roughness={1}
                         metalness={0}
                     />

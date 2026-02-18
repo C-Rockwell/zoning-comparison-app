@@ -96,6 +96,7 @@ const RoadIntersectionFillet = ({
                                 lineWidth={strokeWidth}
                                 opacity={strokeOpacity}
                                 transparent={strokeOpacity < 1}
+                                renderOrder={3}
                             />
                         )}
 
@@ -108,6 +109,7 @@ const RoadIntersectionFillet = ({
                                 lineWidth={(zone.stroke.width || 1) * lineScale}
                                 opacity={zone.stroke.opacity}
                                 transparent={zone.stroke.opacity < 1}
+                                renderOrder={3}
                             />
                         )}
                     </group>

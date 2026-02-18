@@ -168,6 +168,7 @@ const BuildingEditor = ({
                 const localY = planeIntersectPoint.y
                 setMoveBasePoint([localX, localY], [x, y])
             }
+            useStore.temporal.getState().pause()
             if (controls) controls.enabled = false
             e.target.setPointerCapture(e.pointerId)
             return
@@ -175,6 +176,7 @@ const BuildingEditor = ({
 
         // Move mode: finalize placement
         if (moveMode?.active && moveMode.phase === 'moving' && isMoveModeTarget) {
+            useStore.temporal.getState().resume()
             if (controls) controls.enabled = true
             e.target.releasePointerCapture(e.pointerId)
             exitMoveMode()
@@ -185,6 +187,7 @@ const BuildingEditor = ({
         if (onSelect) onSelect()
         if (controls) controls.enabled = false
         setDragging(true)
+        useStore.temporal.getState().pause()
         e.target.setPointerCapture(e.pointerId)
     }
 
@@ -193,6 +196,7 @@ const BuildingEditor = ({
         // Skip normal pointer up during move mode
         if (moveMode?.active) return
         setDragging(false)
+        useStore.temporal.getState().resume()
         if (controls) controls.enabled = true
         e.target.releasePointerCapture(e.pointerId)
     }
@@ -315,6 +319,7 @@ const BuildingEditor = ({
                             position={[x, y, floor.zCenter]}
                             castShadow
                             receiveShadow
+                            renderOrder={4}
                             onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
                             onPointerOut={() => setHovered(false)}
                             onPointerDown={index === 0 ? handlePointerDown : undefined}
