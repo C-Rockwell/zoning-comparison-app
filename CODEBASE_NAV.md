@@ -83,6 +83,7 @@
 | `src/utils/intersectionGeometry.js` | 266 | Road fillet arc computation |
 | `src/utils/dimensionLayout.js` | 95 | Auto-stacking parallel dimensions |
 | `src/utils/formatUnits.js` | 36 | ft / ft-in / meters formatting |
+| `src/utils/featureFlags.js` | 18 | Runtime feature flag helpers (env/query toggles) |
 
 ### 3D Rendering Components
 | File | Lines | Purpose |

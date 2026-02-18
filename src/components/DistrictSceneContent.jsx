@@ -9,6 +9,7 @@ import RoadModule from './RoadModule'
 import RoadAnnotations from './RoadAnnotations'
 import RoadIntersectionFillet from './RoadIntersectionFillet'
 import { computeFilletOuterRadius, createNotchedRectShape } from '../utils/intersectionGeometry'
+import { isExperimentalMoveModeEnabled } from '../utils/featureFlags'
 
 // Direction rotation for annotation labels (matches RoadModule.jsx DIRECTION_ROTATION)
 const DIRECTION_ROTATION = {
@@ -625,6 +626,7 @@ const DistrictSceneContent = () => {
 
     // Move mode state
     const moveMode = useStore((s) => s.moveMode)
+    const experimentalMoveModeEnabled = useMemo(() => isExperimentalMoveModeEnabled(), [])
 
     return (
         <group>
@@ -646,7 +648,11 @@ const DistrictSceneContent = () => {
 
             {/* Move mode capture plane — invisible plane that captures pointer events during move */}
             {moveMode?.active && moveMode.phase === 'moving' && (
-                <MoveModeCapturePlane />
+                experimentalMoveModeEnabled
+                    // Future spike path: swap in experimental move-mode implementation here.
+                    ? <MoveModeCapturePlane key="move-capture-experimental" />
+                    // Default path remains unchanged.
+                    : <MoveModeCapturePlane key="move-capture-default" />
             )}
         </group>
     )
