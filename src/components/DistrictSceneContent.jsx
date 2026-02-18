@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from 'react'
+import { useMemo, useCallback, useEffect } from 'react'
 import * as THREE from 'three'
 import { useThree } from '@react-three/fiber'
 import { useStore } from '../store/useStore'
@@ -480,7 +480,7 @@ const EntityRoadModules = ({ lotPositions }) => {
 // that captures pointer events during move mode
 // so user can move the mouse freely in 3D space
 // ============================================
-const MoveModeCapturePlane = () => {
+const MoveModeCapturePlane = ({ experimental = false }) => {
     const moveMode = useStore((s) => s.moveMode)
     const setEntityBuildingPosition = useStore((s) => s.setEntityBuildingPosition)
     const setAnnotationPosition = useStore((s) => s.setAnnotationPosition)
@@ -491,21 +491,30 @@ const MoveModeCapturePlane = () => {
 
     // Get lot offset for building position calculation
     const lotIds = useLotIds()
-    const lotPositions = useMemo(() => {
+    const lotOffsets = useMemo(() => {
         const positions = {}
         let negOffset = 0
         for (let i = 0; i < lotIds.length; i++) {
             const lot = getLotData(lotIds[i])
             const lotWidth = lot?.lotWidth || 50
+            const lotDepth = lot?.lotDepth || 100
             if (i === 0) {
-                positions[lotIds[i]] = lotWidth / 2
+                positions[lotIds[i]] = { x: lotWidth / 2, y: lotDepth / 2 }
             } else {
                 negOffset -= lotWidth
-                positions[lotIds[i]] = negOffset + lotWidth / 2
+                positions[lotIds[i]] = { x: negOffset + lotWidth / 2, y: lotDepth / 2 }
             }
         }
         return positions
     }, [lotIds])
+
+    useEffect(() => {
+        if (!experimental) return
+        return () => {
+            useStore.temporal.getState().resume()
+            if (controls) controls.enabled = true
+        }
+    }, [experimental, controls])
 
     const handlePointerMove = useCallback((e) => {
         if (!moveMode?.active || moveMode.phase !== 'moving' || !moveMode.basePoint) return
@@ -513,9 +522,11 @@ const MoveModeCapturePlane = () => {
         if (!e.ray.intersectPlane(plane, planeIntersectPoint)) return
 
         if (moveMode.targetType === 'building') {
-            const offsetGroupX = lotPositions[moveMode.targetLotId] ?? 0
-            const localX = planeIntersectPoint.x - offsetGroupX
-            const localY = planeIntersectPoint.y
+            const lotOffset = lotOffsets[moveMode.targetLotId] ?? { x: 0, y: 0 }
+            const localX = planeIntersectPoint.x - lotOffset.x
+            const localY = experimental
+                ? planeIntersectPoint.y - lotOffset.y
+                : planeIntersectPoint.y
             const dx = localX - moveMode.basePoint[0]
             const dy = localY - moveMode.basePoint[1]
             const newX = Math.round((moveMode.originalPosition?.[0] ?? 0) + dx)
@@ -531,23 +542,23 @@ const MoveModeCapturePlane = () => {
             ]
             setAnnotationPosition(`lot-${moveMode.targetLotId}-access-${moveMode.targetDirection}`, newPos)
         }
-    }, [moveMode, plane, planeIntersectPoint, lotPositions, setEntityBuildingPosition, setAnnotationPosition])
+    }, [moveMode, plane, planeIntersectPoint, lotOffsets, setEntityBuildingPosition, setAnnotationPosition, experimental])
 
     const handlePointerDown = useCallback((e) => {
         e.stopPropagation()
         useStore.temporal.getState().resume()
-        if (controls) controls.enabled = true
+        if (controls) controls.enabled = true // eslint-disable-line react-hooks/immutability
         exitMoveMode()
     }, [exitMoveMode, controls])
 
     return (
         <mesh
-            position={[0, 0, 200]}
+            position={experimental ? [0, 0, 0] : [0, 0, 200]}
             onPointerMove={handlePointerMove}
             onPointerDown={handlePointerDown}
         >
-            <planeGeometry args={[2000, 2000]} />
-            <meshBasicMaterial visible={false} />
+            <planeGeometry args={[4000, 4000]} />
+            <meshBasicMaterial visible={false} side={THREE.DoubleSide} />
         </mesh>
     )
 }
@@ -650,7 +661,7 @@ const DistrictSceneContent = () => {
             {moveMode?.active && moveMode.phase === 'moving' && (
                 experimentalMoveModeEnabled
                     // Future spike path: swap in experimental move-mode implementation here.
-                    ? <MoveModeCapturePlane key="move-capture-experimental" />
+                    ? <MoveModeCapturePlane key="move-capture-experimental" experimental />
                     // Default path remains unchanged.
                     : <MoveModeCapturePlane key="move-capture-default" />
             )}

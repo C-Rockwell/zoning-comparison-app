@@ -477,7 +477,6 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
 
     // Entity building actions from store
     const selectEntityBuilding = useStore(state => state.selectEntityBuilding)
-    const setEntityBuildingPosition = useStore(state => state.setEntityBuildingPosition)
     const enableEntityBuildingPolygonMode = useStore(state => state.enableEntityBuildingPolygonMode)
     const updateEntityBuildingVertex = useStore(state => state.updateEntityBuildingVertex)
     const splitEntityBuildingEdge = useStore(state => state.splitEntityBuildingEdge)
@@ -618,6 +617,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     scaleFactor={1}
                     onSelect={() => selectEntityBuilding(lotId, 'principal')}
                     offsetGroupX={offset + lotWidth / 2}
+                    offsetGroupY={lotDepth / 2}
                     stories={principal.stories ?? 1}
                     firstFloorHeight={principal.firstFloorHeight ?? 12}
                     upperFloorHeight={principal.upperFloorHeight ?? 10}
@@ -655,6 +655,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     scaleFactor={1}
                     onSelect={() => selectEntityBuilding(lotId, 'accessory')}
                     offsetGroupX={offset + lotWidth / 2}
+                    offsetGroupY={lotDepth / 2}
                     stories={accessory.stories ?? 1}
                     firstFloorHeight={accessory.firstFloorHeight ?? 10}
                     upperFloorHeight={accessory.upperFloorHeight ?? 10}

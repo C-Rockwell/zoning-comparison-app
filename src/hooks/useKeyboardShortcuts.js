@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useStore } from '../store/useStore'
 import * as api from '../services/api'
+import { isExperimentalMoveModeEnabled } from '../utils/featureFlags'
 
 /**
  * Global keyboard shortcuts
@@ -71,10 +72,14 @@ export function useKeyboardShortcuts() {
 
       // M: Enter Move Mode (district module only)
       if ((e.key === 'm' || e.key === 'M') && !isMod) {
-        const { activeModule, moveMode, enterMoveMode } = useStore.getState()
+        const { activeModule, moveMode, enterMoveMode, setProjection, setCameraView } = useStore.getState()
         if (activeModule === 'district' && !moveMode?.active) {
           e.preventDefault()
           enterMoveMode()
+          if (isExperimentalMoveModeEnabled()) {
+            setProjection('orthographic')
+            setCameraView('top')
+          }
           showToast?.('Move mode: click an object to move', 'info')
         }
         return

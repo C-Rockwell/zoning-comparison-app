@@ -12,6 +12,7 @@ import PolygonBuilding from './PolygonBuilding'
 import RoofMesh from './RoofMesh'
 import Dimension from '../Dimension'
 import { formatDimension } from '../../utils/formatUnits'
+import { isExperimentalMoveModeEnabled } from '../../utils/featureFlags'
 
 // Helper function to resolve dimension label based on custom label settings
 const resolveDimensionLabel = (value, dimensionKey, dimensionSettings) => {
@@ -55,6 +56,7 @@ const BuildingEditor = ({
     heightDimensionKey = 'buildingHeight',
     // Layout
     offsetGroupX = 0,
+    offsetGroupY = 0,
     // Callbacks
     onSelect,
     enableBuildingPolygonMode,
@@ -73,6 +75,7 @@ const BuildingEditor = ({
     const moveMode = useStore((s) => s.moveMode)
     const setMoveTarget = useStore((s) => s.setMoveTarget)
     const setMoveBasePoint = useStore((s) => s.setMoveBasePoint)
+    const experimentalMoveModeEnabled = useMemo(() => isExperimentalMoveModeEnabled(), [])
     // Is this building the current move target?
     const isMoveModeTarget = moveMode?.active && moveMode.targetType === 'building' && moveMode.targetLotId === model && moveMode.targetBuildingType === buildingType
 
@@ -159,6 +162,15 @@ const BuildingEditor = ({
         // Move mode: select base point phase
         if (moveMode?.active && moveMode.phase === 'selectBase' && isMoveModeTarget) {
             e.stopPropagation()
+            if (experimentalMoveModeEnabled) {
+                if (!e.ray.intersectPlane(plane, planeIntersectPoint)) return
+                const localX = planeIntersectPoint.x - offsetGroupX
+                const localY = planeIntersectPoint.y - offsetGroupY
+                setMoveBasePoint([localX, localY], [x, y])
+                useStore.temporal.getState().pause()
+                if (controls) controls.enabled = false // eslint-disable-line react-hooks/immutability
+                return
+            }
             if (e.ray.intersectPlane(plane, planeIntersectPoint)) {
                 const localX = planeIntersectPoint.x - offsetGroupX
                 const localY = planeIntersectPoint.y

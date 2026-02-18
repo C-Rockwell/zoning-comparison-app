@@ -2,6 +2,7 @@ import { useState, useMemo, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useStore } from '../store/useStore'
+import { isExperimentalMoveModeEnabled } from '../utils/featureFlags'
 
 /**
  * Creates a 2D arrow silhouette (shaft + triangular arrowhead) pointing in +Y.
@@ -120,6 +121,7 @@ const LotAccessArrow = ({
     const setMoveTarget = useStore((s) => s.setMoveTarget)
     const setMoveBasePoint = useStore((s) => s.setMoveBasePoint)
     const exitMoveMode = useStore((s) => s.exitMoveMode)
+    const experimentalMoveModeEnabled = useMemo(() => isExperimentalMoveModeEnabled(), [])
     const isMoveModeTarget = moveMode?.active && moveMode.targetType === 'lotAccessArrow' && moveMode.targetLotId === lotId && moveMode.targetDirection === direction
 
     // Drag on Z=0 ground plane
@@ -175,6 +177,11 @@ const LotAccessArrow = ({
 
     // Drag handlers (following DraggableLabel pattern)
     const handlePointerDown = (e) => {
+        if (experimentalMoveModeEnabled && moveMode?.active && moveMode.phase === 'moving') {
+            // In experimental mode, finalize placement through shared capture plane.
+            return
+        }
+
         e.stopPropagation()
 
         // Move mode: select object phase
@@ -185,6 +192,17 @@ const LotAccessArrow = ({
 
         // Move mode: select base point phase
         if (moveMode?.active && moveMode.phase === 'selectBase' && isMoveModeTarget) {
+            if (experimentalMoveModeEnabled) {
+                if (!e.ray.intersectPlane(plane, planeIntersectPoint.current)) return
+                setMoveBasePoint(
+                    [planeIntersectPoint.current.x, planeIntersectPoint.current.y],
+                    [...position]
+                )
+                useStore.temporal.getState().pause()
+                if (controls) controls.enabled = false // eslint-disable-line react-hooks/immutability
+                e.target.setPointerCapture(e.pointerId)
+                return
+            }
             if (e.ray.intersectPlane(plane, planeIntersectPoint.current)) {
                 setMoveBasePoint(
                     [planeIntersectPoint.current.x, planeIntersectPoint.current.y],
@@ -206,8 +224,10 @@ const LotAccessArrow = ({
             return
         }
 
+        if (moveMode?.active) return
+
         // Normal drag
-        if (controls) controls.enabled = false // eslint-disable-line react-hooks/immutability
+        if (controls) controls.enabled = false
         setDragging(true)
         useStore.temporal.getState().pause()
         e.target.setPointerCapture(e.pointerId)
@@ -233,7 +253,9 @@ const LotAccessArrow = ({
 
     const handlePointerMove = (e) => {
         // Move mode: moving phase
-        if (moveMode?.active && moveMode.phase === 'moving' && isMoveModeTarget && moveMode.basePoint) {
+        if (moveMode?.active && moveMode.phase === 'moving') {
+            if (experimentalMoveModeEnabled) return
+            if (!isMoveModeTarget || !moveMode.basePoint) return
             e.stopPropagation()
             if (!e.ray.intersectPlane(plane, planeIntersectPoint.current)) return
             const dx = planeIntersectPoint.current.x - moveMode.basePoint[0]
