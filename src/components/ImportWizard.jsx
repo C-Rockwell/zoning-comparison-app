@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef } from 'react'
 import { Upload, FileText, ArrowRight, ArrowLeft, Check, X, AlertCircle } from 'lucide-react'
 import { useStore } from '../store/useStore'
-import { parseCSV, APP_FIELDS, DISTRICT_FIELDS, autoMatchHeaders, applyMapping, applyDistrictMapping } from '../utils/importParser'
+import { parseCSV, APP_FIELDS, DISTRICT_FIELDS, autoMatchHeaders, applyMapping, parseAllDistrictRows } from '../utils/importParser'
+import * as api from '../services/api'
 
 /**
  * ImportWizard - A 3-step modal for importing CSV data into the entity lot system.
@@ -15,6 +16,9 @@ import { parseCSV, APP_FIELDS, DISTRICT_FIELDS, autoMatchHeaders, applyMapping, 
 const ImportWizard = ({ isOpen, onClose }) => {
   const addLot = useStore(state => state.addLot)
   const setDistrictParameter = useStore(state => state.setDistrictParameter)
+  const currentProject = useStore(state => state.currentProject)
+  const setScenarios = useStore(state => state.setScenarios)
+  const getSnapshotData = useStore(state => state.getSnapshotData)
 
   // Wizard state
   const [step, setStep] = useState(1)
@@ -155,11 +159,11 @@ const ImportWizard = ({ isOpen, onClose }) => {
     }))
   }, [])
 
-  // Get mapped data preview — lots array or district params object
+  // Get mapped data preview — lots array or district scenarios array
   const getMappedData = useCallback(() => {
     if (importType === 'district') {
-      if (rows.length === 0) return {}
-      return applyDistrictMapping(rows[0], mapping)
+      if (rows.length === 0) return []
+      return parseAllDistrictRows(rows, mapping)
     }
     return applyMapping(rows, mapping)
   }, [rows, mapping, importType])
@@ -168,18 +172,51 @@ const ImportWizard = ({ isOpen, onClose }) => {
   // Import Handler
   // ============================================
 
-  const handleImport = useCallback(() => {
+  const handleImport = useCallback(async () => {
     const data = getMappedData()
 
     if (importType === 'district') {
-      if (!data || Object.keys(data).length === 0) {
+      if (!data || data.length === 0) {
         setError('No valid district parameters to import.')
         return
       }
-      for (const [path, value] of Object.entries(data)) {
-        setDistrictParameter(path, value)
+
+      if (currentProject) {
+        // Save each district as a scenario on the backend
+        try {
+          const baseState = getSnapshotData()
+          for (const district of data) {
+            await api.saveScenario(currentProject.id, district.name, {
+              code: district.code,
+              // Merge the imported districtParameters over the current base state
+              ...baseState,
+              districtParameters: {
+                ...baseState.districtParameters,
+                ...Object.fromEntries(
+                  Object.entries(district.districtParameters).reduce((acc, [dotPath, value]) => {
+                    acc.push([dotPath, value])
+                    return acc
+                  }, [])
+                ),
+              },
+            })
+          }
+          // Refresh scenario list in store
+          const updatedList = await api.listScenarios(currentProject.id)
+          setScenarios(updatedList)
+          setImportCount(data.length)
+        } catch (err) {
+          setError(`Failed to save scenarios: ${err.message}`)
+          return
+        }
+      } else {
+        // No project open — import first district's params directly into store
+        const first = data[0]
+        for (const [path, value] of Object.entries(first.districtParameters)) {
+          setDistrictParameter(path, value)
+        }
+        setImportCount(1)
       }
-      setImportCount(Object.keys(data).length)
     } else {
       if (!data || data.length === 0) {
         setError('No valid data to import. Check your field mapping.')
@@ -191,7 +228,7 @@ const ImportWizard = ({ isOpen, onClose }) => {
       setImportCount(data.length)
     }
     setImported(true)
-  }, [getMappedData, addLot, setDistrictParameter, importType])
+  }, [getMappedData, addLot, setDistrictParameter, importType, currentProject, getSnapshotData, setScenarios])
 
   // ============================================
   // Reset / Close
@@ -258,8 +295,8 @@ const ImportWizard = ({ isOpen, onClose }) => {
   // Count how many columns are mapped
   const mappedCount = Object.values(mapping).filter(v => v !== null).length
 
-  // Preview data for step 3
-  const previewData = step === 3 ? getMappedData() : (importType === 'district' ? {} : [])
+  // Preview data for step 3 — always an array (districts or lots)
+  const previewData = step === 3 ? getMappedData() : []
 
   // Get all field keys that are mapped (for lot preview table columns)
   const mappedFieldKeys = step === 3
@@ -591,14 +628,16 @@ const ImportWizard = ({ isOpen, onClose }) => {
           {/* Step 3: Preview & Import */}
           {step === 3 && !imported && importType === 'district' && (
             <div>
-              <p className="text-sm mb-4" style={{ color: 'var(--ui-text-secondary)' }}>
-                {Object.keys(previewData).length === 0
-                  ? 'No valid parameters found. Go back and adjust your field mapping.'
-                  : `Ready to import ${Object.keys(previewData).length} district parameter${Object.keys(previewData).length !== 1 ? 's' : ''}:`
+              <p className="text-sm mb-3" style={{ color: 'var(--ui-text-secondary)' }}>
+                {previewData.length === 0
+                  ? 'No valid district rows found. Go back and adjust your field mapping.'
+                  : currentProject
+                    ? `Ready to create ${previewData.length} district scenario${previewData.length !== 1 ? 's' : ''} in this project:`
+                    : `No project open — only the first district will be imported into the current state.`
                 }
               </p>
 
-              {Object.keys(previewData).length > 0 && (
+              {previewData.length > 0 && (
                 <div
                   className="rounded border overflow-y-auto max-h-60 mb-4"
                   style={{ borderColor: 'var(--ui-border)' }}
@@ -606,18 +645,20 @@ const ImportWizard = ({ isOpen, onClose }) => {
                   <table className="w-full text-xs">
                     <thead>
                       <tr style={{ backgroundColor: 'var(--ui-bg-tertiary)' }}>
-                        <th className="text-left px-2 py-1.5 font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Parameter</th>
-                        <th className="text-right px-2 py-1.5 font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Value</th>
+                        <th className="text-left px-2 py-1.5 font-medium" style={{ color: 'var(--ui-text-secondary)' }}>#</th>
+                        <th className="text-left px-2 py-1.5 font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Name</th>
+                        <th className="text-left px-2 py-1.5 font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Code</th>
+                        <th className="text-right px-2 py-1.5 font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Params</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {Object.entries(previewData).map(([path, value]) => (
-                        <tr key={path} className="border-t" style={{ borderColor: 'var(--ui-border)' }}>
-                          <td className="px-2 py-1" style={{ color: 'var(--ui-text-primary)' }}>
-                            {getFieldLabel(path)}
-                          </td>
-                          <td className="px-2 py-1 text-right" style={{ color: 'var(--ui-text-primary)' }}>
-                            {typeof value === 'boolean' ? (value ? 'Yes' : 'No') : value}
+                      {previewData.map((district, i) => (
+                        <tr key={i} className="border-t" style={{ borderColor: 'var(--ui-border)' }}>
+                          <td className="px-2 py-1" style={{ color: 'var(--ui-text-secondary)' }}>{i + 1}</td>
+                          <td className="px-2 py-1 font-medium" style={{ color: 'var(--ui-text-primary)' }}>{district.name}</td>
+                          <td className="px-2 py-1" style={{ color: 'var(--ui-text-secondary)' }}>{district.code || '—'}</td>
+                          <td className="px-2 py-1 text-right" style={{ color: 'var(--ui-text-secondary)' }}>
+                            {Object.keys(district.districtParameters).length}
                           </td>
                         </tr>
                       ))}
@@ -707,7 +748,9 @@ const ImportWizard = ({ isOpen, onClose }) => {
               </p>
               <p className="text-sm" style={{ color: 'var(--ui-text-secondary)' }}>
                 {importType === 'district'
-                  ? `Successfully imported ${importCount} district parameter${importCount !== 1 ? 's' : ''}.`
+                  ? currentProject
+                    ? `Successfully created ${importCount} district scenario${importCount !== 1 ? 's' : ''}.`
+                    : `Imported district parameters into current state.`
                   : `Successfully created ${importCount} lot${importCount !== 1 ? 's' : ''}.`
                 }
               </p>
@@ -761,11 +804,9 @@ const ImportWizard = ({ isOpen, onClose }) => {
             )}
 
             {step === 3 && !imported && (() => {
-              const count = importType === 'district'
-                ? Object.keys(previewData).length
-                : previewData.length
+              const count = previewData.length
               const label = importType === 'district'
-                ? `Import ${count} Parameter${count !== 1 ? 's' : ''}`
+                ? `Create ${count} Scenario${count !== 1 ? 's' : ''}`
                 : `Import ${count} Lot${count !== 1 ? 's' : ''}`
               return (
                 <button

@@ -67,6 +67,7 @@ const BuildingEditor = ({
     onBuildingMove,
 }) => {
     const { faces, edges } = styles
+    const maxHeightDimKey = buildingType === 'principal' ? 'principalMaxHeight' : 'accessoryMaxHeight'
     const [hovered, setHovered] = useState(false)
     const { controls } = useThree()
     const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), [])
@@ -366,7 +367,25 @@ const BuildingEditor = ({
                 visible={showHeightDimensions}
                 settings={dimensionSettings}
                 lineScale={lineScale}
+                plane="XZ"
+                textMode="billboard"
             />
+
+            {/* Max height dimension — offset further out, only when maxHeight is set */}
+            {showHeightDimensions && maxHeight > 0 && (
+                <Dimension
+                    start={dimStart}
+                    end={[dimStart[0], dimStart[1], maxHeight]}
+                    label={resolveDimensionLabel(maxHeight, maxHeightDimKey, dimensionSettings)}
+                    offset={20}
+                    color="black"
+                    visible={true}
+                    settings={dimensionSettings}
+                    lineScale={lineScale}
+                    plane="XZ"
+                    textMode="billboard"
+                />
+            )}
 
             {/* ============================================ */}
             {/* Selection Handles (shown when selected) */}

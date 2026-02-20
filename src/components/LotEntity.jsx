@@ -1,7 +1,7 @@
 import { Line } from '@react-three/drei'
 import * as THREE from 'three'
 import { useStore } from '../store/useStore'
-import { useLot, useLotStyle, useLotVisibility } from '../hooks/useEntityStore'
+import { useLot, useLotStyle, useLotVisibility, useDistrictParameters } from '../hooks/useEntityStore'
 import Dimension from './Dimension'
 import LotEditor from './LotEditor'
 import BuildingEditor from './BuildingEditor'
@@ -99,7 +99,7 @@ const RectLot = ({ width, depth, style, fillStyle, showWidthDimensions = false, 
             <Dimension
                 start={p1} end={p2}
                 label={resolveDimensionLabel(width, 'lotWidth', dimensionSettings)}
-                offset={-15}
+                offset={-(dimensionSettings.lotDimOffset ?? 15)}
                 color="black"
                 visible={showWidthDimensions}
                 settings={dimensionSettings}
@@ -110,7 +110,7 @@ const RectLot = ({ width, depth, style, fillStyle, showWidthDimensions = false, 
             <Dimension
                 start={p3} end={p2}
                 label={resolveDimensionLabel(depth, 'lotDepth', dimensionSettings)}
-                offset={15}
+                offset={dimensionSettings.lotDimOffset ?? 15}
                 color="black"
                 visible={showDepthDimensions}
                 settings={dimensionSettings}
@@ -163,7 +163,7 @@ const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, s
                     start={[0, -lotDepth / 2, 0.1]}
                     end={[0, y1, 0.1]}
                     label={resolveDimensionLabel(front, 'setbackFront', dimensionSettings)}
-                    offset={5}
+                    offset={dimensionSettings.setbackDimOffset ?? 5}
                     color={style.color || 'red'}
                     visible={showDimensions}
                     settings={dimensionSettings}
@@ -176,7 +176,7 @@ const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, s
                     start={[0, y2, 0.1]}
                     end={[0, lotDepth / 2, 0.1]}
                     label={resolveDimensionLabel(rear, 'setbackRear', dimensionSettings)}
-                    offset={5}
+                    offset={dimensionSettings.setbackDimOffset ?? 5}
                     color={style.color || 'red'}
                     visible={showDimensions}
                     settings={dimensionSettings}
@@ -189,7 +189,7 @@ const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, s
                     start={[-lotWidth / 2, 0, 0.1]}
                     end={[x1, 0, 0.1]}
                     label={resolveDimensionLabel(leftValue, 'setbackLeft', dimensionSettings)}
-                    offset={5}
+                    offset={dimensionSettings.setbackDimOffset ?? 5}
                     color={style.color || 'red'}
                     visible={showDimensions}
                     settings={dimensionSettings}
@@ -202,7 +202,7 @@ const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, s
                     start={[x2, 0, 0.1]}
                     end={[lotWidth / 2, 0, 0.1]}
                     label={resolveDimensionLabel(rightValue, 'setbackRight', dimensionSettings)}
-                    offset={5}
+                    offset={dimensionSettings.setbackDimOffset ?? 5}
                     color={style.color || 'red'}
                     visible={showDimensions}
                     settings={dimensionSettings}
@@ -475,6 +475,11 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
     const exportLineScale = useStore(state => state.viewSettings.exportLineScale) || 1
     const layers = useStore(state => state.viewSettings.layers)
 
+    // District parameters (max height source of truth)
+    const districtParameters = useDistrictParameters()
+    const principalMaxHeight = districtParameters?.structures?.principal?.height?.max ?? 0
+    const accessoryMaxHeight = districtParameters?.structures?.accessory?.height?.max ?? 0
+
     // Entity building actions from store
     const selectEntityBuilding = useStore(state => state.selectEntityBuilding)
     const setEntityBuildingPosition = useStore(state => state.setEntityBuildingPosition)
@@ -622,8 +627,8 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     stories={principal.stories ?? 1}
                     firstFloorHeight={principal.firstFloorHeight ?? 12}
                     upperFloorHeight={principal.upperFloorHeight ?? 10}
-                    maxHeight={principal.maxHeight ?? 30}
-                    showMaxHeightPlane={(layers.maxHeightPlanePrincipal ?? layers.maxHeightPlane) && (visibility.maxHeightPlanePrincipal ?? visibility.maxHeightPlane)}
+                    maxHeight={principalMaxHeight}
+                    showMaxHeightPlane={layers.maxHeightPlane && (visibility.maxHeightPlanePrincipal ?? visibility.maxHeightPlane)}
                     maxHeightPlaneStyle={style.maxHeightPlane}
                     roof={principal.roof}
                     roofStyles={{ roofFaces: style.roofFaces, roofEdges: style.roofEdges }}
@@ -661,8 +666,8 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     stories={accessory.stories ?? 1}
                     firstFloorHeight={accessory.firstFloorHeight ?? 10}
                     upperFloorHeight={accessory.upperFloorHeight ?? 10}
-                    maxHeight={accessory.maxHeight ?? 15}
-                    showMaxHeightPlane={(layers.maxHeightPlaneAccessory ?? layers.maxHeightPlane) && (visibility.maxHeightPlaneAccessory ?? visibility.maxHeightPlane)}
+                    maxHeight={accessoryMaxHeight}
+                    showMaxHeightPlane={layers.maxHeightPlane && (visibility.maxHeightPlaneAccessory ?? visibility.maxHeightPlane)}
                     maxHeightPlaneStyle={style.maxHeightPlane}
                     roof={accessory.roof}
                     roofStyles={{ roofFaces: style.roofFaces, roofEdges: style.roofEdges }}

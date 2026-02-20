@@ -1,18 +1,17 @@
 import { useState, useCallback } from 'react'
 import { Text, Line, Billboard } from '@react-three/drei'
 import * as THREE from 'three'
+import { DIMENSION_FONT_OPTIONS } from '../store/useStore'
 
 /**
  * Compute perpendicular vector for offset based on dimension plane.
- * @param {number} ux - Normalized direction X
- * @param {number} uy - Normalized direction Y
- * @param {number} uz - Normalized direction Z
- * @param {string} plane - 'XY' | 'XZ' | 'YZ' | 'auto'
- * @param {number} dx - Raw direction delta X
- * @param {number} dy - Raw direction delta Y
- * @param {number} dz - Raw direction delta Z
+ * When verticalMode is true, perpendicular is always +Z.
  */
-const computePerpendicular = (ux, uy, uz, plane, dx, dy, dz) => {
+const computePerpendicular = (ux, uy, uz, plane, dx, dy, dz, verticalMode) => {
+    if (verticalMode) {
+        // Vertical mode: offset goes straight up (+Z)
+        return { px: 0, py: 0, pz: 1 }
+    }
     if (plane === 'XZ') {
         // Elevation/front view — perpendicular in XZ plane
         return { px: -uz, py: 0, pz: ux }
@@ -31,14 +30,14 @@ const computePerpendicular = (ux, uy, uz, plane, dx, dy, dz) => {
             return { px: 0, py: -uz, pz: uy } // YZ
         }
     }
-    // Default: XY plane (plan view) — current behavior
+    // Default: XY plane (plan view)
     return { px: -uy, py: ux, pz: 0 }
 }
 
 const Dimension = ({
     start, end, label, offset = 0, color = "black",
     visible = true, flipText = false, settings = {}, lineScale = 1,
-    // New enhanced props (all optional, backward-compatible)
+    // Enhanced props (all optional, backward-compatible)
     plane = 'XY',                   // 'XY' | 'XZ' | 'YZ' | 'auto'
     textMode,                       // 'follow-line' | 'billboard' — overrides settings.textMode
     textBackground,                 // { enabled, color, opacity, padding } — overrides settings.textBackground
@@ -48,7 +47,7 @@ const Dimension = ({
     // WYSIWYG dampened scale
     const dampenedScale = Math.pow(lineScale, 0.15)
 
-    // Defaults from settings or fallback
+    // Resolve base settings
     const lineColor = settings.lineColor || color
     const textColor = settings.textColor || lineColor
     const baseLineWidth = settings.lineWidth || 1
@@ -57,6 +56,20 @@ const Dimension = ({
     const endMarker = settings.endMarker || 'tick'
     const resolvedTextMode = textMode || settings.textMode || 'follow-line'
     const resolvedBackground = textBackground || settings.textBackground || null
+
+    // New: separate extension line styling
+    const extColor = settings.extensionLineColor ?? lineColor
+    const extDashed = settings.extensionLineStyle !== 'solid'
+
+    // New: separate marker styling
+    const markerColor = settings.markerColor ?? lineColor
+    const resolvedMarkerScale = settings.markerScale ?? 1.0
+
+    // New: font resolution (fontFamily → URL via DIMENSION_FONT_OPTIONS)
+    const fontUrl = DIMENSION_FONT_OPTIONS.find(f => f.label === settings.fontFamily)?.url ?? settings.font
+
+    // New: vertical mode
+    const verticalMode = settings.verticalMode ?? false
 
     // Direction vector
     const dx = end[0] - start[0]
@@ -70,8 +83,8 @@ const Dimension = ({
     const uy = dy / length
     const uz = dz / length
 
-    // Perpendicular vector based on plane
-    const { px, py, pz } = computePerpendicular(ux, uy, uz, plane, dx, dy, dz)
+    // Perpendicular vector based on plane (or vertical mode)
+    const { px, py, pz } = computePerpendicular(ux, uy, uz, plane, dx, dy, dz, verticalMode)
 
     // Apply offset
     const ox = px * offset
@@ -86,8 +99,8 @@ const Dimension = ({
     const my = (s[1] + e[1]) / 2
     const mz = (s[2] + e[2]) / 2
 
-    // Marker sizing
-    const markerScale = Math.max(1.5, baseLineWidth * 0.8) * dampenedScale
+    // Marker sizing (with user scale multiplier)
+    const markerScale = Math.max(1.5, baseLineWidth * 0.8) * dampenedScale * resolvedMarkerScale
     const tickSize = 1 * markerScale
     const tx = px * tickSize
     const ty = py * tickSize
@@ -96,7 +109,7 @@ const Dimension = ({
     const linePoints = [s, e]
     const showExtensions = Math.abs(offset) > 0.1
 
-    // Text rotation (follow-line mode)
+    // Text rotation (follow-line mode) — uses XY angle only for plan view
     const angle = Math.atan2(dy, dx)
     const textAngle = (angle > Math.PI / 2 || angle <= -Math.PI / 2) ? angle + Math.PI : angle
 
@@ -136,6 +149,7 @@ const Dimension = ({
             outlineWidth: fontSize * (settings.outlineWidth ?? 0.1),
             outlineColor: settings.outlineColor || "white",
             onSync: bg ? handleSync : undefined,
+            ...(fontUrl ? { font: fontUrl } : {}),
         }
 
         const bgMesh = bg && textBounds ? (
@@ -181,19 +195,19 @@ const Dimension = ({
             {/* End Markers */}
             {endMarker === 'tick' && (
                 <>
-                    <Line points={[[s[0] - tx / 2, s[1] - ty / 2, s[2] - tz / 2], [s[0] + tx / 2, s[1] + ty / 2, s[2] + tz / 2]]} color={lineColor} lineWidth={lineWidth} />
-                    <Line points={[[e[0] - tx / 2, e[1] - ty / 2, e[2] - tz / 2], [e[0] + tx / 2, e[1] + ty / 2, e[2] + tz / 2]]} color={lineColor} lineWidth={lineWidth} />
+                    <Line points={[[s[0] - tx / 2, s[1] - ty / 2, s[2] - tz / 2], [s[0] + tx / 2, s[1] + ty / 2, s[2] + tz / 2]]} color={markerColor} lineWidth={lineWidth} />
+                    <Line points={[[e[0] - tx / 2, e[1] - ty / 2, e[2] - tz / 2], [e[0] + tx / 2, e[1] + ty / 2, e[2] + tz / 2]]} color={markerColor} lineWidth={lineWidth} />
                 </>
             )}
             {endMarker === 'dot' && (
                 <>
                     <mesh position={s}>
                         <sphereGeometry args={[dotSize]} />
-                        <meshBasicMaterial color={lineColor} />
+                        <meshBasicMaterial color={markerColor} />
                     </mesh>
                     <mesh position={e}>
                         <sphereGeometry args={[dotSize]} />
-                        <meshBasicMaterial color={lineColor} />
+                        <meshBasicMaterial color={markerColor} />
                     </mesh>
                 </>
             )}
@@ -202,13 +216,13 @@ const Dimension = ({
                     <group position={s} rotation={[0, 0, angle + Math.PI]}>
                         <mesh position={[-arrowLength / 2, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
                             <coneGeometry args={[arrowWidth, arrowLength, 8]} />
-                            <meshBasicMaterial color={lineColor} />
+                            <meshBasicMaterial color={markerColor} />
                         </mesh>
                     </group>
                     <group position={e} rotation={[0, 0, angle]}>
                         <mesh position={[-arrowLength / 2, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
                             <coneGeometry args={[arrowWidth, arrowLength, 8]} />
-                            <meshBasicMaterial color={lineColor} />
+                            <meshBasicMaterial color={markerColor} />
                         </mesh>
                     </group>
                 </>
@@ -217,8 +231,20 @@ const Dimension = ({
             {/* Extension Lines */}
             {showExtensions && (
                 <>
-                    <Line points={[[start[0], start[1], start[2]], [s[0], s[1], s[2]]]} color={lineColor} lineWidth={lineWidth * (settings.extensionWidth ?? 0.5)} dashed dashScale={2} />
-                    <Line points={[[end[0], end[1], end[2]], [e[0], e[1], e[2]]]} color={lineColor} lineWidth={lineWidth * (settings.extensionWidth ?? 0.5)} dashed dashScale={2} />
+                    <Line
+                        points={[[start[0], start[1], start[2]], [s[0], s[1], s[2]]]}
+                        color={extColor}
+                        lineWidth={lineWidth * (settings.extensionWidth ?? 0.5)}
+                        dashed={extDashed}
+                        dashScale={extDashed ? 2 : 0}
+                    />
+                    <Line
+                        points={[[end[0], end[1], end[2]], [e[0], e[1], e[2]]]}
+                        color={extColor}
+                        lineWidth={lineWidth * (settings.extensionWidth ?? 0.5)}
+                        dashed={extDashed}
+                        dashScale={extDashed ? 2 : 0}
+                    />
                 </>
             )}
 

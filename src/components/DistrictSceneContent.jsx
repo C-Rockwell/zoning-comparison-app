@@ -465,6 +465,7 @@ const EntityRoadModules = ({ lotPositions }) => {
                                 road={road}
                                 spanWidth={spanWidth}
                                 lineScale={exportLineScale}
+                                direction={dir}
                             />
                         </group>
                     </group>

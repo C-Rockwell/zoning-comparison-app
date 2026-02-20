@@ -108,7 +108,7 @@
 |------|-------|---------|
 | `src/components/LotAnnotations.jsx` | ~250 | Lot/setback/building labels |
 | `src/components/RoadAnnotations.jsx` | ~232 | Road name + zone labels |
-| `src/components/Dimension.jsx` | ~231 | Dimension line with text + background |
+| `src/components/Dimension.jsx` | ~240 | Dimension line with text + background; supports markerColor/Scale, extensionLineColor/Style, fontFamily, verticalMode |
 | `src/components/DraggableLabel.jsx` | ~171 | Drag-to-reposition with leader line |
 | `src/components/AngularDimension.jsx` | ~154 | Arc dimension for angles |
 | `src/components/AnnotationText.jsx` | ~143 | Shared text renderer (billboard/follow-line/fixed) |
@@ -149,12 +149,13 @@
 ### Server
 | File | Lines | Purpose |
 |------|-------|---------|
-| `server/index.js` | 71 | Express setup, CORS, port 3001 |
+| `server/index.js` | 74 | Express setup, CORS, port 3001 |
 | `server/routes/config.js` | 55 | GET/PUT projects directory |
-| `server/routes/projects.js` | 188 | Project CRUD |
+| `server/routes/projects.js` | 191 | Project CRUD (creates snapshots/, layer-states/, scenarios/ on new project) |
 | `server/routes/exports.js` | 161 | Export file management |
 | `server/routes/snapshots.js` | 152 | Full-state snapshots |
 | `server/routes/layer-states.js` | 152 | Style-only snapshots |
+| `server/routes/scenarios.js` | ~145 | District scenario CRUD (auto-creates scenarios/ folder for legacy projects) |
 
 ---
 
@@ -324,6 +325,13 @@
 | `exitMoveMode` | ~2570 | `()` — clear all move state |
 | `setMoveTarget` | ~2580 | `(type, lotId, buildingType\|direction)` |
 | `setMoveBasePoint` | ~2590 | `(point)` — [x, y] base reference |
+
+### Scenarios
+
+| Action | ~Line | Signature |
+|--------|-------|-----------|
+| `setScenarios` | ~2900 | `(list)` — set metadata list from API |
+| `setActiveScenario` | ~2901 | `(name)` — set active district name |
 
 ### Auto-Save & UI
 | Action | ~Line | Signature |

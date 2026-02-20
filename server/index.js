@@ -11,6 +11,8 @@ import projectsRoutes from './routes/projects.js'
 import exportsRoutes from './routes/exports.js'
 import snapshotsRoutes from './routes/snapshots.js'
 import layerStatesRoutes from './routes/layer-states.js'
+import stylePresetsRoutes from './routes/style-presets.js'
+import scenariosRoutes from './routes/scenarios.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -53,6 +55,8 @@ app.use('/api/projects', projectsRoutes)
 app.use('/api/projects', exportsRoutes)
 app.use('/api/projects', snapshotsRoutes)
 app.use('/api/projects', layerStatesRoutes)
+app.use('/api/style-presets', stylePresetsRoutes)
+app.use('/api/projects', scenariosRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {

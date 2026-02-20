@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useStore } from '../store/useStore'
+import { useStore, DIMENSION_FONT_OPTIONS } from '../store/useStore'
 import { useShallow } from 'zustand/react/shallow'
 import DraggableLabel from './DraggableLabel'
 
@@ -21,12 +21,14 @@ const LotAnnotations = ({
     lotCenter = [0, 0],
     lineScale = 1,
 }) => {
-    const { annotationSettings, annotationPositions, setAnnotationPosition, layers } = useStore(
+    const { annotationSettings, annotationPositions, setAnnotationPosition, layers, annotationCustomLabels, setAnnotationCustomLabel } = useStore(
         useShallow((state) => ({
             annotationSettings: state.annotationSettings,
             annotationPositions: state.annotationPositions,
             setAnnotationPosition: state.setAnnotationPosition,
             layers: state.viewSettings?.layers,
+            annotationCustomLabels: state.annotationCustomLabels,
+            setAnnotationCustomLabel: state.setAnnotationCustomLabel,
         }))
     )
 
@@ -43,8 +45,9 @@ const LotAnnotations = ({
             opacity: annotationSettings.backgroundOpacity,
             padding: 0.3,
         },
-        outlineColor: '#ffffff',
-        outlineWidth: 0.15,
+        font: DIMENSION_FONT_OPTIONS.find(f => f.label === annotationSettings.fontFamily)?.url,
+        outlineColor: annotationSettings.outlineColor,
+        outlineWidth: annotationSettings.outlineWidth,
         leaderLineSettings: {
             color: annotationSettings.leaderLineColor,
             width: annotationSettings.leaderLineWidth,
@@ -173,13 +176,18 @@ const LotAnnotations = ({
         })
     }
 
+    const lotNameText = (() => {
+        const cl = annotationCustomLabels?.[`lot-${lotId}-name`]
+        return (cl?.mode === 'custom' && cl.text) ? cl.text : `Lot ${lotIndex}`
+    })()
+
     return (
         <group>
             {/* Lot Name */}
             {layers.labelLotNames && (
                 <DraggableLabel
                     {...sharedProps}
-                    text={`Lot ${lotIndex}`}
+                    text={lotNameText}
                     fontSize={baseFontSize * 1.3}
                     defaultPosition={lotNameDefault}
                     anchorPoint={[lotWidth / 2, lotDepth / 2, 0]}

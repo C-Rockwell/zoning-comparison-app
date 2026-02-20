@@ -3,6 +3,18 @@ import { persist } from 'zustand/middleware'
 import { temporal } from 'zundo'
 
 // ============================================
+// Dimension Font Options
+// ============================================
+export const DIMENSION_FONT_OPTIONS = [
+    { label: 'Inter', url: 'https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hjp-Ek-_EeA.woff' },
+    { label: 'Roboto', url: 'https://fonts.gstatic.com/s/roboto/v51/KFOMCnqEu92Fr1ME7kSn66aGLdTylUAMQXC89YmC2DPNWubEbVmUiA8.ttf' },
+    { label: 'Lato', url: 'https://fonts.gstatic.com/s/lato/v24/S6uyw4BMUTPHjx4wWA.woff' },
+    { label: 'Montserrat', url: 'https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCtr6Hw5aX8.ttf' },
+    { label: 'Oswald', url: 'https://fonts.gstatic.com/s/oswald/v57/TK3_WkUHHAIjg75cFRf3bXL8LICs1_FvsUZiYA.ttf' },
+    { label: 'Source Sans', url: 'https://fonts.gstatic.com/s/sourcesans3/v19/nwpBtKy2OAdR1K-IwhWudF-R9QMylBJAV3Bo8Ky462EK9C4.ttf' },
+]
+
+// ============================================
 // Polygon Geometry Utility Functions
 // ============================================
 
@@ -394,7 +406,10 @@ export const useStore = create(
                 annotationSettings: {
                     textRotation: 'billboard',   // 'follow-line' | 'billboard' | 'fixed'
                     fontSize: 1.5,
+                    fontFamily: null,            // null = browser default; otherwise URL from DIMENSION_FONT_OPTIONS
                     textColor: '#000000',
+                    outlineColor: '#ffffff',
+                    outlineWidth: 0.15,
                     backgroundColor: '#ffffff',
                     backgroundOpacity: 0.85,
                     backgroundEnabled: true,
@@ -402,6 +417,14 @@ export const useStore = create(
                     leaderLineWidth: 1,
                     leaderLineDashed: false,
                     unitFormat: 'feet',          // 'feet' | 'feet-inches' | 'meters'
+                },
+                annotationCustomLabels: {
+                    // Road labels keyed by direction: { mode: 'default'|'custom', text: '' }
+                    roadFront: { mode: 'default', text: '' },
+                    roadRight: { mode: 'default', text: '' },
+                    roadRear:  { mode: 'default', text: '' },
+                    roadLeft:  { mode: 'default', text: '' },
+                    // Lot labels added dynamically: lot-{lotId}-name: { mode: 'default', text: '' }
                 },
                 annotationPositions: {},  // { [annotationId]: [x, y, z] | null }
 
@@ -748,7 +771,21 @@ export const useStore = create(
                             autoStack: true,           // Auto-offset parallel dimensions
                             stackGap: 8,               // Gap between stacked dimensions
                             unitFormat: 'feet',        // 'feet' | 'feet-inches' | 'meters'
-                            draggableText: false,      // Allow dragging dimension text
+                            draggableText: false,      // Allow dragging dimension text (future)
+                            // Extension line separate styling
+                            extensionLineColor: null,  // null = inherit lineColor
+                            extensionLineStyle: 'dashed', // 'solid' | 'dashed'
+                            // Marker separate styling
+                            markerColor: null,         // null = inherit lineColor
+                            markerScale: 1.0,          // multiplier on marker sizing
+                            // Font choice (resolved to URL in Dimension.jsx)
+                            fontFamily: 'Inter',       // 'Inter' | 'Roboto' | 'Lato' | 'Montserrat' | 'Oswald' | 'Source Sans'
+                            // Dimension offsets (replaces hardcoded values in LotEntity.jsx)
+                            setbackDimOffset: 5,       // offset for setback dimensions
+                            lotDimOffset: 15,          // offset for lot width/depth dimensions
+                            // Vertical mode
+                            verticalMode: false,       // false = XY plan view; true = Z-axis upward
+                            verticalOffset: 20,        // height above ground in vertical mode
                             customLabels: {
                                 lotWidth: { mode: 'value', text: 'A' },
                                 lotDepth: { mode: 'value', text: 'B' },
@@ -757,6 +794,8 @@ export const useStore = create(
                                 setbackLeft: { mode: 'value', text: '' },
                                 setbackRight: { mode: 'value', text: '' },
                                 buildingHeight: { mode: 'value', text: '' },
+                                principalMaxHeight: { mode: 'value', text: '' },
+                                accessoryMaxHeight: { mode: 'value', text: '' },
                             }
                         }
                     },
@@ -2199,6 +2238,29 @@ export const useStore = create(
                     };
                 }),
 
+                resetEntityBuildingGeometryAndPosition: (lotId, buildingType) => set((state) => {
+                    const lot = state.entities.lots[lotId];
+                    if (!lot) return state;
+                    const building = lot.buildings[buildingType];
+                    if (!building) return state;
+                    const defaultPos = buildingType === 'principal' ? { x: 0, y: 0 } : { x: 0, y: 15 };
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    buildings: {
+                                        ...lot.buildings,
+                                        [buildingType]: { ...building, ...defaultPos, geometry: { mode: 'rectangle', vertices: null }, selected: false },
+                                    },
+                                },
+                            },
+                        },
+                    };
+                }),
+
                 // Road module CRUD (entity system)
                 addEntityRoadModule: (direction, type) => set((state) => {
                     const roadId = generateEntityId('road');
@@ -2308,6 +2370,27 @@ export const useStore = create(
                         }
                     }
                     return { entityStyles: newStyles };
+                }),
+
+                // Style preset helpers
+                getStylePresetData: () => {
+                    const state = get()
+                    const activeLotId = state.selectedEntity || state.entityOrder[0]
+                    return {
+                        entityStyles: activeLotId ? state.entityStyles[activeLotId] : null,
+                        roadModuleStyles: state.roadModuleStyles,
+                    }
+                },
+
+                applyStylePreset: (presetData) => set((state) => {
+                    const newStyles = { ...state.entityStyles }
+                    for (const lotId of state.entityOrder) {
+                        newStyles[lotId] = JSON.parse(JSON.stringify(presetData.entityStyles))
+                    }
+                    return {
+                        entityStyles: newStyles,
+                        ...(presetData.roadModuleStyles ? { roadModuleStyles: presetData.roadModuleStyles } : {}),
+                    }
                 }),
 
                 // Per-lot visibility toggles
@@ -2469,6 +2552,12 @@ export const useStore = create(
                     }
                     return { annotationPositions: filtered }
                 }),
+                setAnnotationCustomLabel: (key, mode, text) => set((state) => ({
+                    annotationCustomLabels: {
+                        ...state.annotationCustomLabels,
+                        [key]: { mode, text },
+                    }
+                })),
                 // Update custom label for a specific dimension
                 setCustomLabel: (dimensionKey, mode, text) => set((state) => ({
                     viewSettings: {
@@ -2805,6 +2894,8 @@ export const useStore = create(
                 projects: [], // List of available projects
                 snapshots: [], // Snapshots for current project
                 layerStates: [], // Layer states for current project
+                scenarios: [], // District scenarios for current project [{ name, code, timestamp }]
+                activeScenario: null, // Name of the currently active scenario
                 cameraState: null, // Current camera state for snapshots
 
                 // Auto-save state
@@ -2846,12 +2937,18 @@ export const useStore = create(
                 clearCurrentProject: () => set({
                     currentProject: null,
                     snapshots: [],
-                    layerStates: []
+                    layerStates: [],
+                    scenarios: [],
+                    activeScenario: null,
                 }),
 
                 // Snapshot/Layer state list actions
                 setSnapshots: (snapshots) => set({ snapshots }),
                 setLayerStates: (layerStates) => set({ layerStates }),
+
+                // Scenario actions
+                setScenarios: (scenarios) => set({ scenarios }),
+                setActiveScenario: (name) => set({ activeScenario: name }),
 
                 // Camera state for snapshots
                 setCameraState: (cameraState) => set({ cameraState }),
@@ -3406,7 +3503,10 @@ export const useStore = create(
                         persistedState.annotationSettings = {
                             textRotation: 'billboard',
                             fontSize: 1.5,
+                            fontFamily: null,
                             textColor: '#000000',
+                            outlineColor: '#ffffff',
+                            outlineWidth: 0.15,
                             backgroundColor: '#ffffff',
                             backgroundOpacity: 0.85,
                             backgroundEnabled: true,
@@ -3414,6 +3514,19 @@ export const useStore = create(
                             leaderLineWidth: 1,
                             leaderLineDashed: false,
                             unitFormat: 'feet',
+                        };
+                    } else {
+                        // Backfill new annotation settings keys
+                        if (persistedState.annotationSettings.fontFamily === undefined) persistedState.annotationSettings.fontFamily = null;
+                        if (persistedState.annotationSettings.outlineColor === undefined) persistedState.annotationSettings.outlineColor = '#ffffff';
+                        if (persistedState.annotationSettings.outlineWidth === undefined) persistedState.annotationSettings.outlineWidth = 0.15;
+                    }
+                    if (!persistedState.annotationCustomLabels) {
+                        persistedState.annotationCustomLabels = {
+                            roadFront: { mode: 'default', text: '' },
+                            roadRight: { mode: 'default', text: '' },
+                            roadRear:  { mode: 'default', text: '' },
+                            roadLeft:  { mode: 'default', text: '' },
                         };
                     }
                     if (!persistedState.annotationPositions) {
@@ -3696,6 +3809,7 @@ export const useStore = create(
                     modelSetup: state.modelSetup,
                     districtParameters: state.districtParameters,
                     annotationSettings: state.annotationSettings,
+                    annotationCustomLabels: state.annotationCustomLabels,
                     annotationPositions: state.annotationPositions,
                 }),
                 merge: (persistedState, currentState) => {
@@ -3743,6 +3857,37 @@ export const useStore = create(
                         merged.viewSettings.exportQueue = []
                         merged.viewSettings.isBatchExporting = false
                     }
+                    // Patch missing dimensionSettings keys (new fields added in v25)
+                    if (merged.viewSettings?.styleSettings?.dimensionSettings) {
+                        const dimDefaults = {
+                            extensionLineColor: null,
+                            extensionLineStyle: 'dashed',
+                            markerColor: null,
+                            markerScale: 1.0,
+                            fontFamily: 'Inter',
+                            setbackDimOffset: 5,
+                            lotDimOffset: 15,
+                            verticalMode: false,
+                            verticalOffset: 20,
+                        };
+                        const ds = merged.viewSettings.styleSettings.dimensionSettings;
+                        for (const [key, val] of Object.entries(dimDefaults)) {
+                            if (ds[key] === undefined) {
+                                ds[key] = val;
+                            }
+                        }
+                        // Patch missing customLabels keys
+                        if (!ds.customLabels) ds.customLabels = {};
+                        const customLabelDefaults = {
+                            principalMaxHeight: { mode: 'value', text: '' },
+                            accessoryMaxHeight: { mode: 'value', text: '' },
+                        };
+                        for (const [key, val] of Object.entries(customLabelDefaults)) {
+                            if (ds.customLabels[key] === undefined) {
+                                ds.customLabels[key] = val;
+                            }
+                        }
+                    }
                     // Patch missing viewSettings.layers keys
                     if (merged.viewSettings?.layers) {
                         const layerDefaults = { maxSetbacks: true, btzPlanes: true, accessorySetbacks: true, lotAccessArrows: true, maxHeightPlanePrincipal: true, maxHeightPlaneAccessory: true };
@@ -3759,10 +3904,10 @@ export const useStore = create(
         {
             limit: 50,
             partialize: (state) => {
-                const { existing, proposed, viewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, comparisonRoads, entities, entityOrder, entityStyles, lotVisibility, modelSetup, annotationSettings, annotationPositions } = state
+                const { existing, proposed, viewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, comparisonRoads, entities, entityOrder, entityStyles, lotVisibility, modelSetup, annotationSettings, annotationCustomLabels, annotationPositions } = state
                 // Exclude export triggers from undo history
                 const { exportRequested: _exportRequested, exportQueue: _exportQueue, isBatchExporting: _isBatchExporting, ...trackedViewSettings } = viewSettings
-                return { existing, proposed, viewSettings: trackedViewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, comparisonRoads, entities, entityOrder, entityStyles, lotVisibility, modelSetup, annotationSettings, annotationPositions }
+                return { existing, proposed, viewSettings: trackedViewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, comparisonRoads, entities, entityOrder, entityStyles, lotVisibility, modelSetup, annotationSettings, annotationCustomLabels, annotationPositions }
             }
         }
     )

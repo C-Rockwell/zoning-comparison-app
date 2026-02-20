@@ -22,6 +22,88 @@ const DIRECTION_ROTATION = {
 }
 
 /**
+ * RoadPolygon Component (module-level — never define inside a render function)
+ *
+ * Renders a filled rectangle with optional border lines for road zones.
+ */
+const RoadPolygon = ({ xMin, xMax, yMin, yMax, style, zOffset = 0.01, suppressLeftEnd: polyLeftEnd = false, suppressRightEnd: polyRightEnd = false, lineScale = 1 }) => {
+    const width = xMax - xMin
+    const depth = yMax - yMin
+    const centerX = (xMin + xMax) / 2
+    const centerY = (yMin + yMax) / 2
+
+    // Corner points for the outline
+    const p1 = [xMin, yMin, zOffset]
+    const p2 = [xMax, yMin, zOffset]
+    const p3 = [xMax, yMax, zOffset]
+    const p4 = [xMin, yMax, zOffset]
+
+    return (
+        <group>
+            {/* Fill */}
+            <mesh position={[centerX, centerY, zOffset]} receiveShadow>
+                <planeGeometry args={[width, depth]} />
+                <meshStandardMaterial
+                    color={style.fillColor}
+                    opacity={style.fillOpacity}
+                    transparent={style.fillOpacity < 1}
+                    side={THREE.DoubleSide}
+                    depthWrite={style.fillOpacity >= 0.95}
+                    roughness={1}
+                    metalness={0}
+                />
+            </mesh>
+
+            {/* Border lines — drei Line2 with adjustable lineWidth */}
+            <Line
+                points={[p1, p2]}
+                color={style.lineColor}
+                lineWidth={(style.lineWidth || 1) * lineScale}
+                opacity={style.lineOpacity}
+                transparent={style.lineOpacity < 1}
+                dashed={style.lineDashed}
+                dashSize={style.lineDashed ? 1 : undefined}
+                gapSize={style.lineDashed ? 0.5 : undefined}
+            />
+            {!polyRightEnd && (
+                <Line
+                    points={[p2, p3]}
+                    color={style.lineColor}
+                    lineWidth={(style.lineWidth || 1) * lineScale}
+                    opacity={style.lineOpacity}
+                    transparent={style.lineOpacity < 1}
+                    dashed={style.lineDashed}
+                    dashSize={style.lineDashed ? 1 : undefined}
+                    gapSize={style.lineDashed ? 0.5 : undefined}
+                />
+            )}
+            <Line
+                points={[p3, p4]}
+                color={style.lineColor}
+                lineWidth={(style.lineWidth || 1) * lineScale}
+                opacity={style.lineOpacity}
+                transparent={style.lineOpacity < 1}
+                dashed={style.lineDashed}
+                dashSize={style.lineDashed ? 1 : undefined}
+                gapSize={style.lineDashed ? 0.5 : undefined}
+            />
+            {!polyLeftEnd && (
+                <Line
+                    points={[p4, p1]}
+                    color={style.lineColor}
+                    lineWidth={(style.lineWidth || 1) * lineScale}
+                    opacity={style.lineOpacity}
+                    transparent={style.lineOpacity < 1}
+                    dashed={style.lineDashed}
+                    dashSize={style.lineDashed ? 1 : undefined}
+                    gapSize={style.lineDashed ? 0.5 : undefined}
+                />
+            )}
+        </group>
+    )
+}
+
+/**
  * RoadModule Component
  *
  * Renders a road cross-section module adjacent to a lot edge.
@@ -43,11 +125,7 @@ const DIRECTION_ROTATION = {
  * @param {number} lineScale - Line width multiplier for export scaling
  */
 const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', lineScale = 1, suppressLeftEnd = false, suppressRightEnd = false }) => {
-    // Early return if missing required data
-    if (!roadModule || !styles || !lotWidth) {
-        return null
-    }
-
+    // All hooks must come before any conditional return (Rules of Hooks)
     const {
         type: roadType,
         rightOfWay = 50,
@@ -60,7 +138,7 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
         rightSidewalk,
         leftTransitionZone,
         rightTransitionZone,
-    } = roadModule
+    } = roadModule ?? {}
 
     // Calculate centerline Y position (negative, measured from lot front)
     const centerlineY = -rightOfWay / 2
@@ -71,14 +149,10 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
     const roadBottomY = centerlineY - roadHalfWidth // Farther from lot (toward Y=-rightOfWay)
 
     // Calculate X positions based on model type
-    // Existing: lot extends to negative X from origin (0,0 is bottom-right of lot)
-    // Proposed: lot extends to positive X from origin (0,0 is bottom-left of lot)
-    const xMin = model === 'existing' ? -lotWidth : 0
-    const xMax = model === 'existing' ? 0 : lotWidth
+    const xMin = model === 'existing' ? -(lotWidth ?? 0) : 0
+    const xMax = model === 'existing' ? 0 : (lotWidth ?? 0)
 
-    // Build the layer stack for left and right sides
-    // Left side: stacks from road edge toward negative Y (outer right-of-way)
-    // Right side: stacks from road edge toward positive Y (lot front)
+    // Build the layer stack for left and right sides (must be before early return — Rules of Hooks)
     const leftLayers = useMemo(() => {
         const layers = []
         let currentY = roadBottomY // Start at left edge of road
@@ -173,82 +247,9 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
         return layers
     }, [roadTopY, rightParking, rightVerge, rightSidewalk, rightTransitionZone])
 
-    // Render a polygon (filled rectangle with optional border)
-    const RoadPolygon = ({ xMin, xMax, yMin, yMax, style, zOffset = 0.01, suppressLeftEnd: polyLeftEnd = false, suppressRightEnd: polyRightEnd = false }) => {
-        const width = xMax - xMin
-        const depth = yMax - yMin
-        const centerX = (xMin + xMax) / 2
-        const centerY = (yMin + yMax) / 2
-
-        // Corner points for the outline
-        const p1 = [xMin, yMin, zOffset]
-        const p2 = [xMax, yMin, zOffset]
-        const p3 = [xMax, yMax, zOffset]
-        const p4 = [xMin, yMax, zOffset]
-
-        return (
-            <group>
-                {/* Fill */}
-                <mesh position={[centerX, centerY, zOffset]} receiveShadow>
-                    <planeGeometry args={[width, depth]} />
-                    <meshStandardMaterial
-                        color={style.fillColor}
-                        opacity={style.fillOpacity}
-                        transparent={style.fillOpacity < 1}
-                        side={THREE.DoubleSide}
-                        depthWrite={style.fillOpacity >= 0.95}
-                        roughness={1}
-                        metalness={0}
-                    />
-                </mesh>
-
-                {/* Border lines — drei Line2 with adjustable lineWidth */}
-                <Line
-                    points={[p1, p2]}
-                    color={style.lineColor}
-                    lineWidth={(style.lineWidth || 1) * lineScale}
-                    opacity={style.lineOpacity}
-                    transparent={style.lineOpacity < 1}
-                    dashed={style.lineDashed}
-                    dashSize={style.lineDashed ? 1 : undefined}
-                    gapSize={style.lineDashed ? 0.5 : undefined}
-                />
-                {!polyRightEnd && (
-                    <Line
-                        points={[p2, p3]}
-                        color={style.lineColor}
-                        lineWidth={(style.lineWidth || 1) * lineScale}
-                        opacity={style.lineOpacity}
-                        transparent={style.lineOpacity < 1}
-                        dashed={style.lineDashed}
-                        dashSize={style.lineDashed ? 1 : undefined}
-                        gapSize={style.lineDashed ? 0.5 : undefined}
-                    />
-                )}
-                <Line
-                    points={[p3, p4]}
-                    color={style.lineColor}
-                    lineWidth={(style.lineWidth || 1) * lineScale}
-                    opacity={style.lineOpacity}
-                    transparent={style.lineOpacity < 1}
-                    dashed={style.lineDashed}
-                    dashSize={style.lineDashed ? 1 : undefined}
-                    gapSize={style.lineDashed ? 0.5 : undefined}
-                />
-                {!polyLeftEnd && (
-                    <Line
-                        points={[p4, p1]}
-                        color={style.lineColor}
-                        lineWidth={(style.lineWidth || 1) * lineScale}
-                        opacity={style.lineOpacity}
-                        transparent={style.lineOpacity < 1}
-                        dashed={style.lineDashed}
-                        dashSize={style.lineDashed ? 1 : undefined}
-                        gapSize={style.lineDashed ? 0.5 : undefined}
-                    />
-                )}
-            </group>
-        )
+    // Early return AFTER all hooks
+    if (!roadModule || !styles || !lotWidth) {
+        return null
     }
 
     // Default styles if not provided — S3 alleys merge alley-specific overrides onto regular styles
@@ -299,6 +300,7 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
                 zOffset={0.01}
                 suppressLeftEnd={suppressLeftEnd}
                 suppressRightEnd={suppressRightEnd}
+                lineScale={lineScale}
             />
 
             {/* Left Side Layers (toward outer right-of-way) */}
@@ -320,6 +322,7 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
                         zOffset={0.01 + (index + 1) * 0.001}
                         suppressLeftEnd={suppressLeftEnd}
                         suppressRightEnd={suppressRightEnd}
+                        lineScale={lineScale}
                     />
                 )
             })}
@@ -343,6 +346,7 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
                         zOffset={0.01 + (index + 1) * 0.001}
                         suppressLeftEnd={suppressLeftEnd}
                         suppressRightEnd={suppressRightEnd}
+                        lineScale={lineScale}
                     />
                 )
             })}

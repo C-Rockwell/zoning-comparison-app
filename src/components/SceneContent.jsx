@@ -547,6 +547,7 @@ const SceneContent = () => {
                             road={roadModule}
                             spanWidth={existing.lotWidth}
                             lineScale={exportLineScale}
+                            direction="front"
                         />
                     </group>
                 )}
@@ -554,17 +555,17 @@ const SceneContent = () => {
                     <>
                         {comparisonRoads.left?.enabled && (
                             <group rotation={DIRECTION_ROTATION.left}>
-                                <RoadAnnotations roadId="existing-left" road={comparisonRoads.left} spanWidth={existing.lotWidth} lineScale={exportLineScale} />
+                                <RoadAnnotations roadId="existing-left" road={comparisonRoads.left} spanWidth={existing.lotWidth} lineScale={exportLineScale} direction="left" />
                             </group>
                         )}
                         {comparisonRoads.right?.enabled && (
                             <group rotation={DIRECTION_ROTATION.right}>
-                                <RoadAnnotations roadId="existing-right" road={comparisonRoads.right} spanWidth={existing.lotWidth} lineScale={exportLineScale} />
+                                <RoadAnnotations roadId="existing-right" road={comparisonRoads.right} spanWidth={existing.lotWidth} lineScale={exportLineScale} direction="right" />
                             </group>
                         )}
                         {comparisonRoads.rear?.enabled && (
                             <group rotation={DIRECTION_ROTATION.rear}>
-                                <RoadAnnotations roadId="existing-rear" road={comparisonRoads.rear} spanWidth={existing.lotWidth} lineScale={exportLineScale} />
+                                <RoadAnnotations roadId="existing-rear" road={comparisonRoads.rear} spanWidth={existing.lotWidth} lineScale={exportLineScale} direction="rear" />
                             </group>
                         )}
                     </>
@@ -790,6 +791,7 @@ const SceneContent = () => {
                             road={roadModule}
                             spanWidth={proposed.lotWidth}
                             lineScale={exportLineScale}
+                            direction="front"
                         />
                     </group>
                 )}
@@ -797,17 +799,17 @@ const SceneContent = () => {
                     <>
                         {comparisonRoads.left?.enabled && (
                             <group rotation={DIRECTION_ROTATION.left}>
-                                <RoadAnnotations roadId="proposed-left" road={comparisonRoads.left} spanWidth={proposed.lotWidth} lineScale={exportLineScale} />
+                                <RoadAnnotations roadId="proposed-left" road={comparisonRoads.left} spanWidth={proposed.lotWidth} lineScale={exportLineScale} direction="left" />
                             </group>
                         )}
                         {comparisonRoads.right?.enabled && (
                             <group rotation={DIRECTION_ROTATION.right}>
-                                <RoadAnnotations roadId="proposed-right" road={comparisonRoads.right} spanWidth={proposed.lotWidth} lineScale={exportLineScale} />
+                                <RoadAnnotations roadId="proposed-right" road={comparisonRoads.right} spanWidth={proposed.lotWidth} lineScale={exportLineScale} direction="right" />
                             </group>
                         )}
                         {comparisonRoads.rear?.enabled && (
                             <group rotation={DIRECTION_ROTATION.rear}>
-                                <RoadAnnotations roadId="proposed-rear" road={comparisonRoads.rear} spanWidth={proposed.lotWidth} lineScale={exportLineScale} />
+                                <RoadAnnotations roadId="proposed-rear" road={comparisonRoads.rear} spanWidth={proposed.lotWidth} lineScale={exportLineScale} direction="rear" />
                             </group>
                         )}
                     </>

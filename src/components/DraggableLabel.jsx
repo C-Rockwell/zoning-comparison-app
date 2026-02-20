@@ -28,30 +28,32 @@ const DraggableLabel = ({
     anchorY = 'bottom',
     outlineWidth = 0.1,
     outlineColor = '#ffffff',
+    font,
     lineScale = 1,
     visible = true,
     depthTest = true,
 }) => {
-    if (!visible || !text) return null
-
+    // All hooks must come before any conditional return (Rules of Hooks)
     const [hovered, setHovered] = useState(false)
     const [dragging, setDragging] = useState(false)
     const { controls } = useThree()
-
-    // Drag on Z=0 ground plane
     const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), [])
     const planeIntersectPoint = useRef(new THREE.Vector3())
     const dragOffset = useRef(new THREE.Vector3())
 
+    if (!visible || !text) return null
+
     // Current position: custom if set, otherwise default
     const position = customPosition || defaultPosition
 
-    // Determine if label has been moved from its default
-    const isDisplaced = customPosition != null && (
-        Math.abs(customPosition[0] - defaultPosition[0]) > 0.5 ||
-        Math.abs(customPosition[1] - defaultPosition[1]) > 0.5 ||
-        Math.abs(customPosition[2] - defaultPosition[2]) > 0.5
-    )
+    // Show leader when label is more than 0.5 units from anchor (works for
+    // both default and custom positions — lot edge labels show leader at default)
+    const isDisplaced = anchorPoint != null && (() => {
+        const dx = position[0] - anchorPoint[0]
+        const dy = position[1] - anchorPoint[1]
+        const dz = position[2] - anchorPoint[2]
+        return Math.sqrt(dx * dx + dy * dy + dz * dz) > 0.5
+    })()
 
     const handlePointerDown = (e) => {
         e.stopPropagation()
@@ -149,6 +151,7 @@ const DraggableLabel = ({
                 anchorY={anchorY}
                 outlineWidth={outlineWidth}
                 outlineColor={outlineColor}
+                font={font}
                 lineScale={lineScale}
                 depthTest={depthTest}
             />

@@ -1,5 +1,5 @@
-import { useState, useMemo, useCallback } from 'react'
-import { useStore, calculatePolygonArea } from '../store/useStore'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import { useStore, calculatePolygonArea, DIMENSION_FONT_OPTIONS } from '../store/useStore'
 import {
     useLotIds,
     useModelSetup, useDistrictParameters, useEntityCount,
@@ -12,8 +12,10 @@ import LineStyleSelector from './ui/LineStyleSelector'
 import {
     ChevronDown, ChevronUp, Eye, EyeOff, Palette, Plus, Minus, Trash2, Copy,
     Layers, Settings, Building2, Route, Upload, Download, BarChart3, Hexagon,
+    Save, FolderOpen, Search, Check, X,
 } from 'lucide-react'
 import ImportWizard from './ImportWizard'
+import * as api from '../services/api'
 
 // ============================================
 // Helper Sub-Components
@@ -330,8 +332,20 @@ const ModelParametersTable = ({ collapseKey, allModelCollapsed }) => {
                 {
                     label: 'Edit Shape',
                     type: 'action',
+                    actionKey: 'edit',
                     buildingType: 'principal',
                     canAct: (lot) => (lot.buildings?.principal?.width ?? 0) > 0 && (lot.buildings?.principal?.stories ?? 0) > 0,
+                },
+                {
+                    label: 'Reset Position',
+                    type: 'action',
+                    actionKey: 'reset',
+                    buildingType: 'principal',
+                    canAct: (lot) => {
+                        const b = lot.buildings?.principal
+                        if (!b) return false
+                        return b.geometry?.mode === 'polygon' || (b.x ?? 0) !== 0 || (b.y ?? 0) !== 0
+                    },
                 },
             ],
         },
@@ -398,8 +412,20 @@ const ModelParametersTable = ({ collapseKey, allModelCollapsed }) => {
                 {
                     label: 'Edit Shape',
                     type: 'action',
+                    actionKey: 'edit',
                     buildingType: 'accessory',
                     canAct: (lot) => (lot.buildings?.accessory?.width ?? 0) > 0 && (lot.buildings?.accessory?.stories ?? 0) > 0,
+                },
+                {
+                    label: 'Reset Position',
+                    type: 'action',
+                    actionKey: 'reset',
+                    buildingType: 'accessory',
+                    canAct: (lot) => {
+                        const b = lot.buildings?.accessory
+                        if (!b) return false
+                        return b.geometry?.mode === 'polygon' || (b.x ?? 0) !== 0 || (b.y ?? 0) !== 15
+                    },
                 },
             ],
         },
@@ -560,6 +586,8 @@ const SectionGroup = ({ section, lotIds, lots, firstLotVis, setLotVisibilityActi
     }
     const regenerateEntityBuilding = useStore((s) => s.regenerateEntityBuilding)
     const enableEntityBuildingPolygonMode = useStore((s) => s.enableEntityBuildingPolygonMode)
+    const selectEntityBuilding = useStore((s) => s.selectEntityBuilding)
+    const resetEntityBuildingGeometryAndPosition = useStore((s) => s.resetEntityBuildingGeometryAndPosition)
 
     // Detect if this is a Structures section with a deleted building
     const isStructuresSection = section.title === 'Structures Principal' || section.title === 'Structures Accessory'
@@ -626,11 +654,32 @@ const SectionGroup = ({ section, lotIds, lots, firstLotVis, setLotVisibilityActi
 
                     if (row.type === 'action') {
                         const canAct = row.canAct ? row.canAct(lot) : true
+                        if (row.actionKey === 'reset') {
+                            return (
+                                <td key={lotId} className="py-1 px-1 text-center">
+                                    {canAct ? (
+                                        <button
+                                            onClick={() => resetEntityBuildingGeometryAndPosition(lotId, row.buildingType)}
+                                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] transition-colors"
+                                            style={{ color: 'var(--ui-text-secondary)', border: '1px solid var(--ui-border)' }}
+                                            title={`Reset ${row.buildingType} to rectangle at default position`}
+                                        >
+                                            Reset
+                                        </button>
+                                    ) : (
+                                        <span className="text-[10px]" style={{ color: 'var(--ui-text-muted)' }}>--</span>
+                                    )}
+                                </td>
+                            )
+                        }
                         return (
                             <td key={lotId} className="py-1 px-1 text-center">
                                 {canAct ? (
                                     <button
-                                        onClick={() => enableEntityBuildingPolygonMode(lotId, row.buildingType)}
+                                        onClick={() => {
+                                            enableEntityBuildingPolygonMode(lotId, row.buildingType)
+                                            selectEntityBuilding(lotId, row.buildingType)
+                                        }}
                                         className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] transition-colors"
                                         style={{ color: 'var(--ui-accent)', border: '1px solid var(--ui-accent)' }}
                                         title={`Edit ${row.buildingType} shape`}
@@ -813,55 +862,116 @@ const ModelSetupSection = () => {
 // LAYERS SECTION
 // ============================================
 
+// Defined at module scope (not inside component) per CLAUDE.md convention
+const LAYER_GROUPS = [
+    {
+        id: 'visualAids',
+        title: 'Visual Aids',
+        items: [
+            { key: 'grid', label: 'Grid' },
+            { key: 'origin', label: 'Origin' },
+            { key: 'ground', label: 'Ground Plane' },
+            { key: 'axes', label: 'Axes' },
+            { key: 'gimbal', label: 'Gimbal' },
+        ],
+    },
+    {
+        id: 'lots',
+        title: 'Lots & Setbacks',
+        items: [
+            { key: 'lotLines', label: 'Lot Lines' },
+            { key: 'setbacks', label: 'Setbacks' },
+            { key: 'accessorySetbacks', label: 'Accessory Setbacks' },
+            { key: 'maxSetbacks', label: 'Max Setbacks' },
+            { key: 'lotAccessArrows', label: 'Lot Access Arrows' },
+            { key: 'labelLotEdges', label: 'Lot Edges' },
+        ],
+    },
+    {
+        id: 'structures',
+        title: 'Structures',
+        items: [
+            { key: 'btzPlanes', label: 'BTZ Planes' },
+            { key: 'buildings', label: 'Buildings' },
+            { key: 'roof', label: 'Roof' },
+            { key: 'maxHeightPlane', label: 'Max Height Plane' },
+        ],
+    },
+    {
+        id: 'roads',
+        title: 'Roads',
+        items: [
+            { key: 'roadModule', label: 'Road Module' },
+            { key: 'roadIntersections', label: 'Road Intersections' },
+            { key: 'labelRoadZones', label: 'Road Zones' },
+        ],
+    },
+    {
+        id: 'annotation',
+        title: 'Annotation',
+        items: [
+            { key: 'annotationLabels', label: 'Annotation Labels' },
+            { key: 'labelLotNames', label: 'Lot Names', indent: true },
+            { key: 'labelSetbacks', label: 'Setback Labels', indent: true },
+            { key: 'labelMaxSetbacks', label: 'Max Setback Labels', indent: true },
+            { key: 'labelRoadNames', label: 'Road Names', indent: true },
+            { key: 'labelBuildings', label: 'Building Labels', indent: true },
+            { key: 'dimensionsLotWidth', label: 'Dim: Lot Width' },
+            { key: 'dimensionsLotDepth', label: 'Dim: Lot Depth' },
+            { key: 'dimensionsSetbacks', label: 'Dim: Setbacks' },
+            { key: 'dimensionsHeight', label: 'Dim: Height' },
+        ],
+    },
+]
+
 const LayersSection = () => {
     const layers = useStore((s) => s.viewSettings?.layers ?? {})
     const setLayer = useStore((s) => s.setLayer)
+    const [openGroups, setOpenGroups] = useState({
+        visualAids: false,
+        lots: false,
+        structures: false,
+        roads: false,
+        annotation: false,
+    })
 
-    const layerList = [
-        { key: 'lotLines', label: 'Lot Lines' },
-        { key: 'setbacks', label: 'Setbacks' },
-        { key: 'accessorySetbacks', label: 'Accessory Setbacks' },
-        { key: 'maxSetbacks', label: 'Max Setbacks' },
-        { key: 'btzPlanes', label: 'BTZ Planes' },
-        { key: 'buildings', label: 'Buildings' },
-        { key: 'roof', label: 'Roof' },
-        { key: 'maxHeightPlane', label: 'Max Height Plane' },
-        { key: 'lotAccessArrows', label: 'Lot Access Arrows' },
-        { key: 'dimensionsLotWidth', label: 'Dim: Lot Width' },
-        { key: 'dimensionsLotDepth', label: 'Dim: Lot Depth' },
-        { key: 'dimensionsSetbacks', label: 'Dim: Setbacks' },
-        { key: 'dimensionsHeight', label: 'Dim: Height' },
-        { key: 'grid', label: 'Grid' },
-        { key: 'roadModule', label: 'Road Module' },
-        { key: 'roadIntersections', label: 'Road Intersections' },
-        { key: 'annotationLabels', label: 'Annotation Labels' },
-        { key: 'labelLotNames', label: '  Lot Names' },
-        { key: 'labelLotEdges', label: '  Lot Edges' },
-        { key: 'labelSetbacks', label: '  Setback Labels' },
-        { key: 'labelMaxSetbacks', label: '  Max Setback Labels' },
-        { key: 'labelRoadNames', label: '  Road Names' },
-        { key: 'labelRoadZones', label: '  Road Zones' },
-        { key: 'labelBuildings', label: '  Building Labels' },
-        { key: 'origin', label: 'Origin' },
-        { key: 'ground', label: 'Ground Plane' },
-        { key: 'axes', label: 'Axes' },
-        { key: 'gimbal', label: 'Gimbal' },
-    ]
+    const toggleGroup = (id) => setOpenGroups(prev => ({ ...prev, [id]: !prev[id] }))
 
     return (
         <Section title="Layers" icon={<Layers className="w-4 h-4" />} defaultOpen={true}>
             <div className="space-y-1">
-                {layerList.map(({ key, label }) => (
-                    <label key={key} className="flex items-center gap-2 cursor-pointer py-0.5">
-                        <input
-                            type="checkbox"
-                            checked={layers[key] !== false}
-                            onChange={(e) => setLayer(key, e.target.checked)}
-                            className="rounded accent-theme"
-                            style={{ backgroundColor: 'var(--ui-bg-secondary)', borderColor: 'var(--ui-border)' }}
-                        />
-                        <span className="text-xs" style={{ color: 'var(--ui-text-secondary)' }}>{label}</span>
-                    </label>
+                {LAYER_GROUPS.map((group) => (
+                    <div key={group.id}>
+                        {/* Group header */}
+                        <button
+                            onClick={() => toggleGroup(group.id)}
+                            className="w-full flex items-center justify-between py-1 px-1 rounded transition-colors hover-bg-secondary"
+                            style={{ color: 'var(--ui-text-secondary)' }}
+                        >
+                            <span className="text-[10px] font-bold uppercase tracking-wider">{group.title}</span>
+                            {openGroups[group.id]
+                                ? <ChevronUp className="w-3 h-3 flex-shrink-0" />
+                                : <ChevronDown className="w-3 h-3 flex-shrink-0" />
+                            }
+                        </button>
+                        {/* Group items */}
+                        {openGroups[group.id] && (
+                            <div className="space-y-0.5 pl-1 pb-1">
+                                {group.items.map(({ key, label, indent }) => (
+                                    <label key={key} className={`flex items-center gap-2 cursor-pointer py-0.5 ${indent ? 'pl-4' : ''}`}>
+                                        <input
+                                            type="checkbox"
+                                            checked={layers[key] !== false}
+                                            onChange={(e) => setLayer(key, e.target.checked)}
+                                            className="rounded accent-theme"
+                                            style={{ backgroundColor: 'var(--ui-bg-secondary)', borderColor: 'var(--ui-border)' }}
+                                        />
+                                        <span className="text-xs" style={{ color: 'var(--ui-text-secondary)' }}>{label}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 ))}
             </div>
         </Section>
@@ -1185,7 +1295,9 @@ const BuildingRoofSection = () => {
     const activeLotId = useActiveLotId()
     const lots = useStore((s) => s.entities?.lots ?? {})
     const setEntityRoofSetting = useStore((s) => s.setEntityRoofSetting)
+    const regenerateEntityBuilding = useStore((s) => s.regenerateEntityBuilding)
     const selectEntity = useStore((s) => s.selectEntity)
+    const districtParams = useDistrictParameters()
 
     // Use active lot, or fall back to first lot
     const targetLotId = activeLotId || lotIds[0]
@@ -1302,7 +1414,12 @@ const BuildingRoofSection = () => {
                                 <div className="flex items-center gap-1 mt-1">
                                     <input
                                         type="number"
-                                        value={roof.ridgeHeight ?? Math.round(building.maxHeight ?? totalHeight)}
+                                        value={roof.ridgeHeight ?? Math.round(
+                                            (buildingType === 'principal'
+                                                ? districtParams?.structures?.principal?.height?.max
+                                                : districtParams?.structures?.accessory?.height?.max
+                                            ) ?? totalHeight
+                                        )}
                                         onChange={(e) => setEntityRoofSetting(targetLotId, buildingType, 'ridgeHeight', parseFloat(e.target.value) || 0)}
                                         className="w-full text-xs rounded px-1 py-0.5
                                                    text-right focus:outline-none focus-ring-accent-1"
@@ -1322,6 +1439,26 @@ const BuildingRoofSection = () => {
                         </div>
                     )}
                 </div>
+                {/* Reset Building button */}
+                {(building.width > 0 || building.stories > 0) && (
+                    <button
+                        onClick={() => {
+                            if (window.confirm(`Reset ${label.toLowerCase()} to defaults?`)) {
+                                regenerateEntityBuilding(targetLotId, buildingType)
+                            }
+                        }}
+                        className="w-full text-[10px] py-1 rounded transition-colors mt-1"
+                        style={{
+                            backgroundColor: 'var(--ui-accent-muted)',
+                            borderWidth: '1px',
+                            borderStyle: 'solid',
+                            borderColor: 'var(--ui-accent)',
+                            color: 'var(--ui-accent)',
+                        }}
+                    >
+                        Reset Building
+                    </button>
+                )}
             </div>
         )
     }
@@ -2474,7 +2611,18 @@ const StylesSection = () => {
     const lotIds = useLotIds()
     const activeLotId = useActiveLotId()
     const entityStyles = useStore((s) => s.entityStyles ?? {})
+    const getStylePresetData = useStore((s) => s.getStylePresetData)
+    const applyStylePreset = useStore((s) => s.applyStylePreset)
+    const showToast = useStore((s) => s.showToast)
     const [expandedCategory, setExpandedCategory] = useState(null)
+
+    // Preset state
+    const [showSaveModal, setShowSaveModal] = useState(false)
+    const [showLoadModal, setShowLoadModal] = useState(false)
+    const [presetName, setPresetName] = useState('')
+    const [presetList, setPresetList] = useState([])
+    const [searchQuery, setSearchQuery] = useState('')
+    const [presetLoading, setPresetLoading] = useState(false)
 
     const styleLotId = activeLotId || lotIds[0]
     if (!styleLotId || !entityStyles[styleLotId]) return null
@@ -2494,8 +2642,91 @@ const StylesSection = () => {
         { key: 'maxHeightPlane', label: 'Max Height Plane' },
     ]
 
+    const handleSavePreset = async (e) => {
+        e.preventDefault()
+        if (!presetName.trim()) return
+        setPresetLoading(true)
+        try {
+            const data = getStylePresetData()
+            if (!data.entityStyles) {
+                showToast('No lot styles to save', 'error')
+                setPresetLoading(false)
+                return
+            }
+            await api.saveStylePreset(presetName.trim(), data)
+            showToast(`Style preset "${presetName.trim()}" saved`)
+            setShowSaveModal(false)
+            setPresetName('')
+        } catch (err) {
+            showToast(err.message, 'error')
+        }
+        setPresetLoading(false)
+    }
+
+    const handleOpenLoad = async () => {
+        setPresetLoading(true)
+        setSearchQuery('')
+        try {
+            const list = await api.listStylePresets()
+            setPresetList(list)
+        } catch (err) {
+            showToast(err.message, 'error')
+            setPresetList([])
+        }
+        setPresetLoading(false)
+        setShowLoadModal(true)
+    }
+
+    const handleLoadPreset = async (filename) => {
+        setPresetLoading(true)
+        try {
+            const preset = await api.loadStylePreset(filename)
+            applyStylePreset(preset)
+            showToast(`Style preset "${preset.name}" applied`)
+            setShowLoadModal(false)
+        } catch (err) {
+            showToast(err.message, 'error')
+        }
+        setPresetLoading(false)
+    }
+
+    const handleDeletePreset = async (filename, name) => {
+        if (!window.confirm(`Delete style preset "${name}"?`)) return
+        try {
+            await api.deleteStylePreset(filename)
+            setPresetList((prev) => prev.filter((p) => p.filename !== filename))
+            showToast(`Preset "${name}" deleted`)
+        } catch (err) {
+            showToast(err.message, 'error')
+        }
+    }
+
+    const filteredPresets = searchQuery
+        ? presetList.filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        : presetList
+
     return (
         <Section title="Styles" icon={<Palette className="w-4 h-4" />} defaultOpen={false}>
+            {/* Save / Load buttons */}
+            <div className="flex gap-2 mb-2">
+                <button
+                    onClick={() => { setPresetName(''); setShowSaveModal(true) }}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs transition-colors"
+                    style={{ backgroundColor: 'var(--ui-bg-secondary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-secondary)' }}
+                >
+                    <Save className="w-3.5 h-3.5" />
+                    Save Style
+                </button>
+                <button
+                    onClick={handleOpenLoad}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs transition-colors"
+                    style={{ backgroundColor: 'var(--ui-bg-secondary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-secondary)' }}
+                >
+                    <FolderOpen className="w-3.5 h-3.5" />
+                    Load Styles
+                </button>
+            </div>
+
             <div className="text-[10px] mb-2" style={{ color: 'var(--ui-text-muted)' }}>
                 Editing styles for Lot {lotIds.indexOf(styleLotId) + 1}
             </div>
@@ -2526,6 +2757,113 @@ const StylesSection = () => {
                     </div>
                 ))}
             </div>
+
+            {/* Save Modal */}
+            {showSaveModal && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+                    <div className="rounded-lg p-6 w-full max-w-sm mx-4" style={{ backgroundColor: 'var(--ui-bg-primary)', border: '1px solid var(--ui-border)' }}>
+                        <h2 className="text-lg font-bold mb-4" style={{ color: 'var(--ui-text-primary)' }}>
+                            Save Style Preset
+                        </h2>
+                        <form onSubmit={handleSavePreset}>
+                            <input
+                                type="text"
+                                value={presetName}
+                                onChange={(e) => setPresetName(e.target.value)}
+                                placeholder="Preset name"
+                                className="w-full px-3 py-2 rounded mb-4 placeholder-theme"
+                                style={{ backgroundColor: 'var(--ui-bg-secondary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-primary)' }}
+                                autoFocus
+                            />
+                            <div className="flex justify-end gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowSaveModal(false)}
+                                    className="px-4 py-2 hover-text-primary transition-colors"
+                                    style={{ color: 'var(--ui-text-secondary)' }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={presetLoading || !presetName.trim()}
+                                    className="px-4 py-2 rounded disabled:opacity-50 transition-colors hover-bg-accent-hover"
+                                    style={{ backgroundColor: 'var(--ui-accent)', color: '#fff' }}
+                                >
+                                    {presetLoading ? 'Saving...' : 'Save'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Load Modal */}
+            {showLoadModal && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+                    <div className="rounded-lg p-5 w-full max-w-md mx-4" style={{ backgroundColor: 'var(--ui-bg-primary)', border: '1px solid var(--ui-border)' }}>
+                        <h2 className="text-lg font-bold mb-3" style={{ color: 'var(--ui-text-primary)' }}>
+                            Load Style Preset
+                        </h2>
+                        {/* Search */}
+                        <div className="relative mb-3">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: 'var(--ui-text-muted)' }} />
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Search presets..."
+                                className="w-full pl-8 pr-3 py-2 rounded text-sm placeholder-theme"
+                                style={{ backgroundColor: 'var(--ui-bg-secondary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-primary)' }}
+                                autoFocus
+                            />
+                        </div>
+                        {/* Preset list */}
+                        <div className="max-h-64 overflow-y-auto space-y-1 mb-3">
+                            {presetLoading ? (
+                                <p className="text-xs text-center py-4" style={{ color: 'var(--ui-text-muted)' }}>Loading...</p>
+                            ) : filteredPresets.length === 0 ? (
+                                <p className="text-xs text-center py-4" style={{ color: 'var(--ui-text-muted)' }}>
+                                    {presetList.length === 0 ? 'No presets saved yet' : 'No matching presets'}
+                                </p>
+                            ) : (
+                                filteredPresets.map((preset) => (
+                                    <div
+                                        key={preset.filename}
+                                        className="group flex items-center justify-between px-3 py-2 rounded cursor-pointer transition-colors"
+                                        style={{ backgroundColor: 'var(--ui-bg-secondary)' }}
+                                        onClick={() => handleLoadPreset(preset.filename)}
+                                    >
+                                        <div>
+                                            <div className="text-sm" style={{ color: 'var(--ui-text-primary)' }}>{preset.name}</div>
+                                            <div className="text-[10px]" style={{ color: 'var(--ui-text-muted)' }}>
+                                                {new Date(preset.timestamp).toLocaleDateString()} {new Date(preset.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleDeletePreset(preset.filename, preset.name) }}
+                                            className="opacity-0 group-hover:opacity-100 p-1 rounded transition-opacity"
+                                            style={{ color: 'var(--ui-text-muted)' }}
+                                            title="Delete preset"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                        <div className="flex justify-end">
+                            <button
+                                onClick={() => setShowLoadModal(false)}
+                                className="px-4 py-2 hover-text-primary transition-colors"
+                                style={{ color: 'var(--ui-text-secondary)' }}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </Section>
     )
 }
@@ -2538,12 +2876,55 @@ const StylesSection = () => {
 // ANNOTATION SETTINGS SECTION
 // ============================================
 
+const ROAD_DIRECTION_LABELS = { roadFront: 'Front Road', roadRight: 'Right Road', roadRear: 'Rear Road', roadLeft: 'Left Road' }
+
+const CustomLabelRowAnnotation = ({ label, labelKey, customLabels, setCustomLabel }) => {
+    const config = customLabels?.[labelKey] || { mode: 'default', text: '' }
+    const isCustom = config.mode === 'custom'
+    return (
+        <div className="flex items-center gap-1 mb-1">
+            <span className="text-[9px] w-20 truncate flex-shrink-0" style={{ color: 'var(--ui-text-secondary)' }}>{label}</span>
+            <div className="flex items-center gap-1 flex-1">
+                <button
+                    onClick={() => setCustomLabel(labelKey, isCustom ? 'default' : 'custom', config.text)}
+                    className="px-1.5 py-0.5 rounded text-[8px] font-medium border transition-colors flex-shrink-0"
+                    style={{
+                        backgroundColor: isCustom ? 'var(--ui-accent)' : 'var(--ui-bg-primary)',
+                        borderColor: isCustom ? 'var(--ui-accent)' : 'var(--ui-border)',
+                        color: isCustom ? '#fff' : 'var(--ui-text-secondary)',
+                    }}
+                    title={isCustom ? 'Using custom label — click to revert to default' : 'Using default label — click to enter custom text'}
+                >
+                    {isCustom ? 'Custom' : 'Default'}
+                </button>
+                {isCustom && (
+                    <input
+                        type="text"
+                        value={config.text}
+                        onChange={(e) => setCustomLabel(labelKey, 'custom', e.target.value)}
+                        placeholder="label text"
+                        className="flex-1 px-1 py-0.5 text-[9px] rounded focus:outline-none"
+                        style={{ backgroundColor: 'var(--ui-bg-primary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-primary)' }}
+                    />
+                )}
+            </div>
+        </div>
+    )
+}
+
 const AnnotationSettingsSection = () => {
     const annotationSettings = useStore((s) => s.annotationSettings)
     const setAnnotationSetting = useStore((s) => s.setAnnotationSetting)
     const resetAnnotationPositions = useStore((s) => s.resetAnnotationPositions)
+    const annotationCustomLabels = useStore((s) => s.annotationCustomLabels)
+    const setAnnotationCustomLabel = useStore((s) => s.setAnnotationCustomLabel)
+    const modelSetup = useModelSetup()
+    const lotIds = useLotIds()
+    const [customLabelsOpen, setCustomLabelsOpen] = useState(false)
 
     if (!annotationSettings) return null
+
+    const streetEdges = modelSetup?.streetEdges ?? { front: true, left: false, right: false, rear: false }
 
     return (
         <Section title="Annotation Labels" icon={<Settings className="w-4 h-4" />} defaultOpen={false}>
@@ -2566,6 +2947,20 @@ const AnnotationSettingsSection = () => {
                         ))}
                     </div>
                 </div>
+                <div className="flex items-center justify-between gap-1">
+                    <span className="text-[10px] font-medium flex-shrink-0" style={{ color: 'var(--ui-text-secondary)' }}>Font</span>
+                    <select
+                        value={annotationSettings.fontFamily ?? ''}
+                        onChange={(e) => setAnnotationSetting('fontFamily', e.target.value || null)}
+                        className="flex-1 ml-2 px-1 py-0.5 text-[9px] rounded focus:outline-none"
+                        style={{ backgroundColor: 'var(--ui-bg-primary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-primary)' }}
+                    >
+                        <option value="">Default</option>
+                        {DIMENSION_FONT_OPTIONS.map(f => (
+                            <option key={f.label} value={f.label}>{f.label}</option>
+                        ))}
+                    </select>
+                </div>
                 <div className="flex items-center justify-between">
                     <span className="text-[10px] font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Font Size</span>
                     <SliderInput value={annotationSettings.fontSize} onChange={(v) => setAnnotationSetting('fontSize', v)} min={0.5} max={5} step={0.25} />
@@ -2573,6 +2968,14 @@ const AnnotationSettingsSection = () => {
                 <div className="flex items-center justify-between">
                     <span className="text-[10px] font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Text Color</span>
                     <ColorPicker value={annotationSettings.textColor} onChange={(c) => setAnnotationSetting('textColor', c)} />
+                </div>
+                <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Outline Color</span>
+                    <ColorPicker value={annotationSettings.outlineColor ?? '#ffffff'} onChange={(c) => setAnnotationSetting('outlineColor', c)} />
+                </div>
+                <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Outline Width</span>
+                    <SliderInput value={annotationSettings.outlineWidth ?? 0.15} onChange={(v) => setAnnotationSetting('outlineWidth', v)} min={0} max={0.5} step={0.05} />
                 </div>
                 <div className="flex items-center justify-between">
                     <span className="text-[10px] font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Background</span>
@@ -2599,6 +3002,45 @@ const AnnotationSettingsSection = () => {
                     <span className="text-[10px] font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Leader Dashed</span>
                     <input type="checkbox" checked={annotationSettings.leaderLineDashed} onChange={(e) => setAnnotationSetting('leaderLineDashed', e.target.checked)} className="rounded accent-theme" />
                 </div>
+
+                {/* Custom Labels */}
+                <button
+                    onClick={() => setCustomLabelsOpen(!customLabelsOpen)}
+                    className="w-full flex items-center justify-between px-2 py-1 text-[10px] rounded transition-colors"
+                    style={{ backgroundColor: 'var(--ui-bg-secondary)', color: 'var(--ui-text-secondary)', border: '1px solid var(--ui-border)' }}
+                >
+                    <span>Custom Labels</span>
+                    <span className="text-[8px]">{customLabelsOpen ? '▼' : '▶'}</span>
+                </button>
+                {customLabelsOpen && (
+                    <div className="pl-1 space-y-0.5">
+                        <span className="text-[9px] font-medium block mb-1" style={{ color: 'var(--ui-text-secondary)' }}>Roads</span>
+                        {Object.entries(ROAD_DIRECTION_LABELS).map(([key, label]) => {
+                            const dir = key.replace('road', '').toLowerCase()
+                            if (!streetEdges[dir]) return null
+                            return (
+                                <CustomLabelRowAnnotation
+                                    key={key}
+                                    label={label}
+                                    labelKey={key}
+                                    customLabels={annotationCustomLabels}
+                                    setCustomLabel={setAnnotationCustomLabel}
+                                />
+                            )
+                        })}
+                        <span className="text-[9px] font-medium block mt-2 mb-1" style={{ color: 'var(--ui-text-secondary)' }}>Lots</span>
+                        {lotIds.map((lotId, idx) => (
+                            <CustomLabelRowAnnotation
+                                key={`lot-${lotId}-name`}
+                                label={`Lot ${idx + 1}`}
+                                labelKey={`lot-${lotId}-name`}
+                                customLabels={annotationCustomLabels}
+                                setCustomLabel={setAnnotationCustomLabel}
+                            />
+                        ))}
+                    </div>
+                )}
+
                 <button
                     onClick={resetAnnotationPositions}
                     className="w-full px-2 py-1 text-[10px] rounded transition-colors hover-bg-secondary"
@@ -2607,6 +3049,267 @@ const AnnotationSettingsSection = () => {
                     Reset All Label Positions
                 </button>
             </div>
+        </Section>
+    )
+}
+
+// ============================================
+// DIMENSION STYLES SECTION
+// ============================================
+
+const CustomLabelRowDim = ({ label, dimensionKey, customLabels, setCustomLabel }) => {
+    const config = customLabels?.[dimensionKey] || { mode: 'value', text: '' }
+    const isCustom = config.mode === 'custom'
+    return (
+        <div className="flex items-center gap-1 mb-1">
+            <span className="text-[9px] w-20 truncate flex-shrink-0" style={{ color: 'var(--ui-text-secondary)' }}>{label}</span>
+            <div className="flex items-center gap-1 flex-1">
+                <button
+                    onClick={() => setCustomLabel(dimensionKey, isCustom ? 'value' : 'custom', config.text)}
+                    className="px-1.5 py-0.5 rounded text-[8px] font-medium border transition-colors flex-shrink-0"
+                    style={{
+                        backgroundColor: isCustom ? 'var(--ui-accent)' : 'var(--ui-bg-primary)',
+                        borderColor: isCustom ? 'var(--ui-accent)' : 'var(--ui-border)',
+                        color: isCustom ? '#fff' : 'var(--ui-text-secondary)',
+                    }}
+                    title={isCustom ? 'Using custom label — click to revert to value' : 'Using numeric value — click to enter custom text'}
+                >
+                    {isCustom ? 'Custom' : 'Value'}
+                </button>
+                {isCustom && (
+                    <input
+                        type="text"
+                        value={config.text}
+                        onChange={(e) => setCustomLabel(dimensionKey, 'custom', e.target.value)}
+                        placeholder="label or leave blank"
+                        className="flex-1 px-1 py-0.5 text-[9px] rounded focus:outline-none"
+                        style={{ backgroundColor: 'var(--ui-bg-primary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-primary)' }}
+                    />
+                )}
+            </div>
+        </div>
+    )
+}
+
+const ToggleRow = ({ label, value, onChange }) => (
+    <div className="flex items-center justify-between py-0.5">
+        <span className="text-[10px]" style={{ color: 'var(--ui-text-secondary)' }}>{label}</span>
+        <input
+            type="checkbox"
+            checked={!!value}
+            onChange={(e) => onChange(e.target.checked)}
+            className="rounded accent-theme"
+            style={{ backgroundColor: 'var(--ui-bg-secondary)', borderColor: 'var(--ui-border)' }}
+        />
+    </div>
+)
+
+const ButtonGroupRow = ({ label, options, value, onChange }) => (
+    <div className="flex items-center justify-between gap-1 py-0.5">
+        {label && <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--ui-text-secondary)' }}>{label}</span>}
+        <div className="flex gap-1 text-[9px]">
+            {options.map(({ key, label: lbl }) => (
+                <button key={key}
+                    onClick={() => onChange(key)}
+                    className="px-2 py-0.5 rounded border"
+                    style={{
+                        backgroundColor: value === key ? 'var(--ui-accent)' : 'var(--ui-bg-primary)',
+                        borderColor: value === key ? 'var(--ui-accent)' : 'var(--ui-border)',
+                        color: value === key ? '#fff' : 'var(--ui-text-secondary)',
+                    }}
+                >
+                    {lbl}
+                </button>
+            ))}
+        </div>
+    </div>
+)
+
+const DimSubSection = ({ title, defaultOpen = false, children }) => {
+    const [isOpen, setIsOpen] = useState(defaultOpen)
+    return (
+        <div style={{ borderBottom: '1px solid var(--ui-border)' }}>
+            <button
+                onClick={() => setIsOpen(v => !v)}
+                className="w-full flex items-center justify-between p-2 text-[10px] font-bold uppercase tracking-wider transition-colors"
+                style={{ backgroundColor: 'var(--ui-bg-primary)', color: 'var(--ui-text-secondary)' }}
+            >
+                {title}
+                {isOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            </button>
+            {isOpen && (
+                <div className="p-2 space-y-1.5" style={{ backgroundColor: 'var(--ui-bg-tertiary)' }}>
+                    {children}
+                </div>
+            )}
+        </div>
+    )
+}
+
+const DimDivider = () => <div className="my-1" style={{ borderTop: '1px solid var(--ui-bg-primary)' }} />
+
+const DimensionStylesSection = () => {
+    const styleSettings = useStore((s) => s.viewSettings?.styleSettings)
+    const setDimensionSetting = useStore((s) => s.setDimensionSetting)
+    const setCustomLabel = useStore((s) => s.setCustomLabel)
+
+    const ds = styleSettings?.dimensionSettings ?? {}
+
+    return (
+        <Section title="Dimensions" icon={<Settings className="w-4 h-4" />} defaultOpen={false}>
+
+            {/* ── Line & Marker Styles ── */}
+            <DimSubSection title="Line & Marker Styles" defaultOpen={true}>
+                <ColorPicker
+                    label="Line Color"
+                    value={ds.lineColor ?? '#000000'}
+                    onChange={(v) => setDimensionSetting('lineColor', v)}
+                />
+                <SliderInput label="Line Width" value={ds.lineWidth ?? 1} onChange={(v) => setDimensionSetting('lineWidth', v)} min={0.5} max={5} step={0.5} />
+
+                <DimDivider />
+
+                {/* Extension line color — null means "same as line" */}
+                <div className="flex items-center gap-1">
+                    <ColorPicker
+                        label="Ext. Line Color"
+                        value={ds.extensionLineColor ?? ds.lineColor ?? '#000000'}
+                        onChange={(v) => setDimensionSetting('extensionLineColor', v)}
+                    />
+                    <button
+                        onClick={() => setDimensionSetting('extensionLineColor', null)}
+                        className="text-[8px] px-1.5 py-0.5 rounded border flex-shrink-0"
+                        style={{ borderColor: ds.extensionLineColor == null ? 'var(--ui-accent)' : 'var(--ui-border)', color: ds.extensionLineColor == null ? 'var(--ui-accent)' : 'var(--ui-text-muted)', backgroundColor: 'var(--ui-bg-primary)' }}
+                        title="Reset to same color as main line"
+                    >
+                        {ds.extensionLineColor == null ? 'auto' : 'auto?'}
+                    </button>
+                </div>
+                <ButtonGroupRow
+                    label="Ext. Style"
+                    options={[{ key: 'dashed', label: 'Dashed' }, { key: 'solid', label: 'Solid' }]}
+                    value={ds.extensionLineStyle ?? 'dashed'}
+                    onChange={(v) => setDimensionSetting('extensionLineStyle', v)}
+                />
+                <SliderInput label="Ext. Width" value={ds.extensionWidth ?? 0.5} onChange={(v) => setDimensionSetting('extensionWidth', v)} min={0.1} max={2} step={0.1} />
+
+                <DimDivider />
+
+                <ButtonGroupRow
+                    label="Marker"
+                    options={[{ key: 'tick', label: 'Tick' }, { key: 'arrow', label: 'Arrow' }, { key: 'dot', label: 'Dot' }]}
+                    value={ds.endMarker ?? 'tick'}
+                    onChange={(v) => setDimensionSetting('endMarker', v)}
+                />
+                {/* Marker color — null means "same as line" */}
+                <div className="flex items-center gap-1">
+                    <ColorPicker
+                        label="Marker Color"
+                        value={ds.markerColor ?? ds.lineColor ?? '#000000'}
+                        onChange={(v) => setDimensionSetting('markerColor', v)}
+                    />
+                    <button
+                        onClick={() => setDimensionSetting('markerColor', null)}
+                        className="text-[8px] px-1.5 py-0.5 rounded border flex-shrink-0"
+                        style={{ borderColor: ds.markerColor == null ? 'var(--ui-accent)' : 'var(--ui-border)', color: ds.markerColor == null ? 'var(--ui-accent)' : 'var(--ui-text-muted)', backgroundColor: 'var(--ui-bg-primary)' }}
+                        title="Reset to same color as main line"
+                    >
+                        {ds.markerColor == null ? 'auto' : 'auto?'}
+                    </button>
+                </div>
+                <SliderInput label="Marker Scale" value={ds.markerScale ?? 1} onChange={(v) => setDimensionSetting('markerScale', v)} min={0.5} max={3} step={0.1} />
+            </DimSubSection>
+
+            {/* ── Text Styles ── */}
+            <DimSubSection title="Text Styles">
+                <div className="flex items-center justify-between gap-1">
+                    <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--ui-text-secondary)' }}>Font</span>
+                    <select
+                        value={ds.fontFamily ?? 'Inter'}
+                        onChange={(e) => setDimensionSetting('fontFamily', e.target.value)}
+                        className="flex-1 ml-2 px-1 py-0.5 text-[9px] rounded focus:outline-none"
+                        style={{ backgroundColor: 'var(--ui-bg-primary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-primary)' }}
+                    >
+                        {DIMENSION_FONT_OPTIONS.map(f => (
+                            <option key={f.label} value={f.label}>{f.label}</option>
+                        ))}
+                    </select>
+                </div>
+                <SliderInput label="Font Size" value={ds.fontSize ?? 2} onChange={(v) => setDimensionSetting('fontSize', v)} min={1} max={10} step={0.5} />
+                <ColorPicker label="Text Color" value={ds.textColor ?? '#000000'} onChange={(v) => setDimensionSetting('textColor', v)} />
+                <ColorPicker label="Outline Color" value={ds.outlineColor ?? '#ffffff'} onChange={(v) => setDimensionSetting('outlineColor', v)} />
+                <SliderInput label="Outline Width" value={ds.outlineWidth ?? 0.1} onChange={(v) => setDimensionSetting('outlineWidth', v)} min={0} max={0.5} step={0.05} />
+                <ButtonGroupRow
+                    label="Text Mode"
+                    options={[{ key: 'follow-line', label: 'Follow' }, { key: 'billboard', label: 'Billboard' }]}
+                    value={ds.textMode ?? 'follow-line'}
+                    onChange={(v) => setDimensionSetting('textMode', v)}
+                />
+
+                <DimDivider />
+
+                <ToggleRow
+                    label="Text Background"
+                    value={ds.textBackground?.enabled}
+                    onChange={(v) => setDimensionSetting('textBackground', { ...(ds.textBackground ?? {}), enabled: v })}
+                />
+                {ds.textBackground?.enabled && (
+                    <>
+                        <ColorPicker
+                            label="Bg Color"
+                            value={ds.textBackground?.color ?? '#ffffff'}
+                            onChange={(v) => setDimensionSetting('textBackground', { ...(ds.textBackground ?? {}), color: v })}
+                        />
+                        <SliderInput
+                            label="Bg Opacity"
+                            value={ds.textBackground?.opacity ?? 0.85}
+                            onChange={(v) => setDimensionSetting('textBackground', { ...(ds.textBackground ?? {}), opacity: v })}
+                            min={0} max={1} step={0.05}
+                        />
+                    </>
+                )}
+            </DimSubSection>
+
+            {/* ── Positioning ── */}
+            <DimSubSection title="Positioning">
+                <ButtonGroupRow
+                    label="Units"
+                    options={[{ key: 'feet', label: "ft'" }, { key: 'feet-inches', label: 'ft-in' }, { key: 'meters', label: 'm' }]}
+                    value={ds.unitFormat ?? 'feet'}
+                    onChange={(v) => setDimensionSetting('unitFormat', v)}
+                />
+                <SliderInput label="Setback Offset" value={ds.setbackDimOffset ?? 5} onChange={(v) => setDimensionSetting('setbackDimOffset', v)} min={1} max={30} step={1} />
+                <SliderInput label="Lot Offset" value={ds.lotDimOffset ?? 15} onChange={(v) => setDimensionSetting('lotDimOffset', v)} min={5} max={40} step={1} />
+
+                <DimDivider />
+
+                <ButtonGroupRow
+                    label="View Mode"
+                    options={[{ key: false, label: '2D Plan' }, { key: true, label: '3D Vertical' }]}
+                    value={ds.verticalMode ?? false}
+                    onChange={(v) => setDimensionSetting('verticalMode', v)}
+                />
+                {ds.verticalMode && (
+                    <SliderInput label="Vert. Height" value={ds.verticalOffset ?? 20} onChange={(v) => setDimensionSetting('verticalOffset', v)} min={5} max={60} step={1} />
+                )}
+            </DimSubSection>
+
+            {/* ── Custom Labels ── */}
+            <DimSubSection title="Custom Labels">
+                <p className="text-[9px] mb-2" style={{ color: 'var(--ui-text-muted)' }}>
+                    Override numeric values with custom text. Leave blank to hide the label entirely.
+                </p>
+                <CustomLabelRowDim label="Lot Width" dimensionKey="lotWidth" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                <CustomLabelRowDim label="Lot Depth" dimensionKey="lotDepth" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                <CustomLabelRowDim label="Front Setback" dimensionKey="setbackFront" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                <CustomLabelRowDim label="Rear Setback" dimensionKey="setbackRear" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                <CustomLabelRowDim label="Left Setback" dimensionKey="setbackLeft" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                <CustomLabelRowDim label="Right Setback" dimensionKey="setbackRight" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                <CustomLabelRowDim label="Bldg Height" dimensionKey="buildingHeight" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                <CustomLabelRowDim label="Principal Max Ht" dimensionKey="principalMaxHeight" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                <CustomLabelRowDim label="Accessory Max Ht" dimensionKey="accessoryMaxHeight" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+            </DimSubSection>
+
         </Section>
     )
 }
@@ -2737,6 +3440,292 @@ const AnalyticsSection = () => {
     )
 }
 
+// ============================================
+// SCENARIOS SECTION
+// ============================================
+
+const ScenariosSection = () => {
+    const currentProject = useStore((s) => s.currentProject)
+    const scenarios = useStore((s) => s.scenarios)
+    const activeScenario = useStore((s) => s.activeScenario)
+    const setScenarios = useStore((s) => s.setScenarios)
+    const setActiveScenario = useStore((s) => s.setActiveScenario)
+    const getSnapshotData = useStore((s) => s.getSnapshotData)
+    const applySnapshot = useStore((s) => s.applySnapshot)
+    const getLayerStateData = useStore((s) => s.getLayerStateData)
+    const showToast = useStore((s) => s.showToast)
+
+    const [loading, setLoading] = useState(false)
+    const [newName, setNewName] = useState('')
+    const [showNewInput, setShowNewInput] = useState(false)
+    const [showImportWizard, setShowImportWizard] = useState(false)
+    const newInputRef = useRef(null)
+
+    // Load scenarios when project changes
+    useEffect(() => {
+        if (!currentProject) {
+            setScenarios([])
+            setActiveScenario(null)
+            return
+        }
+        api.listScenarios(currentProject.id)
+            .then(list => setScenarios(list))
+            .catch(() => setScenarios([]))
+    }, [currentProject, setScenarios, setActiveScenario])
+
+    // Focus new name input when shown
+    useEffect(() => {
+        if (showNewInput && newInputRef.current) newInputRef.current.focus()
+    }, [showNewInput])
+
+    const handleSwitch = async (name) => {
+        if (!currentProject || name === activeScenario) return
+        setLoading(true)
+        try {
+            const data = await api.loadScenario(currentProject.id, name)
+            applySnapshot(data)
+            setActiveScenario(name)
+        } catch {
+            showToast('Failed to load scenario', 'error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleSaveCurrent = async () => {
+        if (!currentProject || !activeScenario) return
+        setLoading(true)
+        try {
+            const state = getSnapshotData()
+            await api.saveScenario(currentProject.id, activeScenario, state)
+            showToast(`Saved "${activeScenario}"`)
+        } catch {
+            showToast('Failed to save scenario', 'error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleSaveNew = async () => {
+        const name = newName.trim()
+        if (!name || !currentProject) return
+        setLoading(true)
+        try {
+            const state = getSnapshotData()
+            await api.saveScenario(currentProject.id, name, state)
+            const list = await api.listScenarios(currentProject.id)
+            setScenarios(list)
+            setActiveScenario(name)
+            setNewName('')
+            setShowNewInput(false)
+            showToast(`Created scenario "${name}"`)
+        } catch {
+            showToast('Failed to create scenario', 'error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleDelete = async () => {
+        if (!currentProject || !activeScenario) return
+        if (!window.confirm(`Delete scenario "${activeScenario}"?`)) return
+        setLoading(true)
+        try {
+            await api.deleteScenario(currentProject.id, activeScenario)
+            const list = await api.listScenarios(currentProject.id)
+            setScenarios(list)
+            setActiveScenario(null)
+            showToast(`Deleted "${activeScenario}"`)
+        } catch {
+            showToast('Failed to delete scenario', 'error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleApplyStyleToAll = async () => {
+        if (!currentProject || scenarios.length === 0) return
+        if (!window.confirm(`Apply current styles to all ${scenarios.length} scenarios?`)) return
+        setLoading(true)
+        try {
+            const styleData = getLayerStateData()
+            let count = 0
+            for (const s of scenarios) {
+                try {
+                    const scenarioData = await api.loadScenario(currentProject.id, s.name)
+                    const merged = {
+                        ...scenarioData,
+                        viewSettings: {
+                            ...scenarioData.viewSettings,
+                            ...styleData.viewSettings,
+                        },
+                        renderSettings: styleData.renderSettings || scenarioData.renderSettings,
+                    }
+                    await api.saveScenario(currentProject.id, s.name, merged)
+                    count++
+                } catch {
+                    // Skip individual failures
+                }
+            }
+            showToast(`Applied styles to ${count} scenarios`)
+        } catch {
+            showToast('Failed to apply styles', 'error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    if (!currentProject) {
+        return (
+            <Section title="Scenarios" icon={<Hexagon className="w-4 h-4" />} defaultOpen={false}>
+                <p className="text-xs py-1" style={{ color: 'var(--ui-text-muted)' }}>
+                    Open a project to use district scenarios.
+                </p>
+            </Section>
+        )
+    }
+
+    return (
+        <Section
+            title="Scenarios"
+            icon={<Hexagon className="w-4 h-4" />}
+            defaultOpen={true}
+            headerRight={
+                <button
+                    onClick={(e) => { e.stopPropagation(); setShowImportWizard(true) }}
+                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] transition-opacity hover:opacity-80"
+                    style={{ color: 'var(--ui-accent)' }}
+                    title="Import district scenarios from CSV"
+                >
+                    <Upload className="w-3 h-3" />
+                    Import CSV
+                </button>
+            }
+        >
+            {showImportWizard && (
+                <ImportWizard isOpen={showImportWizard} onClose={() => setShowImportWizard(false)} />
+            )}
+            <div className="space-y-2">
+                {/* District dropdown */}
+                <div className="flex items-center gap-1.5">
+                    <select
+                        value={activeScenario || ''}
+                        onChange={(e) => handleSwitch(e.target.value)}
+                        disabled={loading || scenarios.length === 0}
+                        className="flex-1 text-xs px-2 py-1 rounded"
+                        style={{
+                            backgroundColor: 'var(--ui-bg-secondary)',
+                            color: 'var(--ui-text-primary)',
+                            borderWidth: '1px',
+                            borderStyle: 'solid',
+                            borderColor: 'var(--ui-border)',
+                        }}
+                    >
+                        <option value="" disabled>
+                            {scenarios.length === 0 ? 'No scenarios — import CSV to create' : '— Select district —'}
+                        </option>
+                        {scenarios.map(s => (
+                            <option key={s.name} value={s.name}>
+                                {s.code ? `${s.code} — ${s.name}` : s.name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex items-center gap-1 flex-wrap">
+                    {activeScenario && (
+                        <button
+                            onClick={handleSaveCurrent}
+                            disabled={loading}
+                            className="flex items-center gap-1 px-2 py-1 rounded text-[10px] transition-opacity hover:opacity-80 disabled:opacity-40"
+                            style={{ backgroundColor: 'var(--ui-accent)', color: '#fff' }}
+                            title="Overwrite this scenario with current model state"
+                        >
+                            <Save className="w-3 h-3" />
+                            Save
+                        </button>
+                    )}
+                    <button
+                        onClick={() => setShowNewInput(v => !v)}
+                        disabled={loading}
+                        className="flex items-center gap-1 px-2 py-1 rounded text-[10px] transition-opacity hover:opacity-80 disabled:opacity-40"
+                        style={{ backgroundColor: 'var(--ui-bg-tertiary)', color: 'var(--ui-text-secondary)', borderWidth: '1px', borderStyle: 'solid', borderColor: 'var(--ui-border)' }}
+                        title="Save current model as a new named scenario"
+                    >
+                        <Plus className="w-3 h-3" />
+                        New
+                    </button>
+                    {activeScenario && (
+                        <button
+                            onClick={handleDelete}
+                            disabled={loading}
+                            className="flex items-center gap-1 px-2 py-1 rounded text-[10px] transition-opacity hover:opacity-80 disabled:opacity-40"
+                            style={{ backgroundColor: 'var(--ui-bg-tertiary)', color: 'var(--ui-text-secondary)', borderWidth: '1px', borderStyle: 'solid', borderColor: 'var(--ui-border)' }}
+                            title="Delete this scenario"
+                        >
+                            <Trash2 className="w-3 h-3" />
+                        </button>
+                    )}
+                    {scenarios.length > 1 && (
+                        <button
+                            onClick={handleApplyStyleToAll}
+                            disabled={loading}
+                            className="flex items-center gap-1 px-2 py-1 rounded text-[10px] transition-opacity hover:opacity-80 disabled:opacity-40"
+                            style={{ backgroundColor: 'var(--ui-bg-tertiary)', color: 'var(--ui-text-secondary)', borderWidth: '1px', borderStyle: 'solid', borderColor: 'var(--ui-border)' }}
+                            title="Apply current visual styles to all scenarios"
+                        >
+                            <Palette className="w-3 h-3" />
+                            Styles → All
+                        </button>
+                    )}
+                </div>
+
+                {/* New scenario name input */}
+                {showNewInput && (
+                    <div className="flex items-center gap-1">
+                        <input
+                            ref={newInputRef}
+                            type="text"
+                            value={newName}
+                            onChange={(e) => setNewName(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleSaveNew(); if (e.key === 'Escape') { setShowNewInput(false); setNewName('') } }}
+                            placeholder="Scenario name…"
+                            className="flex-1 text-xs px-2 py-1 rounded"
+                            style={{
+                                backgroundColor: 'var(--ui-bg-secondary)',
+                                color: 'var(--ui-text-primary)',
+                                borderWidth: '1px',
+                                borderStyle: 'solid',
+                                borderColor: 'var(--ui-border)',
+                            }}
+                        />
+                        <button
+                            onClick={handleSaveNew}
+                            disabled={!newName.trim() || loading}
+                            className="px-2 py-1 rounded text-[10px] transition-opacity hover:opacity-80 disabled:opacity-40"
+                            style={{ backgroundColor: 'var(--ui-accent)', color: '#fff' }}
+                        >
+                            <Check className="w-3 h-3" />
+                        </button>
+                        <button
+                            onClick={() => { setShowNewInput(false); setNewName('') }}
+                            className="px-2 py-1 rounded text-[10px] transition-opacity hover:opacity-80"
+                            style={{ backgroundColor: 'var(--ui-bg-tertiary)', color: 'var(--ui-text-secondary)', borderWidth: '1px', borderStyle: 'solid', borderColor: 'var(--ui-border)' }}
+                        >
+                            <X className="w-3 h-3" />
+                        </button>
+                    </div>
+                )}
+
+                {loading && (
+                    <p className="text-[10px]" style={{ color: 'var(--ui-text-muted)' }}>Loading…</p>
+                )}
+            </div>
+        </Section>
+    )
+}
+
 const DistrictParameterPanel = () => {
     return (
         <div
@@ -2759,12 +3748,14 @@ const DistrictParameterPanel = () => {
             </div>
 
             <div className="p-2">
+                <ScenariosSection />
                 <ModelSetupSection />
                 <LayersSection />
                 <AnnotationSettingsSection />
                 <DistrictParametersSection />
                 <ModelParametersSection />
                 <StylesSection />
+                <DimensionStylesSection />
                 <AnalyticsSection />
                 <BuildingRoofSection />
                 <RoadModulesSection />

@@ -34,6 +34,10 @@ export const APP_FIELDS = [
  * Each field maps to a dot-path in the districtParameters store object.
  */
 export const DISTRICT_FIELDS = [
+  // Meta (scenario identity — not stored in districtParameters)
+  { key: '_districtName', label: 'District Name', group: 'Meta' },
+  { key: '_districtCode', label: 'District Code', group: 'Meta' },
+
   // Lot Dimensions
   { key: 'lotArea.min', label: 'Min Lot Area', group: 'Lot Dimensions' },
   { key: 'lotArea.max', label: 'Max Lot Area', group: 'Lot Dimensions' },
@@ -392,7 +396,10 @@ export function applyDistrictMapping(row, mapping) {
     const rawValue = row[index]
     if (rawValue === '' || rawValue === undefined) continue
 
-    if (fieldKey.endsWith('.permitted')) {
+    if (fieldKey.startsWith('_')) {
+      // String meta field (e.g. _districtName, _districtCode)
+      result[fieldKey] = rawValue
+    } else if (fieldKey.endsWith('.permitted')) {
       const lower = rawValue.toLowerCase().trim()
       result[fieldKey] = ['true', 'yes', '1', 'y', 'permitted'].includes(lower)
     } else {
@@ -499,4 +506,44 @@ function applyFieldToLotData(lotData, fieldKey, value) {
       lotData.buildings.accessory.maxHeight = value
       break
   }
+}
+
+/**
+ * Parse all rows of a district CSV into an array of scenario objects,
+ * one per row. Each scenario has a name, code, and districtParameters map.
+ *
+ * Meta fields (_districtName, _districtCode) are extracted from the mapped
+ * values and used as the scenario identity, then removed from districtParameters.
+ *
+ * @param {string[][]} rows - CSV data rows (parsed, trimmed)
+ * @param {{ [colIndex: number]: string }} mapping - Column index -> district field key
+ * @returns {Array<{ name: string, code: string, districtParameters: Object }>}
+ */
+export function parseAllDistrictRows(rows, mapping) {
+  const results = []
+
+  rows.forEach((row, i) => {
+    // Skip entirely empty rows
+    if (row.every(cell => cell === '')) return
+
+    const mapped = applyDistrictMapping(row, mapping)
+
+    // Extract meta fields
+    const name = (mapped._districtName || '').trim() || `District ${i + 1}`
+    const code = (mapped._districtCode || '').trim()
+
+    // Build districtParameters (dot-path object) without meta keys
+    const districtParameters = {}
+    for (const [key, value] of Object.entries(mapped)) {
+      if (!key.startsWith('_')) {
+        districtParameters[key] = value
+      }
+    }
+
+    if (Object.keys(districtParameters).length > 0) {
+      results.push({ name, code, districtParameters })
+    }
+  })
+
+  return results
 }

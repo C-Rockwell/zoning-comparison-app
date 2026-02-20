@@ -33,7 +33,7 @@ React 19 + Vite 7 + Three.js 0.182 via @react-three/fiber 9.4 | Zustand 5 + Zund
 - State: `entities.lots[lotId]` — each lot has `buildings: { principal, accessory }` + expanded setbacks
 - Lot layout: Lot 1 in +X from origin (0,0 = front-left corner), Lots 2+ in -X
 - Visibility: `layers.X && lotVisibility[lotId].X` (global layers override per-lot)
-- Sidebar order: Model Setup → Layers → Annotations → District Parameters → Model Parameters → Styles → Analytics → Building/Roof → Road Modules → Road Module Styles → Views → Batch Export
+- Sidebar order: **Scenarios** → Model Setup → Layers → Annotations → District Parameters → Model Parameters → Styles → **Dimensions** → Analytics → Building/Roof → Road Modules → Road Module Styles → Views → Batch Export
 
 ## State Structure (useStore.js ~3,700 lines, v24)
 
@@ -44,24 +44,42 @@ React 19 + Vite 7 + Three.js 0.182 via @react-three/fiber 9.4 | Zustand 5 + Zund
 - `lotVisibility[lotId]` — per-lot visibility toggles
 - `modelSetup` — numLots, streetEdges, streetTypes (S1/S2/S3)
 - `districtParameters` — informational zoning data (not visualized)
+- `scenarios[]` / `activeScenario` — list of district scenario metadata + active name (loaded from backend per project)
 - Factory functions: `createDefaultLot()`, `createDefaultLotStyle()`, `createDefaultRoadModule()`, `createDefaultLotVisibility()`
 
-**Other key state**: `viewSettings` (camera, export, batch queue), `layerVisibility` (26+ layers), `dimensionSettings`, `annotationSettings`, `annotationPositions`, `styleSettings`, `roadModule`, `roadModuleStyles` (17 categories: 11 base + 6 alley-specific), `sunSettings`, `moveMode` (transient, excluded from persist/Zundo), `roadModuleStylesSnapshot` (transient — global style toggle revert)
+**Other key state**: `viewSettings` (camera, export, batch queue), `layerVisibility` (26+ layers), `dimensionSettings`, `annotationSettings`, `annotationCustomLabels`, `annotationPositions`, `styleSettings`, `roadModule`, `roadModuleStyles` (17 categories: 11 base + 6 alley-specific), `sunSettings`, `moveMode` (transient, excluded from persist/Zundo), `roadModuleStylesSnapshot` (transient — global style toggle revert)
 
-**Store version 24**: Migrations v1–v23. Persist `merge` function patches missing `entityStyles`, `lotVisibility`, `viewSettings.layers`, `roadModuleStyles` keys on every hydration.
+**Store version 24**: Migrations v1–v23. Persist `merge` function patches missing `entityStyles`, `lotVisibility`,
+`viewSettings.layers`, `roadModuleStyles`, `dimensionSettings`, and `annotationSettings` keys on every hydration.
 
-**Undo/redo**: Tracks entities, entityOrder, entityStyles, lotVisibility, existing, proposed, viewSettings, sunSettings, roadModule, roadModuleStyles, comparisonRoads, annotationSettings, annotationPositions. Excludes export flags.
+**Undo/redo**: Tracks entities, entityOrder, entityStyles, lotVisibility, existing, proposed, viewSettings, sunSettings, roadModule, roadModuleStyles, comparisonRoads, annotationSettings, annotationCustomLabels, annotationPositions. Excludes export flags.
 
-**Entity hooks** (`useEntityStore.js`): `useLot(lotId)`, `useLotIds()`, `useActiveLot()`, `useLotStyle(lotId)`, `useBuilding(lotId, type)`, `useRoadModules()`, `useLotVisibility(lotId)`, `useActiveModule()`, `useModelSetup()`, `useDistrictParameters()`, `getLotData(lotId)` (non-hook)
+**Entity hooks** (`useEntityStore.js`): `useLot(lotId)`, `useLotIds()`, `useActiveLot()`, `useActiveLotId()`, `useLotStyle(lotId)`, `useBuilding(lotId, type)`, `useRoadModules()`, `useLotVisibility(lotId)`, `useActiveModule()`, `useModelSetup()`, `useDistrictParameters()`, `useEntityCount()`, `getLotData(lotId)` (non-hook)
 
 ## Import Patterns
 
 ```javascript
-import { useStore } from './store/useStore'
+import { useStore, DIMENSION_FONT_OPTIONS } from './store/useStore'
 import { useLot, useLotIds, useActiveLot } from '../hooks/useEntityStore'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 const { undo, redo } = useStore.temporal.getState()
 ```
+
+## Dimension System
+
+`dimensionSettings` lives at `viewSettings.styleSettings.dimensionSettings`. Full field list:
+
+- **Lines**: `lineColor`, `lineWidth`, `extensionLineColor` (null = inherit), `extensionLineStyle` ('dashed'|'solid'), `extensionWidth`
+- **Markers**: `endMarker` ('tick'|'arrow'|'dot'), `markerColor` (null = inherit), `markerScale` (multiplier)
+- **Text**: `textColor`, `fontSize`, `fontFamily` (resolved to URL via `DIMENSION_FONT_OPTIONS`), `outlineColor`, `outlineWidth`, `textMode` ('follow-line'|'billboard'), `textBackground` {enabled, color, opacity, padding}
+- **Positioning**: `setbackDimOffset` (default 5), `lotDimOffset` (default 15), `unitFormat`, `autoStack`, `stackGap`
+- **Vertical mode**: `verticalMode` (false=XY plan, true=Z upward), `verticalOffset`
+- **Custom labels**: `customLabels.{lotWidth|lotDepth|setbackFront|setbackRear|setbackLeft|setbackRight|buildingHeight|principalMaxHeight|accessoryMaxHeight}` — each `{mode:'value'|'custom', text:''}`
+
+`DIMENSION_FONT_OPTIONS` exported from `useStore.js` — array of `{label, url}` for 6 Google Fonts.
+Store actions: `setDimensionSetting(key, value)`, `setCustomLabel(key, mode, text)`.
+UI: `ParameterPanel.jsx` (Comparison) and `DimensionStylesSection` in `DistrictParameterPanel.jsx` (District).
+Offsets in `LotEntity.jsx` read from `dimensionSettings` (no longer hardcoded).
 
 ## Conventions (CRITICAL)
 
@@ -104,25 +122,42 @@ AutoCAD-style 3-phase: selectObject → selectBase (pause undo, disable camera) 
 - **Edge extrude**: Sends DELTA per pointer move (not cumulative) — additive displacement
 - **CameraControls**: `dollySpeed={0.25}`, `smoothTime={0.35}`
 - **Building style split** (v22): `principalBuildingEdges`/`Faces` and `accessoryBuildingEdges`/`Faces` — wired with `??` fallback to `buildingEdges`/`buildingFaces`
+- **NEVER define components inside render functions** — causes React to unmount/remount on every render, triggering render loops and locking the app. Always define at module level. Use `DimSubSection`/`DimDivider` in `DistrictParameterPanel.jsx` as the correct pattern.
+- **NEVER put `return null` before hooks** — all `useState`, `useRef`, `useMemo`, `useCallback`, `useThree`, `useStore` etc. must come BEFORE any early return. Putting `if (!visible) return null` above hooks causes "Rendered more hooks than during the previous render" crash (white screen). Fixed in: `DraggableLabel.jsx`, `AnnotationText.jsx`, `RoadAnnotations.jsx`, `RoadModule.jsx`.
 
 ## Style Categories (12)
 Lot Lines, Setbacks, Accessory Setbacks, Max Setbacks, BTZ Planes, Lot Access Arrows, Principal Building Edges/Faces, Accessory Building Edges/Faces, Roof, Max Height Plane
 
 ## Backend API
 
-Config at `~/.zoning-app-config.json`. Projects at `{projectsDir}/{id}/` with `project.json`, `images/`, `models/`, `snapshots/`, `layer-states/`.
+Config at `~/.zoning-app-config.json`. Projects at `{projectsDir}/{id}/` with `project.json`, `images/`, `models/`, `snapshots/`, `layer-states/`, `scenarios/`.
 
-Endpoints: `/api/health`, `/api/config` (GET/PUT), `/api/projects/:id` (CRUD), `/api/projects/:id/exports/:filename`, `/api/projects/:id/snapshots/:name`, `/api/projects/:id/layer-states/:name`
+Endpoints: `/api/health`, `/api/config` (GET/PUT), `/api/projects/:id` (CRUD), `/api/projects/:id/exports/:filename`, `/api/projects/:id/snapshots/:name`, `/api/projects/:id/layer-states/:name`, `/api/projects/:id/scenarios/:name`, `/api/style-presets` (list/save/load/delete — stored in `{projectsDir}/style-presets/`)
 
 ## Untested Features
 
+- **Scenarios System** (runtime-tested): Multi-district configurations per project. Each scenario = full model state JSON stored in `{projectId}/scenarios/`. `ScenariosSection` in `DistrictParameterPanel.jsx` — dropdown to switch districts, Save/New/Delete, "Styles → All" button, **Import CSV button** (opens same ImportWizard as District Parameters). No hardcoded scenario count limit. `server/routes/scenarios.js` mirrors snapshots route. Store: `scenarios[]`, `activeScenario`, `setScenarios`, `setActiveScenario`. API: `listScenarios`, `saveScenario`, `loadScenario`, `deleteScenario` in `api.js`.
+- **Style Presets** (built, not runtime-tested): Save/load named style presets (entityStyles + roadModuleStyles) via backend. `StylesSection` in `DistrictParameterPanel.jsx`. Actions: `getStylePresetData`, `applyStylePreset`. API: `saveStylePreset`, `loadStylePreset`, `listStylePresets`, `deleteStylePreset` in `api.js`.
+- **District CSV Batch Import** (runtime-tested): `parseAllDistrictRows()` in `importParser.js` — processes all rows (not just row 0). `_districtName`/`_districtCode` meta fields in `DISTRICT_FIELDS`. ImportWizard creates one scenario per CSV row when a project is open; falls back to single-district store import if no project. Accessible from both ScenariosSection and DistrictParametersSection headers.
 - **Batch Export**: Queue saved views × camera angles → ZIP download. Uses `exportQueue`/`isBatchExporting` in viewSettings, JSZip in Exporter.jsx, BatchExportSection in DistrictParameterPanel.
-- **District Parameter CSV Import**: Auto-detects lot vs district CSV. `DISTRICT_FIELDS` in importParser.js (~67 fields). ImportWizard with `importType` toggle.
 - **Road Module Styles Overhaul** (4 changes, builds but not runtime-tested):
   - Global style toggle: checkbox enables/disables global Color/Opacity/Line Width controls; snapshot stored in Zustand (`roadModuleStylesSnapshot`, transient) for revert on toggle-off or Reset
   - Alley-specific zone styles: 6 new `roadModuleStyles` keys with `null` defaults, merge-based resolution in `RoadModule.jsx`, "Alley Zones" UI section in panel
   - S3 z-offset: alley road groups raised z=0.042, alley fill rects z=0.077 (was 0.035)
   - Collapsible defaults: all zone sections start collapsed, Left/Right Side group toggles, Expand All / Collapse All button
+
+## Notes
+
+- **Google Fonts URLs**: `DIMENSION_FONT_OPTIONS` in `useStore.js` uses direct gstatic.com URLs. **Troika-three-text does NOT support woff2** — always use `.woff` or `.ttf` format. Current URLs: Inter v12 (woff), Roboto v51 (ttf), Lato v24 (woff), Montserrat v31 (ttf), Oswald v57 (ttf), Source Sans 3 v19 (ttf). If fonts go blank, re-fetch TTF URLs via Google Fonts v1 API: `https://fonts.googleapis.com/css?family=FontName:400` (returns older non-woff2 format) and update the array.
+- **Height dimensions**: `BuildingEditor/index.jsx` renders height dims with `plane="XZ"` and `textMode="billboard"` — required for pure-Z direction vectors. Default `plane="XY"` produces a zero perpendicular for Z-only dims, making ticks/extension lines invisible. Billboard text always faces camera at mid-height.
+- **Max height source of truth**: `principalMaxHeight` / `accessoryMaxHeight` in `LotEntity.jsx` come from `districtParameters.structures.{principal|accessory}.height.max` (not per-lot `building.maxHeight`). Defaults to `0` when unset, hiding the max height plane and dimension — set District Parameters → Structures to visualize. Max height dim (`offset=20`) alongside building height dim (`offset=10`) when `layers.dimensionsHeight` on and `maxHeight > 0`. Custom labels: `principalMaxHeight`, `accessoryMaxHeight` in `dimensionSettings.customLabels`.
+- **Layers panel**: 5 collapsible subsections in `LayersSection` (`DistrictParameterPanel.jsx`), all default collapsed. Groups defined at module scope as `LAYER_GROUPS`. Order: VISUAL AIDS (grid/origin/ground/axes/gimbal) → LOTS & SETBACKS (lotLines/setbacks/accessorySetbacks/maxSetbacks/lotAccessArrows/labelLotEdges) → STRUCTURES (btzPlanes/buildings/roof/maxHeightPlane) → ROADS (roadModule/roadIntersections/labelRoadZones) → ANNOTATION (annotationLabels + indented sub-labels + dim keys).
+- **Empty viewport after localStorage clear**: `entityOrder = []` on fresh state — no lots exist. Go to Model Setup → set Number of Lots ≥ 1.
+- **Annotation system**: `annotationSettings` has `fontFamily` (label from `DIMENSION_FONT_OPTIONS`, null = browser default), `outlineColor`, `outlineWidth`, plus original text/background/leader fields. `annotationCustomLabels` stores per-road-direction and per-lot custom labels (`{ mode: 'default'|'custom', text: '' }`). Road labels keyed as `roadFront`/`roadRight`/`roadRear`/`roadLeft`; lot labels as `lot-{lotId}-name`. Font label resolved to URL via `DIMENSION_FONT_OPTIONS.find()` in `LotAnnotations.jsx` / `RoadAnnotations.jsx`. `RoadAnnotations` accepts `direction` prop for custom label lookup. UI: `AnnotationSettingsSection` in `DistrictParameterPanel.jsx`. Actions: `setAnnotationSetting`, `setAnnotationCustomLabel`. **Leader visibility**: `DraggableLabel` shows leader when label is >0.5 units from `anchorPoint` (distance check, not custom-vs-default). Lot edge labels (anchor on edge, label 3ft outside lot) always show leaders; lot name / road name / setback labels (anchor ≈ default) only show after dragging.
+- **Gimbal/PostProcessing order**: `<PostProcessing />` must render BEFORE the conditional gimbal `<GizmoHelper>` in `SharedCanvas.jsx` and `Viewer3D.jsx`. If PostProcessing comes after, toggling gimbal causes AO/tone mapping to shift (perceived lighting change).
+- **RoadModule `RoadPolygon`**: Defined at module scope (not inside `RoadModule` render). Accepts `lineScale` as an explicit prop.
+
+---
 
 ## Known Limitations
 
