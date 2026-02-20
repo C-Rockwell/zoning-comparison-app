@@ -892,7 +892,8 @@ const LAYER_GROUPS = [
         title: 'Structures',
         items: [
             { key: 'btzPlanes', label: 'BTZ Planes' },
-            { key: 'buildings', label: 'Buildings' },
+            { key: 'principalBuildings', label: 'Principal Buildings' },
+            { key: 'accessoryBuildings', label: 'Accessory Buildings' },
             { key: 'roof', label: 'Roof' },
             { key: 'maxHeightPlane', label: 'Max Height Plane' },
         ],
@@ -915,11 +916,13 @@ const LAYER_GROUPS = [
             { key: 'labelSetbacks', label: 'Setback Labels', indent: true },
             { key: 'labelMaxSetbacks', label: 'Max Setback Labels', indent: true },
             { key: 'labelRoadNames', label: 'Road Names', indent: true },
-            { key: 'labelBuildings', label: 'Building Labels', indent: true },
+            { key: 'labelPrincipalBuildings', label: 'Principal Labels', indent: true },
+            { key: 'labelAccessoryBuildings', label: 'Accessory Labels', indent: true },
             { key: 'dimensionsLotWidth', label: 'Dim: Lot Width' },
             { key: 'dimensionsLotDepth', label: 'Dim: Lot Depth' },
             { key: 'dimensionsSetbacks', label: 'Dim: Setbacks' },
-            { key: 'dimensionsHeight', label: 'Dim: Height' },
+            { key: 'dimensionsHeightPrincipal', label: 'Dim: Principal Height' },
+            { key: 'dimensionsHeightAccessory', label: 'Dim: Accessory Height' },
         ],
     },
 ]
@@ -3245,6 +3248,20 @@ const DimensionStylesSection = () => {
                     value={ds.textMode ?? 'follow-line'}
                     onChange={(v) => setDimensionSetting('textMode', v)}
                 />
+                <SliderInput label="Text Offset" value={ds.textPerpOffset ?? 0} onChange={(v) => setDimensionSetting('textPerpOffset', v)} min={-10} max={20} step={0.5} />
+                <div className="flex items-center justify-between gap-1">
+                    <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--ui-text-secondary)' }}>Text Side</span>
+                    <select
+                        value={ds.textAnchorY ?? 'bottom'}
+                        onChange={(e) => setDimensionSetting('textAnchorY', e.target.value)}
+                        className="flex-1 ml-2 px-1 py-0.5 text-[9px] rounded focus:outline-none"
+                        style={{ backgroundColor: 'var(--ui-bg-primary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-primary)' }}
+                    >
+                        <option value="bottom">Above Line</option>
+                        <option value="center">Inline</option>
+                        <option value="top">Below Line</option>
+                    </select>
+                </div>
 
                 <DimDivider />
 
@@ -3280,6 +3297,18 @@ const DimensionStylesSection = () => {
                 />
                 <SliderInput label="Setback Offset" value={ds.setbackDimOffset ?? 5} onChange={(v) => setDimensionSetting('setbackDimOffset', v)} min={1} max={30} step={1} />
                 <SliderInput label="Lot Offset" value={ds.lotDimOffset ?? 15} onChange={(v) => setDimensionSetting('lotDimOffset', v)} min={5} max={40} step={1} />
+                <div className="flex items-center justify-between gap-1">
+                    <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--ui-text-secondary)' }}>Lot Depth Dim Side</span>
+                    <select
+                        value={ds.lotDepthDimSide ?? 'right'}
+                        onChange={(e) => setDimensionSetting('lotDepthDimSide', e.target.value)}
+                        className="flex-1 ml-2 px-1 py-0.5 text-[9px] rounded focus:outline-none"
+                        style={{ backgroundColor: 'var(--ui-bg-primary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-primary)' }}
+                    >
+                        <option value="right">Right</option>
+                        <option value="left">Left</option>
+                    </select>
+                </div>
 
                 <DimDivider />
 

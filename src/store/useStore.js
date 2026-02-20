@@ -512,14 +512,17 @@ export const useStore = create(
                     layers: {
                         lotLines: true,
                         setbackLines: true,
-                        buildings: true,
+                        principalBuildings: true,
+                        accessoryBuildings: true,
                         zoning: true,
                         streets: true,
                         setbacks: true,
                         dimensionsLotWidth: true, // Renamed from dimensionsLot
                         dimensionsLotDepth: true, // Renamed from dimensionsLot
                         dimensionsSetbacks: true,
-                        dimensionsHeight: true,
+                        dimensionsHeight: true,           // keep for migration fallback
+                        dimensionsHeightPrincipal: true,
+                        dimensionsHeightAccessory: true,
                         grid: true,
                         axes: false, // Default axes off
                         gimbal: true,
@@ -537,7 +540,8 @@ export const useStore = create(
                         labelMaxSetbacks: true,  // "Max. Front Setback" etc.
                         labelRoadNames: true,    // "S1 - Primary Street" etc.
                         labelRoadZones: true,    // "Right of Way", "Sidewalk" etc.
-                        labelBuildings: true,    // "Principal Building", "Accessory Building"
+                        labelPrincipalBuildings: true,    // "Principal Building"
+                        labelAccessoryBuildings: true,    // "Accessory Building"
                         maxSetbacks: true,       // Max setback lines
                         btzPlanes: true,         // BTZ front + side street planes
                         accessorySetbacks: true, // Accessory setback lines
@@ -786,6 +790,9 @@ export const useStore = create(
                             // Vertical mode
                             verticalMode: false,       // false = XY plan view; true = Z-axis upward
                             verticalOffset: 20,        // height above ground in vertical mode
+                            textPerpOffset: 0,
+                            textAnchorY: 'bottom',
+                            lotDepthDimSide: 'right',
                             customLabels: {
                                 lotWidth: { mode: 'value', text: 'A' },
                                 lotDepth: { mode: 'value', text: 'B' },
@@ -3107,7 +3114,7 @@ export const useStore = create(
             }),
             {
                 name: 'zoning-app-storage',
-                version: 24, // v24: alleyIntersectionFill style
+                version: 25, // v25: split buildings/labelBuildings/dimensionsHeight layer keys + dimension text offsets
                 migrate: (persistedState, version) => {
                     // Split dimensionsLot into dimensionsLotWidth and dimensionsLotDepth
                     if (persistedState.viewSettings && persistedState.viewSettings.layers && persistedState.viewSettings.layers.dimensionsLot !== undefined) {
@@ -3543,6 +3550,19 @@ export const useStore = create(
                         if (lyrs.labelRoadZones === undefined) lyrs.labelRoadZones = true;
                         if (lyrs.labelBuildings === undefined) lyrs.labelBuildings = true;
                         if (lyrs.roadIntersections === undefined) lyrs.roadIntersections = true;
+                        // Split labelBuildings -> labelPrincipalBuildings + labelAccessoryBuildings
+                        if (lyrs.labelBuildings !== undefined && lyrs.labelPrincipalBuildings === undefined) {
+                            lyrs.labelPrincipalBuildings = lyrs.labelBuildings;
+                            lyrs.labelAccessoryBuildings = lyrs.labelBuildings;
+                        }
+                        if (lyrs.labelPrincipalBuildings === undefined) lyrs.labelPrincipalBuildings = true;
+                        if (lyrs.labelAccessoryBuildings === undefined) lyrs.labelAccessoryBuildings = true;
+                        // Split buildings -> principalBuildings + accessoryBuildings
+                        if (lyrs.principalBuildings === undefined) lyrs.principalBuildings = lyrs.buildings ?? true;
+                        if (lyrs.accessoryBuildings === undefined) lyrs.accessoryBuildings = lyrs.buildings ?? true;
+                        // Split dimensionsHeight -> dimensionsHeightPrincipal + dimensionsHeightAccessory
+                        if (lyrs.dimensionsHeightPrincipal === undefined) lyrs.dimensionsHeightPrincipal = lyrs.dimensionsHeight ?? true;
+                        if (lyrs.dimensionsHeightAccessory === undefined) lyrs.dimensionsHeightAccessory = lyrs.dimensionsHeight ?? true;
                     }
                     // Enhanced dimension settings
                     const dimS = persistedState.viewSettings?.styleSettings?.dimensionSettings;
@@ -3779,9 +3799,26 @@ export const useStore = create(
                         }
                     }
 
+                    if (version < 25) {
+                        // v25: split buildings/labelBuildings/dimensionsHeight layer keys
+                        const layers = persistedState.viewSettings?.layers ?? {};
+                        persistedState.viewSettings = {
+                            ...persistedState.viewSettings,
+                            layers: {
+                                ...layers,
+                                principalBuildings: layers.principalBuildings ?? layers.buildings ?? true,
+                                accessoryBuildings: layers.accessoryBuildings ?? layers.buildings ?? true,
+                                labelPrincipalBuildings: layers.labelPrincipalBuildings ?? layers.labelBuildings ?? true,
+                                labelAccessoryBuildings: layers.labelAccessoryBuildings ?? layers.labelBuildings ?? true,
+                                dimensionsHeightPrincipal: layers.dimensionsHeightPrincipal ?? layers.dimensionsHeight ?? true,
+                                dimensionsHeightAccessory: layers.dimensionsHeightAccessory ?? layers.dimensionsHeight ?? true,
+                            }
+                        };
+                    }
+
                     return {
                         ...persistedState,
-                        version: 24
+                        version: 25
                     };
                 },
                 partialize: (state) => ({
@@ -3876,6 +3913,10 @@ export const useStore = create(
                                 ds[key] = val;
                             }
                         }
+                        // Patch new dimensionSettings keys (v25)
+                        if (ds.textPerpOffset === undefined) ds.textPerpOffset = 0;
+                        if (ds.textAnchorY === undefined) ds.textAnchorY = 'bottom';
+                        if (ds.lotDepthDimSide === undefined) ds.lotDepthDimSide = 'right';
                         // Patch missing customLabels keys
                         if (!ds.customLabels) ds.customLabels = {};
                         const customLabelDefaults = {

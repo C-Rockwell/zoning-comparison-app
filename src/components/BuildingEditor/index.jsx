@@ -362,7 +362,7 @@ const BuildingEditor = ({
                 start={dimStart}
                 end={dimEnd}
                 label={resolveDimensionLabel(totalBuildingHeight, heightDimensionKey, dimensionSettings)}
-                offset={10}
+                offset={-10}
                 color="black"
                 visible={showHeightDimensions}
                 settings={dimensionSettings}
@@ -377,7 +377,7 @@ const BuildingEditor = ({
                     start={dimStart}
                     end={[dimStart[0], dimStart[1], maxHeight]}
                     label={resolveDimensionLabel(maxHeight, maxHeightDimKey, dimensionSettings)}
-                    offset={20}
+                    offset={-20}
                     color="black"
                     visible={true}
                     settings={dimensionSettings}
@@ -442,11 +442,11 @@ const BuildingEditor = ({
                         offsetGroupX={offsetGroupX}
                     />
 
-                    {/* Move handle at footprint center, raised above building + offset from HeightHandle */}
+                    {/* Move handle at ground level, in front of building */}
                     <MoveHandle
-                        position={[bounds.cx, bounds.cy]}
-                        zPosition={totalBuildingHeight + 0.5}
-                        displayOffset={[-bounds.w * 0.25, -bounds.d * 0.25]}
+                        position={[bounds.cx, bounds.cy - bounds.d / 2]}
+                        zPosition={0}
+                        displayOffset={[0, -3]}
                         offsetGroupX={offsetGroupX}
                         offsetGroupY={offsetGroupY}
                         onDrag={(newX, newY) => { if (onBuildingMove) onBuildingMove(newX, newY) }}

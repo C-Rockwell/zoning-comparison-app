@@ -141,11 +141,24 @@ const Dimension = ({
     const renderLabel = () => {
         if (!label) return null
 
+        const textPerpOffset = settings.textPerpOffset ?? 0
+        const textAnchorYSetting = settings.textAnchorY ?? 'bottom'
+
+        // Compute offset text position (perpendicular to dim line)
+        const tmx = mx + px * textPerpOffset
+        const tmy = my + py * textPerpOffset
+        const tmz = mz + pz * textPerpOffset
+
+        // Determine anchorY
+        const resolvedAnchorY = flipText
+            ? (textAnchorYSetting === 'bottom' ? 'top' : textAnchorYSetting === 'top' ? 'bottom' : 'middle')
+            : (textAnchorYSetting === 'center' ? 'middle' : textAnchorYSetting)
+
         const textProps = {
             fontSize,
             color: textColor,
             anchorX: "center",
-            anchorY: flipText ? "top" : "bottom",
+            anchorY: resolvedAnchorY,
             outlineWidth: fontSize * (settings.outlineWidth ?? 0.1),
             outlineColor: settings.outlineColor || "white",
             onSync: bg ? handleSync : undefined,
@@ -169,7 +182,7 @@ const Dimension = ({
 
         if (resolvedTextMode === 'billboard') {
             return (
-                <Billboard position={[mx, my, mz]}>
+                <Billboard position={[tmx, tmy, tmz]}>
                     <group>
                         {bgMesh}
                         <Text {...textProps}>{label}</Text>
@@ -178,13 +191,41 @@ const Dimension = ({
             )
         }
 
-        // follow-line mode (default, original behavior)
+        // follow-line mode
+        if (verticalMode) {
+            // Stand text upright in the XZ/YZ plane (90° rotation around X)
+            return (
+                <group position={[tmx, tmy, tmz]} rotation={[Math.PI / 2, 0, textAngle]}>
+                    {bgMesh}
+                    <Text {...textProps}>{label}</Text>
+                </group>
+            )
+        }
         return (
-            <group position={[mx, my, mz]} rotation={[0, 0, textAngle]}>
+            <group position={[tmx, tmy, tmz]} rotation={[0, 0, textAngle]}>
                 {bgMesh}
                 <Text {...textProps}>{label}</Text>
             </group>
         )
+    }
+
+    // 3D arrow rotations (for proper orientation in any plane including vertical)
+    let arrowRotStart = [0, 0, angle + Math.PI]
+    let arrowRotEnd = [0, 0, angle]
+    if (endMarker === 'arrow') {
+        const yAxisV = new THREE.Vector3(0, 1, 0)
+        const fwdDir = new THREE.Vector3(ux, uy, uz)
+        const bwdDir = new THREE.Vector3(-ux, -uy, -uz)
+        if (fwdDir.lengthSq() > 0.001) {
+            const ef = new THREE.Euler().setFromQuaternion(
+                new THREE.Quaternion().setFromUnitVectors(yAxisV, fwdDir)
+            )
+            const eb = new THREE.Euler().setFromQuaternion(
+                new THREE.Quaternion().setFromUnitVectors(yAxisV, bwdDir)
+            )
+            arrowRotEnd = [ef.x, ef.y, ef.z]
+            arrowRotStart = [eb.x, eb.y, eb.z]
+        }
     }
 
     return (
@@ -213,13 +254,13 @@ const Dimension = ({
             )}
             {endMarker === 'arrow' && (
                 <>
-                    <group position={s} rotation={[0, 0, angle + Math.PI]}>
+                    <group position={s} rotation={arrowRotStart}>
                         <mesh position={[-arrowLength / 2, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
                             <coneGeometry args={[arrowWidth, arrowLength, 8]} />
                             <meshBasicMaterial color={markerColor} />
                         </mesh>
                     </group>
-                    <group position={e} rotation={[0, 0, angle]}>
+                    <group position={e} rotation={arrowRotEnd}>
                         <mesh position={[-arrowLength / 2, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
                             <coneGeometry args={[arrowWidth, arrowLength, 8]} />
                             <meshBasicMaterial color={markerColor} />

@@ -29,8 +29,8 @@ const EdgeHandle = ({ v1, v2, edgeIndex, onExtrude, offsetGroupX = 0 }) => {
         const dy = v2.y - v1.y
         const len = Math.sqrt(dx * dx + dy * dy)
         if (len === 0) return { x: 0, y: 1 }
-        // Rotate 90 degrees counter-clockwise for outward normal
-        return { x: -dy / len, y: dx / len }
+        // Rotate 90 degrees clockwise for outward normal
+        return { x: dy / len, y: -dx / len }
     }, [v1, v2])
 
     // Calculate edge length

@@ -161,7 +161,8 @@ const LotAnnotations = ({
         buildingLabels.push({
             id: `lot-${lotId}-bldg-principal`,
             text: 'Principal Building',
-            defaultPosition: [px, py, pz],
+            anchorPoint: [px, py, pz],
+            defaultPosition: [px + principal.width * 0.5 + 5, py, pz + 3],
         })
     }
 
@@ -172,7 +173,8 @@ const LotAnnotations = ({
         buildingLabels.push({
             id: `lot-${lotId}-bldg-accessory`,
             text: 'Accessory Building',
-            defaultPosition: [ax, ay, az],
+            anchorPoint: [ax, ay, az],
+            defaultPosition: [ax + accessory.width * 0.5 + 5, ay, az + 3],
         })
     }
 
@@ -239,18 +241,25 @@ const LotAnnotations = ({
             ))}
 
             {/* Building Labels */}
-            {layers.labelBuildings && buildingLabels.map((label) => (
-                <DraggableLabel
-                    key={label.id}
-                    {...sharedProps}
-                    text={label.text}
-                    fontSize={baseFontSize}
-                    defaultPosition={label.defaultPosition}
-                    anchorPoint={label.defaultPosition}
-                    customPosition={annotationPositions[label.id] || null}
-                    onPositionChange={(pos) => setAnnotationPosition(label.id, pos)}
-                />
-            ))}
+            {buildingLabels.map((label) => {
+                const isPrincipal = label.id.includes('bldg-principal')
+                const layerOn = isPrincipal
+                    ? (layers.labelPrincipalBuildings ?? layers.labelBuildings ?? true)
+                    : (layers.labelAccessoryBuildings ?? layers.labelBuildings ?? true)
+                if (!layerOn) return null
+                return (
+                    <DraggableLabel
+                        key={label.id}
+                        {...sharedProps}
+                        text={label.text}
+                        fontSize={baseFontSize}
+                        defaultPosition={label.defaultPosition}
+                        anchorPoint={label.anchorPoint}
+                        customPosition={annotationPositions[label.id] || null}
+                        onPositionChange={(pos) => setAnnotationPosition(label.id, pos)}
+                    />
+                )
+            })}
         </group>
     )
 }

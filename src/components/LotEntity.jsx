@@ -99,24 +99,37 @@ const RectLot = ({ width, depth, style, fillStyle, showWidthDimensions = false, 
             <Dimension
                 start={p1} end={p2}
                 label={resolveDimensionLabel(width, 'lotWidth', dimensionSettings)}
-                offset={-(dimensionSettings.lotDimOffset ?? 15)}
+                offset={dimensionSettings?.verticalMode ? +(dimensionSettings?.verticalOffset ?? 20) : -(dimensionSettings?.lotDimOffset ?? 15)}
                 color="black"
                 visible={showWidthDimensions}
                 settings={dimensionSettings}
                 lineScale={lineScale}
             />
 
-            {/* Depth dimension (right side) */}
-            <Dimension
-                start={p3} end={p2}
-                label={resolveDimensionLabel(depth, 'lotDepth', dimensionSettings)}
-                offset={dimensionSettings.lotDimOffset ?? 15}
-                color="black"
-                visible={showDepthDimensions}
-                settings={dimensionSettings}
-                flipText={true}
-                lineScale={lineScale}
-            />
+            {/* Depth dimension (left or right side) */}
+            {dimensionSettings?.lotDepthDimSide === 'left' ? (
+                <Dimension
+                    start={p4} end={p1}
+                    label={resolveDimensionLabel(depth, 'lotDepth', dimensionSettings)}
+                    offset={dimensionSettings?.verticalMode ? +(dimensionSettings?.verticalOffset ?? 20) : -(dimensionSettings?.lotDimOffset ?? 15)}
+                    color="black"
+                    visible={showDepthDimensions}
+                    settings={dimensionSettings}
+                    flipText={false}
+                    lineScale={lineScale}
+                />
+            ) : (
+                <Dimension
+                    start={p3} end={p2}
+                    label={resolveDimensionLabel(depth, 'lotDepth', dimensionSettings)}
+                    offset={dimensionSettings?.verticalMode ? +(dimensionSettings?.verticalOffset ?? 20) : +(dimensionSettings?.lotDimOffset ?? 15)}
+                    color="black"
+                    visible={showDepthDimensions}
+                    settings={dimensionSettings}
+                    flipText={true}
+                    lineScale={lineScale}
+                />
+            )}
         </group>
     )
 }
@@ -511,7 +524,8 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
     const showWidthDim = layers.dimensionsLotWidth
     const showDepthDim = layers.dimensionsLotDepth
     const showSetbackDim = layers.dimensionsSetbacks
-    const showHeightDim = layers.dimensionsHeight
+    const showPrincipalHeightDim = layers.dimensionsHeightPrincipal ?? layers.dimensionsHeight
+    const showAccessoryHeightDim = layers.dimensionsHeightAccessory ?? layers.dimensionsHeight
 
     // Position the lot group centered on its own width, front edge at y=0
     // Each lot's internal coordinate system: center-x at 0, front at -lotDepth/2, rear at +lotDepth/2
@@ -609,7 +623,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
             {/* ============================================ */}
             {/* Principal Building */}
             {/* ============================================ */}
-            {layers.buildings && visibility.buildings && principal && (
+            {(layers.principalBuildings ?? layers.buildings) && visibility.buildings && principal && (
                 <BuildingEditor
                     model={lotId}
                     width={principal.width}
@@ -633,7 +647,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     roof={principal.roof}
                     roofStyles={{ roofFaces: style.roofFaces, roofEdges: style.roofEdges }}
                     showRoof={layers.roof && visibility.roof}
-                    showHeightDimensions={showHeightDim}
+                    showHeightDimensions={showPrincipalHeightDim}
                     dimensionSettings={dimensionSettings}
                     lineScale={exportLineScale}
                     enableBuildingPolygonMode={() => enableEntityBuildingPolygonMode(lotId, 'principal')}
@@ -648,7 +662,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
             {/* ============================================ */}
             {/* Accessory Building */}
             {/* ============================================ */}
-            {layers.buildings && visibility.accessoryBuilding && accessory && accessory.width > 0 && (
+            {(layers.accessoryBuildings ?? layers.buildings) && visibility.accessoryBuilding && accessory && accessory.width > 0 && (
                 <BuildingEditor
                     model={lotId}
                     width={accessory.width}
@@ -672,7 +686,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     roof={accessory.roof}
                     roofStyles={{ roofFaces: style.roofFaces, roofEdges: style.roofEdges }}
                     showRoof={layers.roof && visibility.roof}
-                    showHeightDimensions={showHeightDim}
+                    showHeightDimensions={showAccessoryHeightDim}
                     dimensionSettings={dimensionSettings}
                     lineScale={exportLineScale}
                     enableBuildingPolygonMode={() => enableEntityBuildingPolygonMode(lotId, 'accessory')}
