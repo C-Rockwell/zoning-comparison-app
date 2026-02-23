@@ -786,12 +786,16 @@ export const useStore = create(
                             fontFamily: 'Inter',       // 'Inter' | 'Roboto' | 'Lato' | 'Montserrat' | 'Oswald' | 'Source Sans'
                             // Dimension offsets (replaces hardcoded values in LotEntity.jsx)
                             setbackDimOffset: 5,       // offset for setback dimensions
-                            lotDimOffset: 15,          // offset for lot width/depth dimensions
+                            lotDimOffset: 15,          // offset for lot width dimension
+                            lotDepthDimOffset: 15,     // offset for lot depth dimension (independent)
                             // Vertical mode
                             verticalMode: false,       // false = XY plan view; true = Z-axis upward
                             verticalOffset: 20,        // height above ground in vertical mode
                             textPerpOffset: 0,
                             textAnchorY: 'bottom',
+                            textPerpOffsetDepth: 0,    // depth dim text perp offset (independent)
+                            textAnchorYDepth: 'center', // depth dim text side (independent)
+                            textModeDepth: 'billboard', // depth dim text mode (billboard faces camera)
                             lotDepthDimSide: 'right',
                             customLabels: {
                                 lotWidth: { mode: 'value', text: 'A' },
@@ -3917,6 +3921,11 @@ export const useStore = create(
                         if (ds.textPerpOffset === undefined) ds.textPerpOffset = 0;
                         if (ds.textAnchorY === undefined) ds.textAnchorY = 'bottom';
                         if (ds.lotDepthDimSide === undefined) ds.lotDepthDimSide = 'right';
+                        // Patch new depth-independent keys
+                        if (ds.lotDepthDimOffset === undefined) ds.lotDepthDimOffset = ds.lotDimOffset ?? 15;
+                        if (ds.textPerpOffsetDepth === undefined) ds.textPerpOffsetDepth = 0;
+                        if (ds.textAnchorYDepth === undefined) ds.textAnchorYDepth = 'center';
+                        if (ds.textModeDepth === undefined) ds.textModeDepth = 'billboard';
                         // Patch missing customLabels keys
                         if (!ds.customLabels) ds.customLabels = {};
                         const customLabelDefaults = {

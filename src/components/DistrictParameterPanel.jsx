@@ -3248,12 +3248,32 @@ const DimensionStylesSection = () => {
                     value={ds.textMode ?? 'follow-line'}
                     onChange={(v) => setDimensionSetting('textMode', v)}
                 />
-                <SliderInput label="Text Offset" value={ds.textPerpOffset ?? 0} onChange={(v) => setDimensionSetting('textPerpOffset', v)} min={-10} max={20} step={0.5} />
+                <SliderInput label="Width Text Offset" value={ds.textPerpOffset ?? 0} onChange={(v) => setDimensionSetting('textPerpOffset', v)} min={-10} max={20} step={0.5} />
                 <div className="flex items-center justify-between gap-1">
-                    <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--ui-text-secondary)' }}>Text Side</span>
+                    <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--ui-text-secondary)' }}>Width Text Side</span>
                     <select
                         value={ds.textAnchorY ?? 'bottom'}
                         onChange={(e) => setDimensionSetting('textAnchorY', e.target.value)}
+                        className="flex-1 ml-2 px-1 py-0.5 text-[9px] rounded focus:outline-none"
+                        style={{ backgroundColor: 'var(--ui-bg-primary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-primary)' }}
+                    >
+                        <option value="bottom">Above Line</option>
+                        <option value="center">Inline</option>
+                        <option value="top">Below Line</option>
+                    </select>
+                </div>
+                <ButtonGroupRow
+                    label="Depth Text Mode"
+                    options={[{ key: 'billboard', label: 'Billboard' }, { key: 'follow-line', label: 'Follow' }]}
+                    value={ds.textModeDepth ?? 'billboard'}
+                    onChange={(v) => setDimensionSetting('textModeDepth', v)}
+                />
+                <SliderInput label="Depth Text Offset" value={ds.textPerpOffsetDepth ?? 0} onChange={(v) => setDimensionSetting('textPerpOffsetDepth', v)} min={-10} max={20} step={0.5} />
+                <div className="flex items-center justify-between gap-1">
+                    <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--ui-text-secondary)' }}>Depth Text Side</span>
+                    <select
+                        value={ds.textAnchorYDepth ?? 'center'}
+                        onChange={(e) => setDimensionSetting('textAnchorYDepth', e.target.value)}
                         className="flex-1 ml-2 px-1 py-0.5 text-[9px] rounded focus:outline-none"
                         style={{ backgroundColor: 'var(--ui-bg-primary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-primary)' }}
                     >
@@ -3296,7 +3316,8 @@ const DimensionStylesSection = () => {
                     onChange={(v) => setDimensionSetting('unitFormat', v)}
                 />
                 <SliderInput label="Setback Offset" value={ds.setbackDimOffset ?? 5} onChange={(v) => setDimensionSetting('setbackDimOffset', v)} min={1} max={30} step={1} />
-                <SliderInput label="Lot Offset" value={ds.lotDimOffset ?? 15} onChange={(v) => setDimensionSetting('lotDimOffset', v)} min={5} max={40} step={1} />
+                <SliderInput label="Lot Width Offset" value={ds.lotDimOffset ?? 15} onChange={(v) => setDimensionSetting('lotDimOffset', v)} min={5} max={40} step={1} />
+                <SliderInput label="Lot Depth Offset" value={ds.lotDepthDimOffset ?? ds.lotDimOffset ?? 15} onChange={(v) => setDimensionSetting('lotDepthDimOffset', v)} min={5} max={40} step={1} />
                 <div className="flex items-center justify-between gap-1">
                     <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--ui-text-secondary)' }}>Lot Depth Dim Side</span>
                     <select

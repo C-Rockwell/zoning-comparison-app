@@ -213,15 +213,15 @@ const Dimension = ({
     let arrowRotStart = [0, 0, angle + Math.PI]
     let arrowRotEnd = [0, 0, angle]
     if (endMarker === 'arrow') {
-        const yAxisV = new THREE.Vector3(0, 1, 0)
+        const xAxisV = new THREE.Vector3(1, 0, 0)
         const fwdDir = new THREE.Vector3(ux, uy, uz)
         const bwdDir = new THREE.Vector3(-ux, -uy, -uz)
         if (fwdDir.lengthSq() > 0.001) {
             const ef = new THREE.Euler().setFromQuaternion(
-                new THREE.Quaternion().setFromUnitVectors(yAxisV, fwdDir)
+                new THREE.Quaternion().setFromUnitVectors(xAxisV, fwdDir)
             )
             const eb = new THREE.Euler().setFromQuaternion(
-                new THREE.Quaternion().setFromUnitVectors(yAxisV, bwdDir)
+                new THREE.Quaternion().setFromUnitVectors(xAxisV, bwdDir)
             )
             arrowRotEnd = [ef.x, ef.y, ef.z]
             arrowRotStart = [eb.x, eb.y, eb.z]

@@ -106,30 +106,41 @@ const RectLot = ({ width, depth, style, fillStyle, showWidthDimensions = false, 
                 lineScale={lineScale}
             />
 
-            {/* Depth dimension (left or right side) */}
-            {dimensionSettings?.lotDepthDimSide === 'left' ? (
-                <Dimension
-                    start={p4} end={p1}
-                    label={resolveDimensionLabel(depth, 'lotDepth', dimensionSettings)}
-                    offset={dimensionSettings?.verticalMode ? +(dimensionSettings?.verticalOffset ?? 20) : -(dimensionSettings?.lotDimOffset ?? 15)}
-                    color="black"
-                    visible={showDepthDimensions}
-                    settings={dimensionSettings}
-                    flipText={false}
-                    lineScale={lineScale}
-                />
-            ) : (
-                <Dimension
-                    start={p3} end={p2}
-                    label={resolveDimensionLabel(depth, 'lotDepth', dimensionSettings)}
-                    offset={dimensionSettings?.verticalMode ? +(dimensionSettings?.verticalOffset ?? 20) : +(dimensionSettings?.lotDimOffset ?? 15)}
-                    color="black"
-                    visible={showDepthDimensions}
-                    settings={dimensionSettings}
-                    flipText={true}
-                    lineScale={lineScale}
-                />
-            )}
+            {/* Depth dimension (left or right side) — independent offset + text settings */}
+            {(() => {
+                const vMode = dimensionSettings?.verticalMode
+                const vOffset = dimensionSettings?.verticalOffset ?? 20
+                const depthOffset = dimensionSettings?.lotDepthDimOffset ?? dimensionSettings?.lotDimOffset ?? 15
+                const depthSettings = dimensionSettings ? {
+                    ...dimensionSettings,
+                    textPerpOffset: dimensionSettings.textPerpOffsetDepth ?? 0,
+                    textAnchorY: dimensionSettings.textAnchorYDepth ?? 'center',
+                    textMode: dimensionSettings.textModeDepth ?? 'billboard',
+                } : dimensionSettings
+                return dimensionSettings?.lotDepthDimSide === 'left' ? (
+                    <Dimension
+                        start={p4} end={p1}
+                        label={resolveDimensionLabel(depth, 'lotDepth', dimensionSettings)}
+                        offset={vMode ? +vOffset : -depthOffset}
+                        color="black"
+                        visible={showDepthDimensions}
+                        settings={depthSettings}
+                        flipText={false}
+                        lineScale={lineScale}
+                    />
+                ) : (
+                    <Dimension
+                        start={p3} end={p2}
+                        label={resolveDimensionLabel(depth, 'lotDepth', dimensionSettings)}
+                        offset={vMode ? +vOffset : +depthOffset}
+                        color="black"
+                        visible={showDepthDimensions}
+                        settings={depthSettings}
+                        flipText={false}
+                        lineScale={lineScale}
+                    />
+                )
+            })()}
         </group>
     )
 }

@@ -35,7 +35,7 @@ React 19 + Vite 7 + Three.js 0.182 via @react-three/fiber 9.4 | Zustand 5 + Zund
 - Visibility: `layers.X && lotVisibility[lotId].X` (global layers override per-lot)
 - Sidebar order: **Scenarios** → Model Setup → Layers → Annotations → District Parameters → Model Parameters → Styles → **Dimensions** → Analytics → Building/Roof → Road Modules → Road Module Styles → Views → Batch Export
 
-## State Structure (useStore.js ~3,700 lines, v24)
+## State Structure (useStore.js ~3,800 lines, v25)
 
 **Entity System** (District):
 - `entities.lots[lotId]` — lot data with buildings, setbacks (principal + accessory)
@@ -49,8 +49,7 @@ React 19 + Vite 7 + Three.js 0.182 via @react-three/fiber 9.4 | Zustand 5 + Zund
 
 **Other key state**: `viewSettings` (camera, export, batch queue), `layerVisibility` (26+ layers), `dimensionSettings`, `annotationSettings`, `annotationCustomLabels`, `annotationPositions`, `styleSettings`, `roadModule`, `roadModuleStyles` (17 categories: 11 base + 6 alley-specific), `sunSettings`, `moveMode` (transient, excluded from persist/Zundo), `roadModuleStylesSnapshot` (transient — global style toggle revert)
 
-**Store version 24**: Migrations v1–v23. Persist `merge` function patches missing `entityStyles`, `lotVisibility`,
-`viewSettings.layers`, `roadModuleStyles`, `dimensionSettings`, and `annotationSettings` keys on every hydration.
+**Store version 25**: Migrations v1–v24 + v25 layer key splits. Persist `merge` function patches missing `entityStyles`, `lotVisibility`, `viewSettings.layers`, `roadModuleStyles`, `dimensionSettings`, and `annotationSettings` keys on every hydration.
 
 **Undo/redo**: Tracks entities, entityOrder, entityStyles, lotVisibility, existing, proposed, viewSettings, sunSettings, roadModule, roadModuleStyles, comparisonRoads, annotationSettings, annotationCustomLabels, annotationPositions. Excludes export flags.
 
@@ -72,7 +71,9 @@ const { undo, redo } = useStore.temporal.getState()
 - **Lines**: `lineColor`, `lineWidth`, `extensionLineColor` (null = inherit), `extensionLineStyle` ('dashed'|'solid'), `extensionWidth`
 - **Markers**: `endMarker` ('tick'|'arrow'|'dot'), `markerColor` (null = inherit), `markerScale` (multiplier)
 - **Text**: `textColor`, `fontSize`, `fontFamily` (resolved to URL via `DIMENSION_FONT_OPTIONS`), `outlineColor`, `outlineWidth`, `textMode` ('follow-line'|'billboard'), `textBackground` {enabled, color, opacity, padding}
-- **Positioning**: `setbackDimOffset` (default 5), `lotDimOffset` (default 15), `unitFormat`, `autoStack`, `stackGap`
+- **Text positioning**: `textPerpOffset` (additional perpendicular offset for width dim text, ft), `textAnchorY` ('bottom'=above line|'center'=inline|'top'=below line) for width dims
+- **Depth dim text** (independent): `textModeDepth` ('billboard' default|'follow-line'), `textPerpOffsetDepth`, `textAnchorYDepth` ('center' default)
+- **Positioning**: `setbackDimOffset` (default 5), `lotDimOffset` (default 15, width dim), `lotDepthDimOffset` (default 15, depth dim — independent), `lotDepthDimSide` ('right'|'left'), `unitFormat`, `autoStack`, `stackGap`
 - **Vertical mode**: `verticalMode` (false=XY plan, true=Z upward), `verticalOffset`
 - **Custom labels**: `customLabels.{lotWidth|lotDepth|setbackFront|setbackRear|setbackLeft|setbackRight|buildingHeight|principalMaxHeight|accessoryMaxHeight}` — each `{mode:'value'|'custom', text:''}`
 
@@ -80,6 +81,8 @@ const { undo, redo } = useStore.temporal.getState()
 Store actions: `setDimensionSetting(key, value)`, `setCustomLabel(key, mode, text)`.
 UI: `ParameterPanel.jsx` (Comparison) and `DimensionStylesSection` in `DistrictParameterPanel.jsx` (District).
 Offsets in `LotEntity.jsx` read from `dimensionSettings` (no longer hardcoded).
+**Depth dim text**: Uses `depthSettings` IIFE in `RectLot` (LotEntity.jsx) to override `textMode`, `textAnchorY`, `textPerpOffset` with depth-specific values before passing to `<Dimension>`. Default billboard mode keeps text readable in isometric view.
+**Arrow end markers**: `Dimension.jsx` uses `THREE.Quaternion.setFromUnitVectors(+X, dimDir)` for correct 3D arrow orientation in any plane (plan/elevation/vertical).
 
 ## Conventions (CRITICAL)
 
@@ -122,6 +125,9 @@ AutoCAD-style 3-phase: selectObject → selectBase (pause undo, disable camera) 
 - **Edge extrude**: Sends DELTA per pointer move (not cumulative) — additive displacement
 - **CameraControls**: `dollySpeed={0.25}`, `smoothTime={0.35}`
 - **Building style split** (v22): `principalBuildingEdges`/`Faces` and `accessoryBuildingEdges`/`Faces` — wired with `??` fallback to `buildingEdges`/`buildingFaces`
+- **Building layer split** (v25): `layers.principalBuildings` / `layers.accessoryBuildings` — each with `?? layers.buildings` fallback in `LotEntity.jsx`. Similarly `layers.labelPrincipalBuildings` / `layers.labelAccessoryBuildings` (fallback to `labelBuildings`) and `layers.dimensionsHeightPrincipal` / `layers.dimensionsHeightAccessory` (fallback to `dimensionsHeight`).
+- **MoveHandle position**: Ground plane in front of building — `position={[bounds.cx, bounds.cy - bounds.d/2]}`, `zPosition={0}`, `displayOffset={[0, -3]}` (3ft in front of front edge).
+- **EdgeHandle normal**: Outward-pointing — `{ x: dy/len, y: -dx/len }` (CW rotation). Previous CCW `{ x: -dy/len, y: dx/len }` pointed inward.
 - **NEVER define components inside render functions** — causes React to unmount/remount on every render, triggering render loops and locking the app. Always define at module level. Use `DimSubSection`/`DimDivider` in `DistrictParameterPanel.jsx` as the correct pattern.
 - **NEVER put `return null` before hooks** — all `useState`, `useRef`, `useMemo`, `useCallback`, `useThree`, `useStore` etc. must come BEFORE any early return. Putting `if (!visible) return null` above hooks causes "Rendered more hooks than during the previous render" crash (white screen). Fixed in: `DraggableLabel.jsx`, `AnnotationText.jsx`, `RoadAnnotations.jsx`, `RoadModule.jsx`.
 
@@ -150,8 +156,8 @@ Endpoints: `/api/health`, `/api/config` (GET/PUT), `/api/projects/:id` (CRUD), `
 
 - **Google Fonts URLs**: `DIMENSION_FONT_OPTIONS` in `useStore.js` uses direct gstatic.com URLs. **Troika-three-text does NOT support woff2** — always use `.woff` or `.ttf` format. Current URLs: Inter v12 (woff), Roboto v51 (ttf), Lato v24 (woff), Montserrat v31 (ttf), Oswald v57 (ttf), Source Sans 3 v19 (ttf). If fonts go blank, re-fetch TTF URLs via Google Fonts v1 API: `https://fonts.googleapis.com/css?family=FontName:400` (returns older non-woff2 format) and update the array.
 - **Height dimensions**: `BuildingEditor/index.jsx` renders height dims with `plane="XZ"` and `textMode="billboard"` — required for pure-Z direction vectors. Default `plane="XY"` produces a zero perpendicular for Z-only dims, making ticks/extension lines invisible. Billboard text always faces camera at mid-height.
-- **Max height source of truth**: `principalMaxHeight` / `accessoryMaxHeight` in `LotEntity.jsx` come from `districtParameters.structures.{principal|accessory}.height.max` (not per-lot `building.maxHeight`). Defaults to `0` when unset, hiding the max height plane and dimension — set District Parameters → Structures to visualize. Max height dim (`offset=20`) alongside building height dim (`offset=10`) when `layers.dimensionsHeight` on and `maxHeight > 0`. Custom labels: `principalMaxHeight`, `accessoryMaxHeight` in `dimensionSettings.customLabels`.
-- **Layers panel**: 5 collapsible subsections in `LayersSection` (`DistrictParameterPanel.jsx`), all default collapsed. Groups defined at module scope as `LAYER_GROUPS`. Order: VISUAL AIDS (grid/origin/ground/axes/gimbal) → LOTS & SETBACKS (lotLines/setbacks/accessorySetbacks/maxSetbacks/lotAccessArrows/labelLotEdges) → STRUCTURES (btzPlanes/buildings/roof/maxHeightPlane) → ROADS (roadModule/roadIntersections/labelRoadZones) → ANNOTATION (annotationLabels + indented sub-labels + dim keys).
+- **Max height source of truth**: `principalMaxHeight` / `accessoryMaxHeight` in `LotEntity.jsx` come from `districtParameters.structures.{principal|accessory}.height.max` (not per-lot `building.maxHeight`). Defaults to `0` when unset, hiding the max height plane and dimension — set District Parameters → Structures to visualize. Max height dim (`offset=-20`) alongside building height dim (`offset=-10`) in `BuildingEditor/index.jsx` — negative so dims extend OUTSIDE the building (XZ plane perpendicular for Z-direction is `-X`, so negative offset → outward). Layer keys: `dimensionsHeightPrincipal` / `dimensionsHeightAccessory` (each ?? `dimensionsHeight` fallback). Custom labels: `principalMaxHeight`, `accessoryMaxHeight` in `dimensionSettings.customLabels`.
+- **Layers panel**: 5 collapsible subsections in `LayersSection` (`DistrictParameterPanel.jsx`), all default collapsed. Groups defined at module scope as `LAYER_GROUPS`. Order: VISUAL AIDS (grid/origin/ground/axes/gimbal) → LOTS & SETBACKS (lotLines/setbacks/accessorySetbacks/maxSetbacks/lotAccessArrows/labelLotEdges) → STRUCTURES (btzPlanes/**principalBuildings/accessoryBuildings**/roof/maxHeightPlane) → ROADS (roadModule/roadIntersections/labelRoadZones) → ANNOTATION (annotationLabels + **labelPrincipalBuildings/labelAccessoryBuildings** + dim keys: **dimensionsHeightPrincipal/dimensionsHeightAccessory** + other sub-labels).
 - **Empty viewport after localStorage clear**: `entityOrder = []` on fresh state — no lots exist. Go to Model Setup → set Number of Lots ≥ 1.
 - **Annotation system**: `annotationSettings` has `fontFamily` (label from `DIMENSION_FONT_OPTIONS`, null = browser default), `outlineColor`, `outlineWidth`, plus original text/background/leader fields. `annotationCustomLabels` stores per-road-direction and per-lot custom labels (`{ mode: 'default'|'custom', text: '' }`). Road labels keyed as `roadFront`/`roadRight`/`roadRear`/`roadLeft`; lot labels as `lot-{lotId}-name`. Font label resolved to URL via `DIMENSION_FONT_OPTIONS.find()` in `LotAnnotations.jsx` / `RoadAnnotations.jsx`. `RoadAnnotations` accepts `direction` prop for custom label lookup. UI: `AnnotationSettingsSection` in `DistrictParameterPanel.jsx`. Actions: `setAnnotationSetting`, `setAnnotationCustomLabel`. **Leader visibility**: `DraggableLabel` shows leader when label is >0.5 units from `anchorPoint` (distance check, not custom-vs-default). Lot edge labels (anchor on edge, label 3ft outside lot) always show leaders; lot name / road name / setback labels (anchor ≈ default) only show after dragging.
 - **Gimbal/PostProcessing order**: `<PostProcessing />` must render BEFORE the conditional gimbal `<GizmoHelper>` in `SharedCanvas.jsx` and `Viewer3D.jsx`. If PostProcessing comes after, toggling gimbal causes AO/tone mapping to shift (perceived lighting change).
