@@ -345,6 +345,101 @@ const AccessorySetbackLines = ({ lotWidth, lotDepth, accessorySetbacks, style, s
 }
 
 // ============================================
+// ParkingSetbackLines — parking setback lines + dimensions
+// Renders sides where parking setback has a positive value.
+// ============================================
+const ParkingSetbackLines = ({ lotWidth, lotDepth, parkingSetbacks, style, streetSides = {}, showDimensions = false, dimensionSettings = {}, lineScale = 1 }) => {
+    const { front: pFront, rear: pRear, sideInterior: pSideInt, sideStreet: pSideStr } = parkingSetbacks
+
+    // Street-facing sides use sideStreet; interior sides use sideInterior
+    const pLeftValue = streetSides.left ? pSideStr : pSideInt
+    const pRightValue = streetSides.right ? pSideStr : pSideInt
+
+    // Only render lines for sides with actual positive values
+    const hasFront = pFront != null && pFront > 0
+    const hasRear = pRear != null && pRear > 0
+    const hasSideLeft = pLeftValue != null && pLeftValue > 0
+    const hasSideRight = pRightValue != null && pRightValue > 0
+
+    if (!hasFront && !hasRear && !hasSideLeft && !hasSideRight) return null
+
+    const z = 0.13 // Above max setbacks (0.12), below lot access arrows (0.15)
+
+    // Positions: qualifying sides use their setback offset, others fall to lot edge
+    const y1 = hasFront ? -lotDepth / 2 + pFront : -lotDepth / 2
+    const y2 = hasRear ? lotDepth / 2 - pRear : lotDepth / 2
+    const x1 = hasSideLeft ? -lotWidth / 2 + pLeftValue : -lotWidth / 2
+    const x2 = hasSideRight ? lotWidth / 2 - pRightValue : lotWidth / 2
+
+    const p1 = [x1, y1, z]
+    const p2 = [x2, y1, z]
+    const p3 = [x2, y2, z]
+    const p4 = [x1, y2, z]
+
+    return (
+        <group>
+            {hasFront && <SingleLine start={p1} end={p2} style={style} side="front" lineScale={lineScale} />}
+            {hasSideRight && <SingleLine start={p2} end={p3} style={style} side="right" lineScale={lineScale} />}
+            {hasRear && <SingleLine start={p3} end={p4} style={style} side="rear" lineScale={lineScale} />}
+            {hasSideLeft && <SingleLine start={p4} end={p1} style={style} side="left" lineScale={lineScale} />}
+
+            {/* Front Parking Setback dimension */}
+            {hasFront && (
+                <Dimension
+                    start={[0, -lotDepth / 2, z]}
+                    end={[0, y1, z]}
+                    label={resolveDimensionLabel(pFront, 'setbackFront', dimensionSettings)}
+                    offset={dimensionSettings.setbackDimOffset ?? 5}
+                    color={style.color || '#FF9800'}
+                    visible={showDimensions}
+                    settings={dimensionSettings}
+                    lineScale={lineScale}
+                />
+            )}
+            {/* Rear Parking Setback dimension */}
+            {hasRear && (
+                <Dimension
+                    start={[0, y2, z]}
+                    end={[0, lotDepth / 2, z]}
+                    label={resolveDimensionLabel(pRear, 'setbackRear', dimensionSettings)}
+                    offset={dimensionSettings.setbackDimOffset ?? 5}
+                    color={style.color || '#FF9800'}
+                    visible={showDimensions}
+                    settings={dimensionSettings}
+                    lineScale={lineScale}
+                />
+            )}
+            {/* Left Parking Setback dimension */}
+            {hasSideLeft && (
+                <Dimension
+                    start={[-lotWidth / 2, 0, z]}
+                    end={[x1, 0, z]}
+                    label={resolveDimensionLabel(pLeftValue, 'setbackLeft', dimensionSettings)}
+                    offset={dimensionSettings.setbackDimOffset ?? 5}
+                    color={style.color || '#FF9800'}
+                    visible={showDimensions}
+                    settings={dimensionSettings}
+                    lineScale={lineScale}
+                />
+            )}
+            {/* Right Parking Setback dimension */}
+            {hasSideRight && (
+                <Dimension
+                    start={[x2, 0, z]}
+                    end={[lotWidth / 2, 0, z]}
+                    label={resolveDimensionLabel(pRightValue, 'setbackRight', dimensionSettings)}
+                    offset={dimensionSettings.setbackDimOffset ?? 5}
+                    color={style.color || '#FF9800'}
+                    visible={showDimensions}
+                    settings={dimensionSettings}
+                    lineScale={lineScale}
+                />
+            )}
+        </group>
+    )
+}
+
+// ============================================
 // BTZPlanes — vertical Build-To Zone planes on
 // building facades (front and street-facing side)
 // ============================================
@@ -535,6 +630,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
     const showWidthDim = layers.dimensionsLotWidth
     const showDepthDim = layers.dimensionsLotDepth
     const showSetbackDim = layers.dimensionsSetbacks
+    const showParkingSetbackDim = layers.dimensionsParkingSetbacks
     const showPrincipalHeightDim = layers.dimensionsHeightPrincipal ?? layers.dimensionsHeight
     const showAccessoryHeightDim = layers.dimensionsHeightAccessory ?? layers.dimensionsHeight
 
@@ -615,6 +711,22 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     accessorySetbacks={setbacks.accessory}
                     style={style.accessorySetbacks}
                     streetSides={streetSides}
+                    lineScale={exportLineScale}
+                />
+            )}
+
+            {/* ============================================ */}
+            {/* Parking Setback Lines */}
+            {/* ============================================ */}
+            {layers.parkingSetbacks && visibility.parkingSetbacks && lot.parkingSetbacks && style?.parkingSetbacks && (
+                <ParkingSetbackLines
+                    lotWidth={lotWidth}
+                    lotDepth={lotDepth}
+                    parkingSetbacks={lot.parkingSetbacks}
+                    style={style.parkingSetbacks}
+                    streetSides={streetSides}
+                    showDimensions={showParkingSetbackDim}
+                    dimensionSettings={dimensionSettings}
                     lineScale={exportLineScale}
                 />
             )}

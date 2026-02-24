@@ -9,6 +9,7 @@
 | Feature | File(s) | Key Functions/Components |
 |---------|---------|--------------------------|
 | Lot dimensions | `useStore.js:1542`, `DistrictParameterPanel.jsx` | `updateLotParam(lotId, key, value)` |
+| District→lot auto-populate | `useStore.js` (DISTRICT_TO_LOT_MAP), `DistrictParameterPanel.jsx` | `applyDistrictDefaultsToLot()`, `DISTRICT_REF_MAP`, `DistrictRefCell` |
 | Setback lines (min) | `LotEntity.jsx` (SetbackLines component) | Renders per-side at z=0.1 |
 | Setback lines (max) | `LotEntity.jsx` (MaxSetbackLines component) | Renders per-side at z=0.12 |
 | Setback lines (accessory) | `LotEntity.jsx` (AccessorySetbackLines component) | Renders per-side at z=0.11 |

@@ -52,7 +52,8 @@ const triangulatePolygon = (vertices) => {
 }
 
 /**
- * Build a BufferGeometry from position array and index array
+ * Build a BufferGeometry from position array and index array.
+ * All generators must emit correctly-wound triangles (CCW from outside).
  */
 const buildGeometry = (positions, indices, computeNormals = true) => {
     const geometry = new THREE.BufferGeometry()
@@ -87,34 +88,28 @@ export const generateShedRoof = (vertices, baseZ, ridgeZ, shedDirection) => {
     const positions = []
     const indices = []
 
-    // Top face vertices (0 to n-1)
+    // Top face vertices (0 to n-1) — sloped from baseZ to baseZ+rise
     for (let i = 0; i < n; i++) {
         const t = getT(vertices[i])
         positions.push(vertices[i].x, vertices[i].y, baseZ + t * rise)
     }
 
-    // Bottom face vertices (n to 2n-1)
+    // Bottom edge vertices at baseZ (n to 2n-1) — same XY, flat at building top
     for (let i = 0; i < n; i++) {
         positions.push(vertices[i].x, vertices[i].y, baseZ)
     }
 
-    // Top face triangles
+    // Top face triangles (no bottom face — building box provides the floor)
     const topTriangles = triangulatePolygon(vertices)
     for (const [a, b, c] of topTriangles) {
         indices.push(a, b, c)
     }
 
-    // Bottom face triangles (reversed winding)
-    for (const [a, b, c] of topTriangles) {
-        indices.push(n + a, n + c, n + b)
-    }
-
-    // Side walls connecting top and bottom
+    // Side wall quads: connect each top edge to its bottom edge
     for (let i = 0; i < n; i++) {
         const next = (i + 1) % n
-        // Two triangles per side quad
-        indices.push(i, next, n + next)
-        indices.push(i, n + next, n + i)
+        indices.push(i, n + i, n + next)
+        indices.push(i, n + next, next)
     }
 
     return buildGeometry(positions, indices)
@@ -122,8 +117,10 @@ export const generateShedRoof = (vertices, baseZ, ridgeZ, shedDirection) => {
 
 /**
  * Generate GABLED roof geometry
- * Ridge line runs through centroid along ridgeDirection.
- * Adds explicit ridge vertices at ridgeZ and builds slope/gable faces.
+ * Proper gable roof: ridge LINE along ridgeDirection at full building length.
+ * For 4-vertex rectangular footprints: 2 slope quads + 2 gable triangles (8 triangles).
+ * For non-rectangular polygons: pyramid fallback (fan to centroid).
+ * Uses identical triangle indices as hip roof — only ridge positions differ.
  */
 export const generateGabledRoof = (vertices, baseZ, ridgeZ, ridgeDirection) => {
     if (ridgeZ <= baseZ || !vertices || vertices.length < 3) return null
@@ -131,150 +128,142 @@ export const generateGabledRoof = (vertices, baseZ, ridgeZ, ridgeDirection) => {
     const bounds = getVertexBounds(vertices)
     const n = vertices.length
 
-    // Ridge endpoints at the extremes of the ridge axis, through the centroid
-    let ridgeStart, ridgeEnd, getSide
-    if (ridgeDirection === 'x') {
-        ridgeStart = { x: bounds.minX, y: bounds.centerY }
-        ridgeEnd   = { x: bounds.maxX, y: bounds.centerY }
-        getSide = (v) => v.y < bounds.centerY ? -1 : v.y > bounds.centerY ? 1 : 0
-    } else {
-        ridgeStart = { x: bounds.centerX, y: bounds.minY }
-        ridgeEnd   = { x: bounds.centerX, y: bounds.maxY }
-        getSide = (v) => v.x < bounds.centerX ? -1 : v.x > bounds.centerX ? 1 : 0
+    // Non-rectangular polygons: pyramid fallback (fan to centroid at ridgeZ)
+    if (n !== 4) {
+        const positions = []
+        const indices = []
+        for (let i = 0; i < n; i++) {
+            positions.push(vertices[i].x, vertices[i].y, baseZ)
+        }
+        positions.push(bounds.centerX, bounds.centerY, ridgeZ)
+        for (let i = 0; i < n; i++) {
+            indices.push(i, (i + 1) % n, n)
+        }
+        return buildGeometry(positions, indices)
     }
 
+    // Rectangular (4 vertices): explicit gable roof with ridge line
+    const { centerX, centerY, minX, maxX, minY, maxY } = bounds
     const positions = []
     const indices = []
 
-    // Footprint vertices at baseZ (indices 0 to n-1)
-    for (let i = 0; i < n; i++) {
+    // Footprint vertices at baseZ (indices 0-3)
+    for (let i = 0; i < 4; i++) {
         positions.push(vertices[i].x, vertices[i].y, baseZ)
     }
 
-    // Ridge vertices at ridgeZ
-    const rsi = n      // ridge start index
-    const rei = n + 1  // ridge end index
-    positions.push(ridgeStart.x, ridgeStart.y, ridgeZ)
-    positions.push(ridgeEnd.x, ridgeEnd.y, ridgeZ)
+    // Ridge direction: respect user's setting directly
+    const ridgeAlongX = ridgeDirection === 'x'
 
-    // Build roof faces: each footprint edge connects to the ridge line
-    for (let i = 0; i < n; i++) {
-        const next = (i + 1) % n
-        const s1 = getSide(vertices[i])
-        const s2 = getSide(vertices[next])
+    if (ridgeAlongX) {
+        // Ridge endpoints at FULL building length (indices 4, 5)
+        positions.push(minX, centerY, ridgeZ)   // ridgeStart (left end)
+        positions.push(maxX, centerY, ridgeZ)    // ridgeEnd (right end)
 
-        if (s1 === s2 || s1 === 0 || s2 === 0) {
-            // Both on same side of ridge → slope face (quad to both ridge points)
-            indices.push(i, next, rei)
-            indices.push(i, rei, rsi)
-        } else {
-            // Different sides → gable end (triangle to nearest ridge endpoint)
-            const midCoord = ridgeDirection === 'x'
-                ? (vertices[i].x + vertices[next].x) / 2
-                : (vertices[i].y + vertices[next].y) / 2
-            const ridgeMid = ridgeDirection === 'x'
-                ? bounds.centerX
-                : bounds.centerY
-            indices.push(i, next, midCoord < ridgeMid ? rsi : rei)
-        }
+        // Front slope (-Y side): v0, v1 eave to ridge
+        indices.push(0, 1, 5)
+        indices.push(0, 5, 4)
+        // Right gable (+X side): vertical triangle
+        indices.push(1, 2, 5)
+        // Back slope (+Y side): v2, v3 eave to ridge
+        indices.push(2, 3, 4)
+        indices.push(2, 4, 5)
+        // Left gable (-X side): vertical triangle
+        indices.push(3, 0, 4)
+    } else {
+        // Ridge endpoints at FULL building depth (indices 4, 5)
+        positions.push(centerX, minY, ridgeZ)    // ridgeStart (front end)
+        positions.push(centerX, maxY, ridgeZ)     // ridgeEnd (back end)
+
+        // Left slope (-X side): v3, v0 eave to ridge
+        indices.push(3, 0, 4)
+        indices.push(3, 4, 5)
+        // Front gable (-Y side): vertical triangle
+        indices.push(0, 1, 4)
+        // Right slope (+X side): v1, v2 eave to ridge
+        indices.push(1, 2, 5)
+        indices.push(1, 5, 4)
+        // Back gable (+Y side): vertical triangle
+        indices.push(2, 3, 5)
     }
 
-    // Bottom face
-    const bi = n + 2
-    for (let i = 0; i < n; i++) {
-        positions.push(vertices[i].x, vertices[i].y, baseZ)
-    }
-    const bottomTriangles = triangulatePolygon(vertices)
-    for (const [a, b, c] of bottomTriangles) {
-        indices.push(bi + a, bi + c, bi + b)
-    }
-
-    // Side walls connecting top edge to bottom edge
-    for (let i = 0; i < n; i++) {
-        const next = (i + 1) % n
-        indices.push(i, next, bi + next)
-        indices.push(i, bi + next, bi + i)
-    }
+    // No bottom face or side walls — building box provides the floor
 
     return buildGeometry(positions, indices)
 }
 
 /**
  * Generate HIPPED roof geometry
- * All sides slope inward — simplified using min-distance-to-edge approach
+ * Proper hip roof: ridge LINE along longer dimension, length = L - W (45° rule).
+ * For 4-vertex rectangular footprints: 2 trapezoidal slopes + 2 triangular hips.
+ * For non-rectangular polygons: pyramid fallback (fan to centroid).
+ * Square buildings (L = W) produce a pyramid (ridge degenerates to a point).
  */
-export const generateHippedRoof = (vertices, baseZ, ridgeZ) => {
+export const generateHippedRoof = (vertices, baseZ, ridgeZ, ridgeDirection) => {
     if (ridgeZ <= baseZ || !vertices || vertices.length < 3) return null
 
     const bounds = getVertexBounds(vertices)
-    const rise = ridgeZ - baseZ
     const n = vertices.length
 
-    // For each vertex, calculate the minimum distance to any edge of the polygon
-    // This creates a hip-like roof where all sides slope inward
-    const getMinEdgeDistance = (px, py) => {
-        let minDist = Infinity
+    // Non-rectangular polygons: pyramid fallback (fan to centroid at ridgeZ)
+    if (n !== 4) {
+        const positions = []
+        const indices = []
         for (let i = 0; i < n; i++) {
-            const v1 = vertices[i]
-            const v2 = vertices[(i + 1) % n]
-            // Distance from point to line segment
-            const dx = v2.x - v1.x
-            const dy = v2.y - v1.y
-            const lenSq = dx * dx + dy * dy
-            if (lenSq === 0) continue
-            let t = ((px - v1.x) * dx + (py - v1.y) * dy) / lenSq
-            t = Math.max(0, Math.min(1, t))
-            const closestX = v1.x + t * dx
-            const closestY = v1.y + t * dy
-            const dist = Math.sqrt((px - closestX) ** 2 + (py - closestY) ** 2)
-            minDist = Math.min(minDist, dist)
+            positions.push(vertices[i].x, vertices[i].y, baseZ)
         }
-        return minDist
+        positions.push(bounds.centerX, bounds.centerY, ridgeZ)
+        for (let i = 0; i < n; i++) {
+            indices.push(i, (i + 1) % n, n)
+        }
+        return buildGeometry(positions, indices)
     }
 
-    // Find maximum interior distance (for the ridge)
-    // Sample the centroid and a grid to find the true max
-    const maxDist = getMinEdgeDistance(bounds.centerX, bounds.centerY)
-    if (maxDist <= 0) return null
-
+    // Rectangular (4 vertices): proper hip roof with ridge line
+    const { width, depth, centerX, centerY, minX, maxX, minY, maxY } = bounds
     const positions = []
     const indices = []
 
-    // Top face vertices with hipped Z (0 to n-1)
-    for (let i = 0; i < n; i++) {
-        // Edge vertices have distance 0, so they stay at baseZ
-        // Interior points rise proportionally
-        const d = getMinEdgeDistance(vertices[i].x, vertices[i].y)
-        const z = baseZ + (d / maxDist) * rise
-        positions.push(vertices[i].x, vertices[i].y, z)
-    }
-
-    // Add ridge point at centroid (vertex n)
-    positions.push(bounds.centerX, bounds.centerY, ridgeZ)
-
-    // Bottom face vertices (n+1 to n+1+n-1)
-    const bottomStart = n + 1
-    for (let i = 0; i < n; i++) {
+    // Footprint vertices at baseZ (indices 0-3)
+    for (let i = 0; i < 4; i++) {
         positions.push(vertices[i].x, vertices[i].y, baseZ)
     }
 
-    // Top face: triangles from each edge to the ridge point
-    for (let i = 0; i < n; i++) {
-        const next = (i + 1) % n
-        indices.push(i, next, n) // n is the ridge point
-    }
+    // Ridge runs along the LONGER dimension (ridgeDirection as tiebreaker when square)
+    const ridgeAlongX = width > depth || (width === depth && ridgeDirection === 'x')
 
-    // Bottom face triangles (reversed winding)
-    const bottomTriangles = triangulatePolygon(vertices)
-    for (const [a, b, c] of bottomTriangles) {
-        indices.push(bottomStart + a, bottomStart + c, bottomStart + b)
-    }
+    if (ridgeAlongX) {
+        const halfShort = depth / 2
+        // Ridge endpoints (indices 4, 5)
+        positions.push(minX + halfShort, centerY, ridgeZ)  // ridgeStart (left end)
+        positions.push(maxX - halfShort, centerY, ridgeZ)   // ridgeEnd (right end)
 
-    // Side walls from bottom edge to top edge
-    for (let i = 0; i < n; i++) {
-        const next = (i + 1) % n
-        indices.push(i, next, bottomStart + next)
-        indices.push(i, bottomStart + next, bottomStart + i)
+        // Front trapezoid (-Y side): v0, v1, ridgeEnd, ridgeStart
+        indices.push(0, 1, 5)
+        indices.push(0, 5, 4)
+        // Right hip triangle (+X side): v1, v2, ridgeEnd
+        indices.push(1, 2, 5)
+        // Back trapezoid (+Y side): v2, v3, ridgeStart, ridgeEnd
+        indices.push(2, 3, 4)
+        indices.push(2, 4, 5)
+        // Left hip triangle (-X side): v3, v0, ridgeStart
+        indices.push(3, 0, 4)
+    } else {
+        const halfShort = width / 2
+        // Ridge endpoints (indices 4, 5)
+        positions.push(centerX, minY + halfShort, ridgeZ)   // ridgeStart (front end)
+        positions.push(centerX, maxY - halfShort, ridgeZ)    // ridgeEnd (back end)
+
+        // Left trapezoid (-X side): v3, v0, ridgeStart, ridgeEnd
+        indices.push(3, 0, 4)
+        indices.push(3, 4, 5)
+        // Front hip triangle (-Y side): v0, v1, ridgeStart
+        indices.push(0, 1, 4)
+        // Right trapezoid (+X side): v1, v2, ridgeEnd, ridgeStart
+        indices.push(1, 2, 5)
+        indices.push(1, 5, 4)
+        // Back hip triangle (+Y side): v2, v3, ridgeEnd
+        indices.push(2, 3, 5)
     }
 
     return buildGeometry(positions, indices)

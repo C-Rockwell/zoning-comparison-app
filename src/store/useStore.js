@@ -201,7 +201,7 @@ export const createDefaultLotStyle = (overrides = {}) => ({
             right: { enabled: false, color: '#000000', width: 1, dashed: true },
         }
     },
-    roofFaces: { color: '#B8A088', opacity: 0.85, transparent: true },
+    roofFaces: { color: '#B8A088', opacity: 1.0 },
     roofEdges: { color: '#000000', width: 1.5, visible: true, opacity: 1.0 },
     btzPlanes: { color: '#AA00FF', opacity: 1.0 },
     accessorySetbacks: {
@@ -211,6 +211,15 @@ export const createDefaultLotStyle = (overrides = {}) => ({
             rear: { enabled: false, color: '#2196F3', width: 1, dashed: true },
             left: { enabled: false, color: '#2196F3', width: 1, dashed: true },
             right: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+        }
+    },
+    parkingSetbacks: {
+        color: '#FF9800', width: 1, dashed: true, dashSize: 0.8, gapSize: 0.4, dashScale: 1, opacity: 1.0,
+        overrides: {
+            front: { enabled: false, color: '#FF9800', width: 1, dashed: true },
+            rear: { enabled: false, color: '#FF9800', width: 1, dashed: true },
+            left: { enabled: false, color: '#FF9800', width: 1, dashed: true },
+            right: { enabled: false, color: '#FF9800', width: 1, dashed: true },
         }
     },
     lotAccessArrows: { color: '#FF00FF', opacity: 1.0 },
@@ -254,6 +263,57 @@ export const createDefaultLotVisibility = () => ({
     accessorySetbacks: true,
     lotAccessArrows: true,
 });
+
+// Maps district parameter dot-paths to lot property setter functions (mutates lot in place)
+const DISTRICT_TO_LOT_MAP = {
+    'lotWidth.min': (lot, v) => { lot.lotWidth = v },
+    'lotDepth.min': (lot, v) => { lot.lotDepth = v },
+    'setbacksPrincipal.front.min': (lot, v) => { lot.setbacks.principal.front = v },
+    'setbacksPrincipal.front.max': (lot, v) => { lot.setbacks.principal.maxFront = v },
+    'setbacksPrincipal.btzFront': (lot, v) => { lot.setbacks.principal.btzFront = v },
+    'setbacksPrincipal.rear.min': (lot, v) => { lot.setbacks.principal.rear = v },
+    'setbacksPrincipal.sideInterior.min': (lot, v) => { lot.setbacks.principal.sideInterior = v },
+    'setbacksPrincipal.sideStreet.min': (lot, v) => { lot.setbacks.principal.minSideStreet = v },
+    'setbacksPrincipal.sideStreet.max': (lot, v) => { lot.setbacks.principal.maxSideStreet = v },
+    'setbacksPrincipal.btzSideStreet': (lot, v) => { lot.setbacks.principal.btzSideStreet = v },
+    'setbacksAccessory.front.min': (lot, v) => { lot.setbacks.accessory.front = v },
+    'setbacksAccessory.rear.min': (lot, v) => { lot.setbacks.accessory.rear = v },
+    'setbacksAccessory.sideInterior.min': (lot, v) => { lot.setbacks.accessory.sideInterior = v },
+    'setbacksAccessory.sideStreet.min': (lot, v) => { lot.setbacks.accessory.sideStreet = v },
+    'structures.principal.height.max': (lot, v) => { lot.buildings.principal.maxHeight = v },
+    'structures.principal.stories.max': (lot, v) => { lot.buildings.principal.stories = v },
+    'structures.principal.firstStoryHeight.min': (lot, v) => { lot.buildings.principal.firstFloorHeight = v },
+    'structures.principal.upperStoryHeight.min': (lot, v) => { lot.buildings.principal.upperFloorHeight = v },
+    'structures.accessory.height.max': (lot, v) => { lot.buildings.accessory.maxHeight = v },
+    'structures.accessory.stories.max': (lot, v) => { lot.buildings.accessory.stories = v },
+    'structures.accessory.firstStoryHeight.min': (lot, v) => { lot.buildings.accessory.firstFloorHeight = v },
+    'structures.accessory.upperStoryHeight.min': (lot, v) => { lot.buildings.accessory.upperFloorHeight = v },
+    'lotAccess.primaryStreet.permitted': (lot, v) => { lot.lotAccess.front = v },
+    'lotAccess.sharedDrive.permitted': (lot, v) => { lot.lotAccess.sideInterior = v },
+    'lotAccess.secondaryStreet.permitted': (lot, v) => { lot.lotAccess.sideStreet = v },
+    'lotAccess.rearAlley.permitted': (lot, v) => { lot.lotAccess.rear = v },
+    'parkingLocations.front.permitted': (lot, v) => { lot.parking.front = v },
+    'parkingLocations.sideInterior.permitted': (lot, v) => { lot.parking.sideInterior = v },
+    'parkingLocations.sideStreet.permitted': (lot, v) => { lot.parking.sideStreet = v },
+    'parkingLocations.rear.permitted': (lot, v) => { lot.parking.rear = v },
+    'parkingLocations.front.min': (lot, v) => { lot.parkingSetbacks.front = v },
+    'parkingLocations.sideInterior.min': (lot, v) => { lot.parkingSetbacks.sideInterior = v },
+    'parkingLocations.sideStreet.min': (lot, v) => { lot.parkingSetbacks.sideStreet = v },
+    'parkingLocations.rear.min': (lot, v) => { lot.parkingSetbacks.rear = v },
+};
+
+// Apply all current district parameter defaults to a lot object (mutates in place)
+const applyDistrictDefaultsToLot = (lot, dp) => {
+    if (!dp) return;
+    for (const [path, setter] of Object.entries(DISTRICT_TO_LOT_MAP)) {
+        const keys = path.split('.');
+        let val = dp;
+        for (const k of keys) {
+            val = val?.[k];
+        }
+        if (val != null) setter(lot, val);
+    }
+};
 
 export const useStore = create(
     temporal(
@@ -523,6 +583,8 @@ export const useStore = create(
                         dimensionsHeight: true,           // keep for migration fallback
                         dimensionsHeightPrincipal: true,
                         dimensionsHeightAccessory: true,
+                        parkingSetbacks: true,
+                        dimensionsParkingSetbacks: true,
                         grid: true,
                         axes: false, // Default axes off
                         gimbal: true,
@@ -613,8 +675,7 @@ export const useStore = create(
                             },
                             roofFaces: {
                                 color: '#B8A088',
-                                opacity: 0.85,
-                                transparent: true,
+                                opacity: 1.0,
                             },
                             roofEdges: {
                                 color: '#000000',
@@ -703,8 +764,7 @@ export const useStore = create(
                             },
                             roofFaces: {
                                 color: '#C4B8A8',
-                                opacity: 0.85,
-                                transparent: true,
+                                opacity: 1.0,
                             },
                             roofEdges: {
                                 color: '#000000',
@@ -1528,7 +1588,7 @@ export const useStore = create(
                     }
                 })),
 
-                // District parameters (informational)
+                // District parameters (informational) — also auto-populates lots
                 setDistrictParameter: (path, value) => set((state) => {
                     // path is dot-separated, e.g. 'lotArea.min' or 'setbacksPrincipal.front.min'
                     const keys = path.split('.');
@@ -1539,22 +1599,42 @@ export const useStore = create(
                         obj = obj[keys[i]];
                     }
                     obj[keys[keys.length - 1]] = value;
+
+                    // Auto-populate all lots with the changed district parameter
+                    const setter = DISTRICT_TO_LOT_MAP[path];
+                    if (setter && value != null && state.entityOrder.length > 0) {
+                        const newEntities = JSON.parse(JSON.stringify(state.entities));
+                        for (const lotId of state.entityOrder) {
+                            if (newEntities.lots[lotId]) {
+                                setter(newEntities.lots[lotId], value);
+                            }
+                        }
+                        return { districtParameters: newParams, entities: newEntities };
+                    }
+
                     return { districtParameters: newParams };
                 }),
 
                 // Lot CRUD
                 addLot: (initialData) => set((state) => {
                     const lotId = generateEntityId('lot');
-                    // Copy dimensions from the last lot when no explicit overrides provided
-                    let overrides = initialData;
+                    // 1. Create lot with hardcoded defaults
+                    const lot = createDefaultLot();
+                    // 2. Apply district parameter defaults (overrides hardcoded)
+                    applyDistrictDefaultsToLot(lot, state.districtParameters);
+                    // 3. Copy dimensions from the last lot when no explicit overrides
                     if (!initialData && state.entityOrder.length > 0) {
                         const lastLotId = state.entityOrder[state.entityOrder.length - 1];
                         const lastLot = state.entities.lots[lastLotId];
                         if (lastLot) {
-                            overrides = { lotWidth: lastLot.lotWidth, lotDepth: lastLot.lotDepth };
+                            lot.lotWidth = lastLot.lotWidth;
+                            lot.lotDepth = lastLot.lotDepth;
                         }
                     }
-                    const lot = createDefaultLot(overrides);
+                    // 4. Apply explicit overrides (highest priority)
+                    if (initialData) {
+                        Object.assign(lot, initialData);
+                    }
                     const style = createDefaultLotStyle();
                     const visibility = createDefaultLotVisibility();
                     return {
@@ -3118,7 +3198,7 @@ export const useStore = create(
             }),
             {
                 name: 'zoning-app-storage',
-                version: 25, // v25: split buildings/labelBuildings/dimensionsHeight layer keys + dimension text offsets
+                version: 26, // v26: parking setback layer keys
                 migrate: (persistedState, version) => {
                     // Split dimensionsLot into dimensionsLotWidth and dimensionsLotDepth
                     if (persistedState.viewSettings && persistedState.viewSettings.layers && persistedState.viewSettings.layers.dimensionsLot !== undefined) {
@@ -3383,7 +3463,7 @@ export const useStore = create(
                         }
 
                         // Add roof style defaults
-                        const defaultRoofFaces = (color) => ({ color, opacity: 0.85, transparent: true });
+                        const defaultRoofFaces = (color) => ({ color, opacity: 1.0 });
                         const defaultRoofEdges = { color: '#000000', width: 1.5, visible: true, opacity: 1.0 };
                         if (persistedState.viewSettings?.styleSettings?.existing && !persistedState.viewSettings.styleSettings.existing.roofFaces) {
                             persistedState.viewSettings.styleSettings.existing.roofFaces = defaultRoofFaces('#B8A088');
@@ -3820,9 +3900,16 @@ export const useStore = create(
                         };
                     }
 
+                    if (version < 26) {
+                        // v26: parking setback layer keys
+                        const layers = persistedState.viewSettings?.layers ?? {};
+                        if (layers.parkingSetbacks === undefined) layers.parkingSetbacks = true;
+                        if (layers.dimensionsParkingSetbacks === undefined) layers.dimensionsParkingSetbacks = true;
+                    }
+
                     return {
                         ...persistedState,
-                        version: 25
+                        version: 26
                     };
                 },
                 partialize: (state) => ({
@@ -3940,7 +4027,7 @@ export const useStore = create(
                     }
                     // Patch missing viewSettings.layers keys
                     if (merged.viewSettings?.layers) {
-                        const layerDefaults = { maxSetbacks: true, btzPlanes: true, accessorySetbacks: true, lotAccessArrows: true, maxHeightPlanePrincipal: true, maxHeightPlaneAccessory: true };
+                        const layerDefaults = { maxSetbacks: true, btzPlanes: true, accessorySetbacks: true, lotAccessArrows: true, maxHeightPlanePrincipal: true, maxHeightPlaneAccessory: true, parkingSetbacks: true, dimensionsParkingSetbacks: true };
                         for (const [key, val] of Object.entries(layerDefaults)) {
                             if (merged.viewSettings.layers[key] === undefined) {
                                 merged.viewSettings.layers[key] = val;

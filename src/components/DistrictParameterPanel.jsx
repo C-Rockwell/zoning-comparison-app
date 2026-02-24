@@ -22,39 +22,48 @@ import * as api from '../services/api'
 // ============================================
 
 /** Small number input cell for model parameter tables */
-const ParamCell = ({ value, onChange, min, max, step = 1, disabled = false }) => (
-    <input
-        type="number"
-        value={value ?? ''}
-        onChange={(e) => onChange(e.target.value === '' ? null : parseFloat(e.target.value))}
-        min={min}
-        max={max}
-        step={step}
-        disabled={disabled}
-        className="w-full text-xs text-right rounded px-1 py-0.5
-                   focus:outline-none focus-ring-accent-1 input-theme"
-        style={{
-            color: 'var(--ui-text-primary)',
-            backgroundColor: 'var(--ui-bg-secondary)',
-            borderWidth: '1px',
-            borderStyle: 'solid',
-            borderColor: 'var(--ui-border)',
-        }}
-    />
-)
+const ParamCell = ({ value, onChange, min, max, step = 1, disabled = false, districtDefault }) => {
+    const matchesDistrict = districtDefault != null && value != null && value === districtDefault
+    return (
+        <input
+            type="number"
+            value={value ?? ''}
+            onChange={(e) => onChange(e.target.value === '' ? null : parseFloat(e.target.value))}
+            min={min}
+            max={max}
+            step={step}
+            disabled={disabled}
+            className="w-full text-xs text-right rounded px-1 py-0.5
+                       focus:outline-none focus-ring-accent-1 input-theme"
+            style={{
+                color: matchesDistrict ? 'rgba(255, 20, 147, 0.5)' : 'var(--ui-text-primary)',
+                backgroundColor: 'var(--ui-bg-secondary)',
+                borderWidth: '1px',
+                borderStyle: 'solid',
+                borderColor: matchesDistrict ? 'rgba(255, 20, 147, 0.3)' : 'var(--ui-border)',
+            }}
+        />
+    )
+}
 
 /** Checkbox cell for model parameter tables */
-const CheckCell = ({ checked, onChange }) => (
-    <div className="flex items-center justify-center">
-        <input
-            type="checkbox"
-            checked={checked || false}
-            onChange={(e) => onChange(e.target.checked)}
-            className="rounded accent-theme"
-            style={{ backgroundColor: 'var(--ui-bg-secondary)', borderColor: 'var(--ui-border)' }}
-        />
-    </div>
-)
+const CheckCell = ({ checked, onChange, districtDefault }) => {
+    const matchesDistrict = districtDefault != null && checked === districtDefault
+    return (
+        <div
+            className="flex items-center justify-center"
+            style={matchesDistrict ? { backgroundColor: 'rgba(255, 20, 147, 0.15)', borderRadius: '4px' } : {}}
+        >
+            <input
+                type="checkbox"
+                checked={checked || false}
+                onChange={(e) => onChange(e.target.checked)}
+                className="rounded accent-theme"
+                style={{ backgroundColor: 'var(--ui-bg-secondary)', borderColor: matchesDistrict ? '#FF1493' : 'var(--ui-border)' }}
+            />
+        </div>
+    )
+}
 
 /** Computed (read-only) value cell */
 const ComputedCell = ({ value, unit = '' }) => (
@@ -71,6 +80,89 @@ const ComputedCell = ({ value, unit = '' }) => (
         {value != null ? `${typeof value === 'number' ? value.toFixed(1) : value}${unit ? ` ${unit}` : ''}` : '--'}
     </div>
 )
+
+/** District parameter reference cell (read-only, highlights when populated) */
+const DistrictRefCell = ({ value }) => {
+    const hasValue = value != null
+    return (
+        <div
+            className="text-xs text-center rounded px-0.5 py-0.5"
+            style={{
+                color: hasValue ? '#fff' : 'var(--ui-text-muted)',
+                backgroundColor: hasValue ? '#FF1493' : 'var(--ui-bg-secondary)',
+                borderWidth: '1px',
+                borderStyle: 'solid',
+                borderColor: hasValue ? '#FF1493' : 'var(--ui-border)',
+                fontSize: '10px',
+                opacity: hasValue ? 1 : 0.4,
+            }}
+        >
+            {hasValue ? (typeof value === 'boolean' ? (value ? 'Y' : 'N') : value) : ''}
+        </div>
+    )
+}
+
+/** Maps (section title, row label) to district parameter getter function */
+const DISTRICT_REF_MAP = {
+    'Lot Dimensions': {
+        'Lot Width (ft)': (dp) => dp?.lotWidth?.min,
+        'Lot Depth (ft)': (dp) => dp?.lotDepth?.min,
+    },
+    'Setbacks Principle': {
+        'Front (ft)': (dp) => dp?.setbacksPrincipal?.front?.min,
+        'Max. Front (ft)': (dp) => dp?.setbacksPrincipal?.front?.max,
+        'BTZ - Front (%)': (dp) => dp?.setbacksPrincipal?.btzFront,
+        'Rear (ft)': (dp) => dp?.setbacksPrincipal?.rear?.min,
+        'Side, Interior (ft)': (dp) => dp?.setbacksPrincipal?.sideInterior?.min,
+        'Min. Side, Street (ft)': (dp) => dp?.setbacksPrincipal?.sideStreet?.min,
+        'Max. Side, Street (ft)': (dp) => dp?.setbacksPrincipal?.sideStreet?.max,
+        'BTZ - Side, Street (%)': (dp) => dp?.setbacksPrincipal?.btzSideStreet,
+    },
+    'Setbacks Accessory': {
+        'Front (ft)': (dp) => dp?.setbacksAccessory?.front?.min,
+        'Rear (ft)': (dp) => dp?.setbacksAccessory?.rear?.min,
+        'Side, Interior (ft)': (dp) => dp?.setbacksAccessory?.sideInterior?.min,
+        'Side, Street (ft)': (dp) => dp?.setbacksAccessory?.sideStreet?.min,
+    },
+    'Structures Principal': {
+        'Height': (dp) => dp?.structures?.principal?.height?.max,
+        'Stories': (dp) => dp?.structures?.principal?.stories?.max,
+        'First Story Height': (dp) => dp?.structures?.principal?.firstStoryHeight?.min,
+        'Upper Floor Height': (dp) => dp?.structures?.principal?.upperStoryHeight?.min,
+    },
+    'Structures Accessory': {
+        'Height': (dp) => dp?.structures?.accessory?.height?.max,
+        'Stories': (dp) => dp?.structures?.accessory?.stories?.max,
+        'First Story Height': (dp) => dp?.structures?.accessory?.firstStoryHeight?.min,
+        'Upper Floor Height': (dp) => dp?.structures?.accessory?.upperStoryHeight?.min,
+    },
+    'Lot Access': {
+        'Front': (dp) => dp?.lotAccess?.primaryStreet?.permitted,
+        'Shared Drive': (dp) => dp?.lotAccess?.sharedDrive?.permitted,
+        'Side, Street': (dp) => dp?.lotAccess?.secondaryStreet?.permitted,
+        'Rear': (dp) => dp?.lotAccess?.rearAlley?.permitted,
+    },
+    'Parking': {
+        'Front': (dp) => dp?.parkingLocations?.front?.permitted,
+        'Side, Interior': (dp) => dp?.parkingLocations?.sideInterior?.permitted,
+        'Side, Street': (dp) => dp?.parkingLocations?.sideStreet?.permitted,
+        'Rear': (dp) => dp?.parkingLocations?.rear?.permitted,
+    },
+    'Parking Setbacks': {
+        'Front (ft)': (dp) => dp?.parkingLocations?.front?.min,
+        'Side, Interior (ft)': (dp) => dp?.parkingLocations?.sideInterior?.min,
+        'Side, Street (ft)': (dp) => dp?.parkingLocations?.sideStreet?.min,
+        'Rear (ft)': (dp) => dp?.parkingLocations?.rear?.min,
+    },
+}
+
+/** Maps analytics metric labels to district parameter getter functions */
+const ANALYTICS_REF_MAP = {
+    'Lot Area': (dp) => dp?.lotArea?.min,
+    'Coverage': (dp) => dp?.lotCoverage?.max,
+    'GFA': null,
+    'FAR': null,
+}
 
 /** District parameter min/max pair input */
 const MinMaxInput = ({ min, max, onMinChange, onMaxChange, unit = '' }) => (
@@ -134,6 +226,7 @@ const ModelParametersTable = ({ collapseKey, allModelCollapsed }) => {
     const lots = useStore((s) => s.entities?.lots ?? {})
     const lotVisibilityAll = useStore((s) => s.lotVisibility ?? {})
     const modelSetup = useModelSetup()
+    const districtParameters = useDistrictParameters()
 
     // Compute which lots are corner lots (have a street side)
     const lotCornerStatus = useMemo(() => {
@@ -540,14 +633,17 @@ const ModelParametersTable = ({ collapseKey, allModelCollapsed }) => {
                 <thead>
                     <tr style={{ borderBottom: '1px solid var(--ui-border)' }}>
                         <th
-                            className="text-left font-medium py-1 pr-2 sticky left-0 z-10 min-w-[140px]"
+                            className="text-left font-medium py-1 pr-2 sticky left-0 z-10 min-w-[120px]"
                             style={{ color: 'var(--ui-text-secondary)', backgroundColor: 'var(--ui-bg-primary)' }}
                         >
                             Parameter
                         </th>
+                        <th className="text-center font-medium py-1 px-0.5 min-w-[36px]" style={{ color: '#FF1493' }}>
+                            Dist.
+                        </th>
                         {lotIds.map((id, i) => (
-                            <th key={id} className="text-center font-medium py-1 px-1 min-w-[60px]" style={{ color: 'var(--ui-text-secondary)' }}>
-                                Lot {i + 1}
+                            <th key={id} className="text-center font-medium py-1 px-1 min-w-[36px]" style={{ color: 'var(--ui-text-secondary)' }}>
+                                {i + 1}
                             </th>
                         ))}
                         <th className="text-center font-medium py-1 px-1 w-8" style={{ color: 'var(--ui-text-muted)' }}>
@@ -567,6 +663,7 @@ const ModelParametersTable = ({ collapseKey, allModelCollapsed }) => {
                             lotCornerStatus={lotCornerStatus}
                             collapseKey={collapseKey}
                             allModelCollapsed={allModelCollapsed}
+                            districtParameters={districtParameters}
                         />
                     ))}
                 </tbody>
@@ -576,7 +673,7 @@ const ModelParametersTable = ({ collapseKey, allModelCollapsed }) => {
 }
 
 /** A group of rows in the model parameters table with a collapsible section header */
-const SectionGroup = ({ section, lotIds, lots, firstLotVis, setLotVisibilityAction, lotCornerStatus, collapseKey, allModelCollapsed }) => {
+const SectionGroup = ({ section, lotIds, lots, firstLotVis, setLotVisibilityAction, lotCornerStatus, collapseKey, allModelCollapsed, districtParameters }) => {
     const [isOpen, setIsOpen] = useState(true)
     // Sync with parent collapse-all toggle
     const [prevCollapseKey, setPrevCollapseKey] = useState(collapseKey)
@@ -601,7 +698,7 @@ const SectionGroup = ({ section, lotIds, lots, firstLotVis, setLotVisibilityActi
     <>
         <tr>
             <td
-                colSpan={lotIds.length + 2}
+                colSpan={lotIds.length + 3}
                 className="text-[10px] font-bold uppercase tracking-wider pt-3 pb-1 cursor-pointer select-none"
                 style={{ color: 'var(--ui-text-secondary)', borderBottom: '2px solid var(--ui-border)', borderLeft: '2px solid var(--ui-text-muted)', paddingLeft: '4px' }}
                 onClick={() => setIsOpen(!isOpen)}
@@ -628,7 +725,10 @@ const SectionGroup = ({ section, lotIds, lots, firstLotVis, setLotVisibilityActi
                 </div>
             </td>
         </tr>
-        {isOpen && section.rows.map((row) => (
+        {isOpen && section.rows.map((row) => {
+            const districtRefFn = DISTRICT_REF_MAP[section.title]?.[row.label]
+            const districtRefValue = districtRefFn ? districtRefFn(districtParameters) : null
+            return (
             <tr key={row.label} className="hover-bg-secondary transition-colors" style={{ borderBottom: '1px solid var(--ui-border)' }}>
                 {/* Parameter name (sticky left) */}
                 <td
@@ -636,6 +736,11 @@ const SectionGroup = ({ section, lotIds, lots, firstLotVis, setLotVisibilityActi
                     style={{ color: 'var(--ui-text-secondary)', backgroundColor: 'var(--ui-bg-primary)' }}
                 >
                     {row.label}
+                </td>
+
+                {/* District parameter reference */}
+                <td className="py-1 px-0.5">
+                    <DistrictRefCell value={districtRefValue} />
                 </td>
 
                 {/* Lot value cells */}
@@ -718,6 +823,7 @@ const SectionGroup = ({ section, lotIds, lots, firstLotVis, setLotVisibilityActi
                                 <CheckCell
                                     checked={value}
                                     onChange={(v) => row.setValue(lotId, v)}
+                                    districtDefault={districtRefValue}
                                 />
                             </td>
                         )
@@ -732,6 +838,7 @@ const SectionGroup = ({ section, lotIds, lots, firstLotVis, setLotVisibilityActi
                                 min={row.min}
                                 max={row.max}
                                 step={row.step}
+                                districtDefault={districtRefValue}
                             />
                         </td>
                     )
@@ -755,7 +862,8 @@ const SectionGroup = ({ section, lotIds, lots, firstLotVis, setLotVisibilityActi
                     )}
                 </td>
             </tr>
-        ))}
+            )
+        })}
     </>
     )
 }
@@ -884,6 +992,7 @@ const LAYER_GROUPS = [
             { key: 'accessorySetbacks', label: 'Accessory Setbacks' },
             { key: 'maxSetbacks', label: 'Max Setbacks' },
             { key: 'lotAccessArrows', label: 'Lot Access Arrows' },
+            { key: 'parkingSetbacks', label: 'Parking Setbacks' },
             { key: 'labelLotEdges', label: 'Lot Edges' },
         ],
     },
@@ -923,6 +1032,7 @@ const LAYER_GROUPS = [
             { key: 'dimensionsSetbacks', label: 'Dim: Setbacks' },
             { key: 'dimensionsHeightPrincipal', label: 'Dim: Principal Height' },
             { key: 'dimensionsHeightAccessory', label: 'Dim: Accessory Height' },
+            { key: 'dimensionsParkingSetbacks', label: 'Dim: Parking Setbacks' },
         ],
     },
 ]
@@ -1441,6 +1551,47 @@ const BuildingRoofSection = () => {
                             )}
                         </div>
                     )}
+
+                    {/* Pitch Ratio Input */}
+                    {roof.type !== 'flat' && (() => {
+                        const halfSpan = Math.min(building.width ?? 0, building.depth ?? 0) / 2
+                        const currentRidgeZ = (roof.overrideHeight && roof.ridgeHeight != null)
+                            ? roof.ridgeHeight
+                            : ((buildingType === 'principal'
+                                ? districtParams?.structures?.principal?.height?.max
+                                : districtParams?.structures?.accessory?.height?.max
+                              ) ?? totalHeight)
+                        const currentPitch = halfSpan > 0 ? ((currentRidgeZ - totalHeight) / halfSpan * 12) : 0
+                        return (
+                            <div>
+                                <label className="text-[10px] block mb-0.5" style={{ color: 'var(--ui-text-secondary)' }}>Pitch Ratio</label>
+                                <div className="flex items-center gap-1">
+                                    <input
+                                        type="number"
+                                        value={parseFloat(currentPitch.toFixed(1))}
+                                        onChange={(e) => {
+                                            const pitchVal = parseFloat(e.target.value) || 0
+                                            const newRidgeHeight = totalHeight + (pitchVal / 12) * halfSpan
+                                            setEntityRoofSetting(targetLotId, buildingType, 'overrideHeight', true)
+                                            setEntityRoofSetting(targetLotId, buildingType, 'ridgeHeight', Math.round(newRidgeHeight * 10) / 10)
+                                        }}
+                                        className="w-full text-xs rounded px-1 py-0.5
+                                                   text-right focus:outline-none focus-ring-accent-1"
+                                        style={{
+                                            color: 'var(--ui-text-primary)',
+                                            backgroundColor: 'var(--ui-bg-secondary)',
+                                            borderWidth: '1px',
+                                            borderStyle: 'solid',
+                                            borderColor: 'var(--ui-border)',
+                                        }}
+                                        min={0}
+                                        step={0.5}
+                                    />
+                                    <span className="text-[10px] whitespace-nowrap" style={{ color: 'var(--ui-text-muted)' }}>: 12</span>
+                                </div>
+                            </div>
+                        )
+                    })()}
                 </div>
                 {/* Reset Building button */}
                 {(building.width > 0 || building.stories > 0) && (
@@ -2635,6 +2786,7 @@ const StylesSection = () => {
         { key: 'setbacks', label: 'Setbacks' },
         { key: 'accessorySetbacks', label: 'Accessory Setbacks' },
         { key: 'maxSetbacks', label: 'Max Setbacks' },
+        { key: 'parkingSetbacks', label: 'Parking Setbacks' },
         { key: 'btzPlanes', label: 'BTZ Planes' },
         { key: 'lotAccessArrows', label: 'Lot Access Arrows' },
         { key: 'principalBuildingEdges', label: 'Principal Building Edges' },
@@ -3371,6 +3523,7 @@ const DimensionStylesSection = () => {
 const AnalyticsSection = () => {
     const lotIds = useLotIds()
     const lots = useStore((s) => s.entities?.lots ?? {})
+    const districtParameters = useDistrictParameters()
 
     const metrics = useMemo(() => {
         let districtLotArea = 0
@@ -3439,6 +3592,9 @@ const AnalyticsSection = () => {
                             >
                                 Metric
                             </th>
+                            <th className="text-center font-medium py-1 px-0.5 min-w-[36px]" style={{ color: '#FF1493' }}>
+                                Dist.
+                            </th>
                             {lotIds.map((_, i) => (
                                 <th key={i} className="text-right font-medium py-1 px-1 min-w-[65px]" style={{ color: 'var(--ui-text-secondary)' }}>
                                     Lot {i + 1}
@@ -3457,6 +3613,9 @@ const AnalyticsSection = () => {
                                 <td className="py-1.5 pr-2 font-medium" style={{ color: 'var(--ui-text-secondary)' }}>
                                     {label}
                                     {unit && <span className="ml-1 opacity-50 font-normal">({unit})</span>}
+                                </td>
+                                <td className="py-1.5 px-0.5">
+                                    <DistrictRefCell value={ANALYTICS_REF_MAP[label]?.(districtParameters) ?? null} />
                                 </td>
                                 {metrics.perLot.map((m, i) => (
                                     <td key={i} className="text-right py-1.5 px-1">

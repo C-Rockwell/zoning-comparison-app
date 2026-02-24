@@ -77,7 +77,7 @@ const EntityRoadModules = ({ lotPositions }) => {
         let maxD = 100
         for (const lp of lotPositions) {
             const lot = getLotData(lp.lotId)
-            const depth = lot?.lotDepth || 100
+            const depth = lot?.lotDepth ?? 100
             if (depth > maxD) maxD = depth
         }
 
@@ -491,13 +491,21 @@ const MoveModeCapturePlane = () => {
 
     // Get lot offset for building position calculation
     const lotIds = useLotIds()
+    const lotDimsKey = useStore((state) => {
+        const order = state.entityOrder ?? []
+        const lots = state.entities?.lots ?? {}
+        return order.map(id => {
+            const lot = lots[id]
+            return `${lot?.lotWidth ?? 50}:${lot?.lotDepth ?? 100}`
+        }).join(',')
+    })
     const lotPositions = useMemo(() => {
         const positions = {}
         let negOffset = 0
         for (let i = 0; i < lotIds.length; i++) {
             const lot = getLotData(lotIds[i])
-            const lotWidth = lot?.lotWidth || 50
-            const lotDepth = lot?.lotDepth || 100
+            const lotWidth = lot?.lotWidth ?? 50
+            const lotDepth = lot?.lotDepth ?? 100
             if (i === 0) {
                 positions[lotIds[i]] = { x: lotWidth / 2, y: lotDepth / 2 }
             } else {
@@ -506,7 +514,7 @@ const MoveModeCapturePlane = () => {
             }
         }
         return positions
-    }, [lotIds])
+    }, [lotIds, lotDimsKey])
 
     const handlePointerMove = useCallback((e) => {
         if (!moveMode?.active || moveMode.phase !== 'moving' || !moveMode.basePoint) return
@@ -560,6 +568,14 @@ const MoveModeCapturePlane = () => {
 // ============================================
 const DistrictSceneContent = () => {
     const lotIds = useLotIds()
+    const lotDimsKey = useStore((state) => {
+        const order = state.entityOrder ?? []
+        const lots = state.entities?.lots ?? {}
+        return order.map(id => {
+            const lot = lots[id]
+            return `${lot?.lotWidth ?? 50}:${lot?.lotDepth ?? 100}`
+        }).join(',')
+    })
     const layers = useStore(useShallow(state => state.viewSettings.layers))
     const groundStyle = useStore(useShallow(state => state.viewSettings.styleSettings?.ground))
     const roadModulesState = useStore(state => state.entities?.roadModules ?? {})
@@ -574,7 +590,7 @@ const DistrictSceneContent = () => {
         for (let i = 0; i < lotIds.length; i++) {
             const lotId = lotIds[i]
             const lot = getLotData(lotId)
-            const lotWidth = lot?.lotWidth || 50
+            const lotWidth = lot?.lotWidth ?? 50
 
             if (i === 0) {
                 // Lot 1: extends in positive X from origin
@@ -598,7 +614,7 @@ const DistrictSceneContent = () => {
         }
 
         return positions
-    }, [lotIds])
+    }, [lotIds, lotDimsKey])
 
     // Derive active road directions from actual enabled road modules
     // (not from modelSetup.streetEdges, which can desync during undo/redo)
