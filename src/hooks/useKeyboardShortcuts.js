@@ -8,6 +8,7 @@ import * as api from '../services/api'
  * - Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y: Redo
  * - Ctrl/Cmd+S: Save project
  * - Delete/Backspace: Delete selected building
+ * - V/F/L/R: Drawing tools (select/freehand/line/rectangle) when layer active
  * - M: Enter move mode (AutoCAD-style, district module only)
  * - Escape: Exit move mode / cancel move
  */
@@ -58,8 +59,16 @@ export function useKeyboardShortcuts() {
         return
       }
 
-      // Delete/Backspace: Delete selected building
+      // Delete/Backspace: Delete selected drawing objects, then selected building
       if (e.key === 'Delete' || e.key === 'Backspace') {
+        const { selectedDrawingIds, deleteDrawingObject, setSelectedDrawingIds: setSelIds } = useStore.getState()
+        if (selectedDrawingIds?.length > 0) {
+          e.preventDefault()
+          for (const id of selectedDrawingIds) deleteDrawingObject(id)
+          setSelIds([])
+          showToast?.(`${selectedDrawingIds.length} drawing object(s) deleted`, 'info')
+          return
+        }
         const { selectedBuildingType, activeEntityId, activeModule, deleteEntityBuilding } = useStore.getState()
         if (activeModule === 'district' && selectedBuildingType && activeEntityId) {
           e.preventDefault()
@@ -67,6 +76,18 @@ export function useKeyboardShortcuts() {
           showToast?.(`${selectedBuildingType === 'principal' ? 'Principal' : 'Accessory'} building deleted`, 'info')
         }
         return
+      }
+
+      // Drawing tool shortcuts (V/F/L/R/P/C/A/T — only when drawing layer is active)
+      if (!isMod && 'vflrpcate'.includes(e.key.toLowerCase())) {
+        const { activeDrawingLayerId, drawingMode: dm, setDrawingMode: setDM } = useStore.getState()
+        if (activeDrawingLayerId) {
+          e.preventDefault()
+          const toolMap = { v: 'select', f: 'freehand', l: 'line', r: 'rectangle', p: 'polygon', c: 'circle', a: 'arrow', t: 'text', e: 'eraser' }
+          const toolId = toolMap[e.key.toLowerCase()]
+          setDM(dm?.tool === toolId ? null : { tool: toolId, phase: 'idle' })
+          return
+        }
       }
 
       // M: Enter Move Mode (district module only)
@@ -80,8 +101,22 @@ export function useKeyboardShortcuts() {
         return
       }
 
-      // Escape: Exit Move Mode / cancel move
+      // Escape: Clear text input, then Drawing Mode, then Move Mode
       if (e.key === 'Escape') {
+        const { textEditState, setTextEditState } = useStore.getState()
+        if (textEditState) {
+          e.preventDefault()
+          setTextEditState(null)
+          return
+        }
+        const { drawingMode, setDrawingMode, setSelectedDrawingIds } = useStore.getState()
+        if (drawingMode) {
+          e.preventDefault()
+          setDrawingMode(null)
+          setSelectedDrawingIds([])
+          showToast?.('Drawing mode deactivated', 'info')
+          return
+        }
         const { moveMode, exitMoveMode, setEntityBuildingPosition, setAnnotationPosition } = useStore.getState()
         if (moveMode?.active) {
           e.preventDefault()

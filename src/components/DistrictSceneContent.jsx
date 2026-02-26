@@ -8,6 +8,7 @@ import LotEntity from './LotEntity'
 import RoadModule from './RoadModule'
 import RoadAnnotations from './RoadAnnotations'
 import RoadIntersectionFillet from './RoadIntersectionFillet'
+import DrawingEditor from './DrawingEditor'
 import { computeFilletOuterRadius, createNotchedRectShape } from '../utils/intersectionGeometry'
 
 // Direction rotation for annotation labels (matches RoadModule.jsx DIRECTION_ROTATION)
@@ -661,6 +662,9 @@ const DistrictSceneContent = () => {
             {layers.roadModule && (
                 <EntityRoadModules lotPositions={lotPositions} />
             )}
+
+            {/* Drawing editor — markup objects on ground plane */}
+            <DrawingEditor />
 
             {/* Move mode capture plane — invisible plane that captures pointer events during move */}
             {moveMode?.active && moveMode.phase === 'moving' && (

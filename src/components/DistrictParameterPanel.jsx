@@ -15,6 +15,8 @@ import {
     Save, FolderOpen, Search, Check, X,
 } from 'lucide-react'
 import ImportWizard from './ImportWizard'
+import DrawingLayersPanel from './DrawingEditor/DrawingLayersPanel'
+import DrawingPropertiesPanel from './DrawingEditor/DrawingPropertiesPanel'
 import * as api from '../services/api'
 
 // ============================================
@@ -988,6 +990,7 @@ const LAYER_GROUPS = [
         title: 'Lots & Setbacks',
         items: [
             { key: 'lotLines', label: 'Lot Lines' },
+            { key: 'setbackFill', label: 'Setback Fill' },
             { key: 'setbacks', label: 'Setbacks' },
             { key: 'accessorySetbacks', label: 'Accessory Setbacks' },
             { key: 'maxSetbacks', label: 'Max Setbacks' },
@@ -1033,6 +1036,13 @@ const LAYER_GROUPS = [
             { key: 'dimensionsHeightPrincipal', label: 'Dim: Principal Height' },
             { key: 'dimensionsHeightAccessory', label: 'Dim: Accessory Height' },
             { key: 'dimensionsParkingSetbacks', label: 'Dim: Parking Setbacks' },
+        ],
+    },
+    {
+        id: 'drawings',
+        title: 'Drawings',
+        items: [
+            { key: 'drawingEditor', label: 'Drawing Editor' },
         ],
     },
 ]
@@ -2570,7 +2580,7 @@ const InlineStyleControls = ({ lotId, category, style }) => {
     // Mesh-only categories: only color + opacity (no line width/dashed)
     const isMeshCategory = ['btzPlanes', 'lotAccessArrows', 'principalBuildingFaces', 'accessoryBuildingFaces', 'buildingFaces', 'roofFaces'].includes(category)
     // Hybrid categories: mesh controls (fill color/opacity) + line controls (lineColor/lineWidth/lineDashed)
-    const isHybridCategory = category === 'maxHeightPlane'
+    const isHybridCategory = ['maxHeightPlane', 'setbackFill'].includes(category)
 
     return (
         <div
@@ -2783,6 +2793,7 @@ const StylesSection = () => {
 
     const styleCategories = [
         { key: 'lotLines', label: 'Lot Lines' },
+        { key: 'setbackFill', label: 'Setback Fill' },
         { key: 'setbacks', label: 'Setbacks' },
         { key: 'accessorySetbacks', label: 'Accessory Setbacks' },
         { key: 'maxSetbacks', label: 'Max Setbacks' },
@@ -3961,6 +3972,8 @@ const DistrictParameterPanel = () => {
                 <ModelSetupSection />
                 <LayersSection />
                 <AnnotationSettingsSection />
+                <DrawingLayersPanel />
+                <DrawingPropertiesPanel />
                 <DistrictParametersSection />
                 <ModelParametersSection />
                 <StylesSection />

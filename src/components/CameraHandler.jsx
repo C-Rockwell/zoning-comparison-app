@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
+import CameraControlsImpl from 'camera-controls'
 import { useStore } from '../store/useStore'
 
 const CameraHandler = ({ controlsRef }) => {
@@ -80,6 +81,15 @@ const CameraHandler = ({ controlsRef }) => {
                 break
         }
     }, [viewVersion, controlsRef, setProjection, camera, cameraView, projection]) // Depend on version
+
+    // Remap mouse buttons: left=none (free for drawing), middle=orbit, right=pan (unchanged)
+    useEffect(() => {
+        if (!controlsRef.current) return
+        const controls = controlsRef.current
+        controls.mouseButtons.left = CameraControlsImpl.ACTION.NONE
+        controls.mouseButtons.middle = CameraControlsImpl.ACTION.ROTATE
+        // right stays as TRUCK (pan), wheel stays as DOLLY
+    }, [controlsRef])
 
     return null
 }

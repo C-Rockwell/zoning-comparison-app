@@ -47,6 +47,8 @@
 | Theme system | `App.jsx`, CSS variables `var(--ui-*)` | `setUiTheme('standard'|'modern')` |
 | Road module styles | `DistrictParameterPanel.jsx` | `setRoadModuleStyle(layerType, prop, val)` |
 | Polygon lot editing | `LotEditor/`, `useStore.js:789` | `enablePolygonMode`, vertex/edge/extrude ops |
+| Drawing editor tools | `DrawingEditor/`, `useStore.js:~2700` | 12 types, select/move/resize/vertex edit |
+| Drawing hit-testing | `utils/drawingHitTest.js` | `hitTestObject`, `computeObjectBounds`, `computeMoveUpdate` |
 | Comparison roads | `useStore.js` (comparisonRoads), `SceneContent.jsx` | Left/right/rear roads for comparison module |
 | Unit formatting | `utils/formatUnits.js` | `formatDimension(value, 'feet'|'feet-inches'|'meters')` |
 | Dimension stacking | `utils/dimensionLayout.js` | `computeDimensionOffsets(dims, gap)` |
@@ -127,6 +129,20 @@
 | `src/components/LotEditor/VertexHandle.jsx` | ~99 | Draggable vertex sphere |
 | `src/components/LotEditor/EdgeHandle.jsx` | ~147 | Edge manipulation handle |
 | `src/components/LotEditor/MidpointHandle.jsx` | ~51 | Edge split click target |
+
+### Drawing Editor
+| File | Lines | Purpose |
+|------|-------|---------|
+| `src/components/DrawingEditor/index.jsx` | ~58 | Drawing editor entry point, renders objects by layer + selection overlay + capture plane |
+| `src/components/DrawingEditor/DrawingCapturePlane.jsx` | ~820 | Pointer event handler for all drawing tools + select tool + drag-to-move |
+| `src/components/DrawingEditor/DrawingObjectRenderer.jsx` | ~600 | Renders 12 drawing object types with selection highlighting |
+| `src/components/DrawingEditor/DrawingSelectionOverlay.jsx` | ~405 | Bounding box + vertex/resize handles for selected objects |
+| `src/components/DrawingEditor/DrawingHandles.jsx` | ~175 | DrawingVertexHandle (sphere) + DrawingResizeHandle (box) components |
+| `src/components/DrawingEditor/DrawingToolbar.jsx` | ~200 | Vertical toolbar on left side of canvas (14 tools) |
+| `src/components/DrawingEditor/DrawingLayersPanel.jsx` | ~250 | Sidebar panel for managing drawing layers |
+| `src/components/DrawingEditor/DrawingTextInput.jsx` | ~80 | HTML overlay for text/leader text entry |
+| `src/utils/drawingGeometry.js` | ~130 | Vertex generators (circle, ellipse, star, polygon, rounded rect) + pointInPolygon |
+| `src/utils/drawingHitTest.js` | ~200 | Hit-test utilities + computeObjectBounds + computeMoveUpdate |
 
 ### Project Management
 | File | Lines | Purpose |

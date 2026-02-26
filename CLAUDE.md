@@ -33,9 +33,9 @@ React 19 + Vite 7 + Three.js 0.182 via @react-three/fiber 9.4 | Zustand 5 + Zund
 - State: `entities.lots[lotId]` — each lot has `buildings: { principal, accessory }` + expanded setbacks
 - Lot layout: Lot 1 in +X from origin (0,0 = front-left corner), Lots 2+ in -X
 - Visibility: `layers.X && lotVisibility[lotId].X` (global layers override per-lot)
-- Sidebar order: **Scenarios** → Model Setup → Layers → Annotations → District Parameters → Model Parameters → Styles → **Dimensions** → Analytics → Building/Roof → Road Modules → Road Module Styles → Views → Batch Export
+- Sidebar order: **Scenarios** → Model Setup → Layers → Annotations → **Drawing Layers** → **Drawing Properties** → District Parameters → Model Parameters → Styles → **Dimensions** → Analytics → Building/Roof → Road Modules → Road Module Styles → Views → Batch Export
 
-## State Structure (useStore.js ~3,800 lines, v26)
+## State Structure (useStore.js ~4,000 lines, v29)
 
 **Entity System** (District):
 - `entities.lots[lotId]` — lot data with buildings, setbacks (principal + accessory)
@@ -49,9 +49,77 @@ React 19 + Vite 7 + Three.js 0.182 via @react-three/fiber 9.4 | Zustand 5 + Zund
 
 **Other key state**: `viewSettings` (camera, export, batch queue), `layerVisibility` (26+ layers), `dimensionSettings`, `annotationSettings`, `annotationCustomLabels`, `annotationPositions`, `styleSettings`, `roadModule`, `roadModuleStyles` (17 categories: 11 base + 6 alley-specific), `sunSettings`, `moveMode` (transient, excluded from persist/Zundo), `roadModuleStylesSnapshot` (transient — global style toggle revert)
 
-**Store version 26**: Migrations v1–v25 + v26 parking setback layer keys. Persist `merge` function patches missing `entityStyles`, `lotVisibility`, `viewSettings.layers`, `roadModuleStyles`, `dimensionSettings`, and `annotationSettings` keys on every hydration.
+**Store version 29**: Migrations v1–v28 + v29 drawing editor foundation. Persist `merge` function patches missing `entityStyles`, `lotVisibility`, `viewSettings.layers`, `roadModuleStyles`, `dimensionSettings`, `annotationSettings`, `entities.lots[].parkingSetbacks`, and `drawingLayers/drawingObjects/drawingDefaults` keys on every hydration. Merge also reconciles lot `parkingSetbacks` with `districtParameters.parkingLocations` values.
 
-**Undo/redo**: Tracks entities, entityOrder, entityStyles, lotVisibility, existing, proposed, viewSettings, sunSettings, roadModule, roadModuleStyles, comparisonRoads, annotationSettings, annotationCustomLabels, annotationPositions. Excludes export flags.
+**Drawing Editor** (All 8 phases DONE, runtime-tested Feb 2025 — 158/158 Playwright tests PASS):
+- `drawingLayers` — `{ [layerId]: { name, visible, locked, zHeight, renderMode, order } }`
+- `drawingLayerOrder` — layerId[] in display order
+- `activeDrawingLayerId` — currently active layer for new drawings
+- `drawingObjects` — `{ [objectId]: DrawingObject }` with 12 types: freehand, line, arrow, rectangle, polygon, circle, ellipse, star, octagon, roundedRect, text, leader
+- `drawingDefaults` — current tool style defaults (strokeColor, strokeWidth, fillColor, fillOpacity, lineType, fontSize, fontFamily, textColor, arrowHead, cornerRadius, starPoints, outlineWidth, outlineColor)
+- `drawingMode` — transient `{ tool, phase }` or null (excluded from persist/Zundo)
+- `textEditState` — transient `{ worldPosition, screenPosition, tool, targetPoint?, objectId }` or null (excluded from persist/Zundo)
+- `selectedDrawingIds` — transient array (excluded from persist/Zundo)
+- Camera: orbit remapped globally to middle-click, left-click freed for drawing tools
+- Toolbar: vertical on far-left of canvas (`DrawingEditor/DrawingToolbar.jsx`) — 14 tools (select, freehand, line, arrow, polygon, rectangle, roundedRect, circle, ellipse, octagon, star, text, leader, eraser)
+- Layers panel: `DrawingEditor/DrawingLayersPanel.jsx` in sidebar after Annotations
+- Scene: `DrawingEditor/index.jsx` + `DrawingCapturePlane.jsx` in DistrictSceneContent
+- Renderer: `DrawingEditor/DrawingObjectRenderer.jsx` renders all 12 types with selection highlights (ArrowRenderer uses cone geometry, TextRenderer uses AnnotationText, LeaderRenderer uses LeaderCallout)
+- Text input: `DrawingEditor/DrawingTextInput.jsx` — HTML overlay outside Canvas for text/leader text entry (positioned at screen coords from `textEditState`)
+- Geometry: `src/utils/drawingGeometry.js` — shared vertex generators (circle, ellipse, star, regular polygon, rounded rect) + THREE.Shape builders + `pointInPolygon` hit-test
+- Shortcuts: V=Select, F=Freehand, L=Line, R=Rectangle, P=Polygon, C=Circle, A=Arrow, T=Text, E=Eraser (gated by `activeDrawingLayerId`)
+
+**DrawingObject data structures** (Phase 1 + Phase 2 + Phase 3):
+- `freehand`: `{ id, layerId, type, points: [[x,y],...], strokeColor, strokeWidth, lineType, opacity }`
+- `line`: `{ id, layerId, type, start: [x,y], end: [x,y], strokeColor, strokeWidth, lineType, opacity }`
+- `arrow`: `{ id, layerId, type, start: [x,y], end: [x,y], strokeColor, strokeWidth, lineType, opacity, arrowHead: 'none'|'start'|'end'|'both' }`
+- `rectangle`: `{ id, layerId, type, origin: [x,y], width, height, strokeColor, strokeWidth, lineType, fillColor, fillOpacity, opacity }`
+- `polygon`: `{ id, layerId, type, points: [[x,y],...], strokeColor, strokeWidth, lineType, fillColor, fillOpacity, opacity }`
+- `circle`: `{ id, layerId, type, center: [x,y], radius, strokeColor, strokeWidth, lineType, fillColor, fillOpacity, opacity }`
+- `ellipse`: `{ id, layerId, type, center: [x,y], radiusX, radiusY, strokeColor, strokeWidth, lineType, fillColor, fillOpacity, opacity }`
+- `star`: `{ id, layerId, type, center: [x,y], outerRadius, innerRadius, numPoints, strokeColor, strokeWidth, lineType, fillColor, fillOpacity, opacity }`
+- `octagon`: `{ id, layerId, type, center: [x,y], radius, strokeColor, strokeWidth, lineType, fillColor, fillOpacity, opacity }`
+- `roundedRect`: `{ id, layerId, type, origin: [x,y], width, height, cornerRadius, strokeColor, strokeWidth, lineType, fillColor, fillOpacity, opacity }`
+- `text`: `{ id, layerId, type, position: [x,y], text, fontSize, fontFamily, textColor, outlineWidth, outlineColor, opacity }`
+- `leader`: `{ id, layerId, type, targetPoint: [x,y], textPosition: [x,y], text, fontSize, fontFamily, textColor, strokeColor, strokeWidth, lineType, opacity }`
+
+**Drawing interaction patterns**:
+- **Drag-based tools** (freehand, line, arrow, rectangle, circle, ellipse, star, octagon, roundedRect): Pointer capture + camera disable + undo pause/resume (same as DraggableLabel). Live preview via `useRef` + version counter (avoids store churn during draw).
+- **Click-to-place tool** (polygon): No pointer capture. First click places vertex + disables camera + pauses undo. Subsequent clicks add vertices. Double-click (350ms threshold) closes polygon and commits. Escape cancels via `keydown` listener inside DrawingCapturePlane. Preview shows placed vertices + rubber-band line to cursor + dashed close line back to first vertex.
+- **Text tool**: Single click places text position, opens HTML overlay input (`DrawingTextInput.jsx`) at screen coords. Enter commits, Escape cancels. No pointer capture or camera disable.
+- **Leader tool**: Two-click placement. Click 1 sets targetPoint (arrow tip), disables camera + pauses undo. Click 2 sets textPosition, opens text input overlay. Preview shows leader line + arrow from target to cursor. Escape cancels during placement.
+- Freehand: 0.5 world unit min-distance filter between points
+- Circle/star/octagon: center-drag, radius = distance from center to cursor
+- Ellipse: center-drag, radiusX = |dx|, radiusY = |dy|
+- Star: innerRadius = outerRadius * 0.4, numPoints from `drawingDefaults.starPoints ?? 5`
+- RoundedRect: cornerRadius from `drawingDefaults.cornerRadius ?? 0`, clamped to `min(|w|/2, |h|/2)`
+- Arrow hit-test: same as line (point-to-segment distance). Text hit-test: approximate bounding box (`charWidth = fontSize * 0.6`). Leader hit-test: segment distance + text bounding box.
+- Selection: point-to-segment distance (3 world unit tolerance), Shift+click multi-select, `pointInPolygon` for filled polygon/star/octagon shapes, ellipse normalized equation for edge/fill
+- **Eraser tool**: Single click hit-tests all visible/unlocked objects (same as select), deletes first hit via `deleteDrawingObject`. No pointer capture or camera disable. Reuses `hitTestObject` from `drawingHitTest.js`.
+- Locked layers: cannot draw on, select, or erase objects from locked layers
+- **Drag-to-move** (select tool): Click on already-selected object enters "potential move" state. Moving >2 world units transitions to "active move" (pause undo, disable camera). All selected objects move together via `computeMoveUpdate`. Escape during active move reverts positions. Uses `moveState` ref in DrawingCapturePlane.
+- **Selection overlay** (`DrawingSelectionOverlay.jsx`): Renders when `selectedDrawingIds.length > 0`. Shows dashed blue bounding box (`BBOX_PADDING = 2ft`). For single selection, renders type-specific handles (`DrawingVertexHandle` for vertex types, `DrawingResizeHandle` for bounded types). Handles only interactive when `!drawingMode || drawingMode.tool === 'select'`.
+- **Hit-test utilities** extracted to `src/utils/drawingHitTest.js`: `hitTestObject`, `computeObjectBounds`, `computeMoveUpdate` — shared between DrawingCapturePlane and DrawingSelectionOverlay.
+- **Batch update**: `updateDrawingObjects(updates)` in store — takes `{ [id]: partialObj }` map, merges all in a single `set()` call. Used for multi-select move.
+
+**Drawing Editor Implementation Plan** (Phases 4–7, ALL DONE, ALL RUNTIME-TESTED):
+- **Phase 4** — Advanced Editing, DONE: Drag-to-move (single/multi-select), polygon/freehand vertex editing, line/arrow endpoint handles, leader endpoint handles, rectangle/roundedRect corner+edge resize, circle/octagon radius handles, ellipse X/Y radius handles, star inner/outer radius handles. Bounding box overlay with dashed blue border. Undo batching via pause/resume. Rotation deferred to Phase 4b.
+- **Phase 5** — Properties Panel, DONE: `DrawingPropertiesPanel.jsx` in sidebar after Drawing Layers. Auto-shows when `selectedDrawingIds.length > 0`. Sub-sections: Stroke (color/width/lineType/arrowHead), Fill (color/opacity), Text (content/color/fontSize/fontFamily/outlineWidth/outlineColor), Shape (cornerRadius/numPoints), Opacity. Multi-select shows only common properties. Uses `updateDrawingObjects` batch action + `setDrawingDefault` to update both selection and defaults. Type groupings via Sets (`STROKE_TYPES`, `FILL_TYPES`, `TEXT_TYPES`, etc.).
+- **Phase 6** — Persistence Integration, DONE: Already fully wired in Phase 0 foundation (v29). All drawing state included in: persist partialize, persist merge patching, undo/redo, project save/load (`getProjectState`/`applyProjectState`), snapshots (`getSnapshotData`/`applySnapshot`), layer states (drawing layer visibility), scenarios (via snapshot functions).
+- **Phase 7** — Export & Polish, DONE: Eraser tool (E key, click-to-delete via `hitTestObject`). SVG export includes all 12 drawing object types via `generateDrawingSVG()` in `Exporter.jsx` — projects world coords to screen, applies stroke/fill/opacity styles, renders arrowheads as triangles. DXF export includes all types via `generateDrawingDXF()` — emits LWPOLYLINE (closed shapes), LINE, CIRCLE, ELLIPSE, TEXT entities with drawing layer names. 2D overlay render mode deferred.
+
+**Drawing Editor Runtime Testing** (Feb 2025, 158/158 PASS via Playwright):
+- **Phase 1** (23/23): Toolbar rendering (14 tools), tool gating (disabled before layer, enabled after), 9 keyboard shortcuts (V/F/L/R/C/P/A/T/E), canvas drawing (freehand/line/rect/circle/polygon/arrow), no console errors
+- **Phase 2** (14/14): Ellipse (asymmetric radii), star (5-point, 0.4 inner/outer ratio), octagon (radius-based), roundedRect (cornerRadius from defaults)
+- **Phase 3** (19/19): Arrow with arrowHead='end' default, arrowhead select UI (show/hide/change), text tool (input overlay + commit), text cancel (Escape), leader two-click placement (targetPoint + textPosition + text input)
+- **Phase 4+5** (27/27): Selection via store, Delete key removal, Escape deselection, multi-select count display, properties panel auto-show, type-specific sections, edit propagation to store + defaults
+- **Phase 6** (24/24): Single/multi-step undo/redo, localStorage persistence across reload, transient state exclusion (drawingMode/selectedDrawingIds/textEditState reset), getProjectState/applyProjectState round-trip
+- **Phase 7** (7/7): Eraser activation (E key), eraser click-to-delete, eraser respects locked layers, export format options (SVG/DXF present), drawing data in getProjectState/getSnapshotData, tool toggle/switching
+- **Layers Panel** (44/44): Create/rename/delete layers, active indicator toggle, visibility/lock toggles, render mode 3D/2D switch, Z height slider, multi-layer management (mid-list deletion)
+- **Dev testing setup**: `window.__store = useStore` exposed in dev mode (`import.meta.env.DEV`) for Playwright store verification
+- **Non-blocking warnings**: "Maximum update depth exceeded" React warnings (~100+ during module switching, not drawing-specific), nested `<button>` HTML warning
+
+**Undo/redo**: Tracks entities, entityOrder, entityStyles, lotVisibility, existing, proposed, viewSettings, sunSettings, roadModule, roadModuleStyles, comparisonRoads, annotationSettings, annotationCustomLabels, annotationPositions, drawingLayers, drawingLayerOrder, drawingObjects. Excludes export flags, drawingMode, selectedDrawingIds, textEditState, drawingDefaults.
 
 **Entity hooks** (`useEntityStore.js`): `useLot(lotId)`, `useLotIds()`, `useActiveLot()`, `useActiveLotId()`, `useLotStyle(lotId)`, `useBuilding(lotId, type)`, `useRoadModules()`, `useLotVisibility(lotId)`, `useActiveModule()`, `useModelSetup()`, `useDistrictParameters()`, `useEntityCount()`, `getLotData(lotId)` (non-hook)
 
@@ -118,7 +186,7 @@ Offsets in `LotEntity.jsx` read from `dimensionSettings` (no longer hardcoded).
 Road zones=0, intersection fill=1, alley fill=1, fillet fills=2, fillet lines=3, building faces=4, roof=4, BTZ planes=5, max height plane=6, move handle=8, height handle ring=9, sphere=10. **Note**: `renderOrder` doesn't work reliably on drei `<Line>` — use z-offset separation instead.
 
 ### Z-Layer Map (Lot Geometry)
-Lot fill (z=0.02) → lot lines (0.03) → min setbacks (0.1) → accessory setbacks (0.11) → max setbacks (0.12) → parking setbacks (0.13) → lot access arrows (0.15) → BTZ planes (vertical)
+Lot fill (z=0.02) → lot lines (0.03) → setback fill (0.06) → min setbacks (0.1) → accessory setbacks (0.11) → max setbacks (0.12) → parking setbacks (0.13) → lot access arrows (0.15) → BTZ planes (vertical)
 
 ### Street-Aware Setbacks
 `streetSides` prop (from `DistrictSceneContent` via `modelSetup.streetEdges`) determines which lot sides face streets. Street-facing sides use `minSideStreet`/`maxSideStreet`; interior sides use `sideInterior`. Critical for corner lots.
@@ -140,7 +208,7 @@ AutoCAD-style 3-phase: selectObject → selectBase (pause undo, disable camera) 
 - **Shadow camera**: `target-position={[0, 50, 0]}` centers frustum on ground plane (y=50)
 - **Lot access arrow bounds**: Validated against lot bounds + 20ft margin; stale positions fall back to defaults
 - **Edge extrude**: Sends DELTA per pointer move (not cumulative) — additive displacement
-- **CameraControls**: `dollySpeed={0.25}`, `smoothTime={0.35}`
+- **CameraControls**: `dollySpeed={0.25}`, `smoothTime={0.35}`. Mouse buttons remapped globally in `CameraHandler.jsx`: left=NONE (freed for drawing), middle=ROTATE (orbit), right=TRUCK (pan), wheel=DOLLY (zoom).
 - **Building style split** (v22): `principalBuildingEdges`/`Faces` and `accessoryBuildingEdges`/`Faces` — wired with `??` fallback to `buildingEdges`/`buildingFaces`
 - **Building layer split** (v25): `layers.principalBuildings` / `layers.accessoryBuildings` — each with `?? layers.buildings` fallback in `LotEntity.jsx`. Similarly `layers.labelPrincipalBuildings` / `layers.labelAccessoryBuildings` (fallback to `labelBuildings`) and `layers.dimensionsHeightPrincipal` / `layers.dimensionsHeightAccessory` (fallback to `dimensionsHeight`).
 - **MoveHandle position**: Ground plane in front of building — `position={[bounds.cx, bounds.cy - bounds.d/2]}`, `zPosition={0}`, `displayOffset={[0, -13]}` (13ft in front of front edge, avoids vertex handle conflicts).
@@ -148,8 +216,8 @@ AutoCAD-style 3-phase: selectObject → selectBase (pause undo, disable camera) 
 - **NEVER define components inside render functions** — causes React to unmount/remount on every render, triggering render loops and locking the app. Always define at module level. Use `DimSubSection`/`DimDivider` in `DistrictParameterPanel.jsx` as the correct pattern.
 - **NEVER put `return null` before hooks** — all `useState`, `useRef`, `useMemo`, `useCallback`, `useThree`, `useStore` etc. must come BEFORE any early return. Putting `if (!visible) return null` above hooks causes "Rendered more hooks than during the previous render" crash (white screen). Fixed in: `DraggableLabel.jsx`, `AnnotationText.jsx`, `RoadAnnotations.jsx`, `RoadModule.jsx`.
 
-## Style Categories (13)
-Lot Lines, Setbacks, Accessory Setbacks, Max Setbacks, Parking Setbacks, BTZ Planes, Lot Access Arrows, Principal Building Edges/Faces, Accessory Building Edges/Faces, Roof, Max Height Plane
+## Style Categories (14)
+Lot Lines, Setback Fill, Setbacks, Accessory Setbacks, Max Setbacks, Parking Setbacks, BTZ Planes, Lot Access Arrows, Principal Building Edges/Faces, Accessory Building Edges/Faces, Roof, Max Height Plane
 
 ## Backend API
 
@@ -176,7 +244,7 @@ Endpoints: `/api/health`, `/api/config` (GET/PUT), `/api/projects/:id` (CRUD), `
 - **Google Fonts URLs**: `DIMENSION_FONT_OPTIONS` in `useStore.js` uses direct gstatic.com URLs. **Troika-three-text does NOT support woff2** — always use `.woff` or `.ttf` format. Current URLs: Inter v12 (woff), Roboto v51 (ttf), Lato v24 (woff), Montserrat v31 (ttf), Oswald v57 (ttf), Source Sans 3 v19 (ttf). If fonts go blank, re-fetch TTF URLs via Google Fonts v1 API: `https://fonts.googleapis.com/css?family=FontName:400` (returns older non-woff2 format) and update the array.
 - **Height dimensions**: `BuildingEditor/index.jsx` renders height dims with `plane="XZ"` and `textMode="billboard"` — required for pure-Z direction vectors. Default `plane="XY"` produces a zero perpendicular for Z-only dims, making ticks/extension lines invisible. Billboard text always faces camera at mid-height.
 - **Max height source of truth**: `principalMaxHeight` / `accessoryMaxHeight` in `LotEntity.jsx` come from `districtParameters.structures.{principal|accessory}.height.max` (not per-lot `building.maxHeight`). Defaults to `0` when unset, hiding the max height plane and dimension — set District Parameters → Structures to visualize. Max height dim (`offset=-20`) alongside building height dim (`offset=-10`) in `BuildingEditor/index.jsx` — negative so dims extend OUTSIDE the building (XZ plane perpendicular for Z-direction is `-X`, so negative offset → outward). Layer keys: `dimensionsHeightPrincipal` / `dimensionsHeightAccessory` (each ?? `dimensionsHeight` fallback). Custom labels: `principalMaxHeight`, `accessoryMaxHeight` in `dimensionSettings.customLabels`.
-- **Layers panel**: 5 collapsible subsections in `LayersSection` (`DistrictParameterPanel.jsx`), all default collapsed. Groups defined at module scope as `LAYER_GROUPS`. Order: VISUAL AIDS (grid/origin/ground/axes/gimbal) → LOTS & SETBACKS (lotLines/setbacks/accessorySetbacks/maxSetbacks/lotAccessArrows/**parkingSetbacks**/labelLotEdges) → STRUCTURES (btzPlanes/**principalBuildings/accessoryBuildings**/roof/maxHeightPlane) → ROADS (roadModule/roadIntersections/labelRoadZones) → ANNOTATION (annotationLabels + **labelPrincipalBuildings/labelAccessoryBuildings** + dim keys: **dimensionsHeightPrincipal/dimensionsHeightAccessory/dimensionsParkingSetbacks** + other sub-labels).
+- **Layers panel**: 5 collapsible subsections in `LayersSection` (`DistrictParameterPanel.jsx`), all default collapsed. Groups defined at module scope as `LAYER_GROUPS`. Order: VISUAL AIDS (grid/origin/ground/axes/gimbal) → LOTS & SETBACKS (lotLines/**setbackFill**/setbacks/accessorySetbacks/maxSetbacks/lotAccessArrows/**parkingSetbacks**/labelLotEdges) → STRUCTURES (btzPlanes/**principalBuildings/accessoryBuildings**/roof/maxHeightPlane) → ROADS (roadModule/roadIntersections/labelRoadZones) → ANNOTATION (annotationLabels + **labelPrincipalBuildings/labelAccessoryBuildings** + dim keys: **dimensionsHeightPrincipal/dimensionsHeightAccessory/dimensionsParkingSetbacks** + other sub-labels).
 - **Empty viewport after localStorage clear**: `entityOrder = []` on fresh state — no lots exist. Go to Model Setup → set Number of Lots ≥ 1.
 - **Annotation system**: `annotationSettings` has `fontFamily` (label from `DIMENSION_FONT_OPTIONS`, null = browser default), `outlineColor`, `outlineWidth`, plus original text/background/leader fields. `annotationCustomLabels` stores per-road-direction and per-lot custom labels (`{ mode: 'default'|'custom', text: '' }`). Road labels keyed as `roadFront`/`roadRight`/`roadRear`/`roadLeft`; lot labels as `lot-{lotId}-name`. Font label resolved to URL via `DIMENSION_FONT_OPTIONS.find()` in `LotAnnotations.jsx` / `RoadAnnotations.jsx`. `RoadAnnotations` accepts `direction` prop for custom label lookup. UI: `AnnotationSettingsSection` in `DistrictParameterPanel.jsx`. Actions: `setAnnotationSetting`, `setAnnotationCustomLabel`. **Leader visibility**: `DraggableLabel` shows leader when label is >0.5 units from `anchorPoint` (distance check, not custom-vs-default). Lot edge labels (anchor on edge, label 3ft outside lot) always show leaders; lot name / road name / setback labels (anchor ≈ default) only show after dragging.
 - **Gimbal/PostProcessing order**: `<PostProcessing />` must render BEFORE the conditional gimbal `<GizmoHelper>` in `SharedCanvas.jsx` and `Viewer3D.jsx`. If PostProcessing comes after, toggling gimbal causes AO/tone mapping to shift (perceived lighting change).
@@ -229,3 +297,7 @@ The `lotPositions` useMemo in `DistrictSceneContent.jsx` previously depended onl
 ## User Shortcuts
 
 - **/PUCP** — Update CLAUDE.md, commit all changes, push to GitHub.
+
+## RESOLVED BUG: Parking Setback Auto-Population (Feb 2026)
+
+**Fixed in v28**. Parking setback auto-population from district parameters now works. The v27 migration was permanently skipped due to HMR auto-saving the version before migration code was deployed. Fix: added district→lot parking reconciliation to both the persist `merge` function (runs every hydration, idempotent) and a v28 migration. Also fixed falsy-based checks (`!value` → `=== undefined`) in the entityStyles and roadModuleStyles merge patching for correctness.

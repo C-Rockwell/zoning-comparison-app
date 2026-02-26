@@ -4,6 +4,11 @@ import { useStore } from '../store/useStore'
 import { OBJExporter, GLTFExporter, ColladaExporter } from 'three-stdlib'
 import * as THREE from 'three'
 import { generateIFC, generateDistrictIFC } from '../utils/ifcGenerator'
+import {
+    generateStarPoints,
+    generateRegularPolygonPoints,
+    generateRoundedRectPoints,
+} from '../utils/drawingGeometry'
 import * as api from '../services/api'
 import JSZip from 'jszip'
 
@@ -193,9 +198,9 @@ const Exporter = ({ target }) => {
                             saveOrDownload(result.data, 'zoning-model.dae', 'application/xml', false, projectId, showToast)
 
                         } else if (exportFormat === 'dxf') {
-                            // DXF operates on the Three.js scene graph, so it handles whatever
-                            // geometry is rendered (works for both comparison and district modules)
-                            const dxfString = generateDXF(tempGroup)
+                            // DXF operates on the Three.js scene graph + drawing objects
+                            const { drawingObjects: dxfDrawObjs, drawingLayers: dxfDrawLayers } = useStore.getState()
+                            const dxfString = generateDXF(tempGroup, dxfDrawObjs, dxfDrawLayers)
                             saveOrDownload(dxfString, 'zoning-model.dxf', 'application/dxf', false, projectId, showToast)
 
                         } else if (exportFormat === 'ifc') {
@@ -251,8 +256,9 @@ const Exporter = ({ target }) => {
                             }
 
                         } else if (exportFormat === 'svg') {
-                            // Use the configured width/height
-                            const svgString = generateSVG(tempGroup, camera, width, height)
+                            // Use the configured width/height + include drawing objects
+                            const { drawingObjects: svgDrawObjs, drawingLayers: svgDrawLayers } = useStore.getState()
+                            const svgString = generateSVG(tempGroup, camera, width, height, svgDrawObjs, svgDrawLayers)
                             saveOrDownload(svgString, 'zoning-model.svg', 'image/svg+xml', false, projectId, showToast)
                         }
 
@@ -383,23 +389,18 @@ const Exporter = ({ target }) => {
     return null
 }
 
-// Minimal DXF Generator for 3DFACEs (Mesh Geometry)
-const generateDXF = (group) => {
+// Minimal DXF Generator for 3DFACEs (Mesh Geometry) + Drawing Objects
+const generateDXF = (group, drawingObjects, drawingLayers) => {
     let s = `0\nSECTION\n2\nHEADER\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n`
 
     group.traverse((child) => {
         if (child.isMesh && child.geometry) {
             const geom = child.geometry
-            // Ensure we have position attribute
             const positions = geom.attributes.position
             if (!positions) return
 
-            // We need to handle indices if they exist, or just iterate faces
-            // For BoxGeometry and PlaneGeometry, we usually have indices.
+            const localMatrix = child.matrix
 
-            const localMatrix = child.matrix // Already has world transform applied during clone
-
-            // Helper to transform vertex
             const getVert = (idx) => {
                 const arr = positions.array
                 const v = new THREE.Vector3(arr[idx * 3], arr[idx * 3 + 1], arr[idx * 3 + 2])
@@ -413,27 +414,20 @@ const generateDXF = (group) => {
                     const v1 = getVert(indices[i])
                     const v2 = getVert(indices[i + 1])
                     const v3 = getVert(indices[i + 2])
-                    // DXF 3DFACE requires 4 points. For a triangle, repeat the last one.
-                    s += `0\n3DFACE\n8\n0\n` // Layer 0
-                    // Z-UP UPDATE: We are now natively Z-up. 
-                    // DXF expects Z-up. So we map X->X, Y->Y, Z->Z.
-
-                    const formatVert = (code, v) => `${code}\n${v.x}\n${code + 10}\n${v.y}\n${code + 20}\n${v.z}` // Direct mapping
-
+                    s += `0\n3DFACE\n8\n0\n`
+                    const formatVert = (code, v) => `${code}\n${v.x}\n${code + 10}\n${v.y}\n${code + 20}\n${v.z}`
                     s += formatVert(10, v1) + '\n'
                     s += formatVert(11, v2) + '\n'
                     s += formatVert(12, v3) + '\n'
-                    s += formatVert(13, v3) + '\n' // Repeat last for triangle
+                    s += formatVert(13, v3) + '\n'
                 }
             } else {
-                // Non-indexed (triangle list)
                 for (let i = 0; i < positions.count; i += 3) {
                     const v1 = getVert(i)
                     const v2 = getVert(i + 1)
                     const v3 = getVert(i + 2)
-
                     s += `0\n3DFACE\n8\n0\n`
-                    const formatVert = (code, v) => `${code}\n${v.x}\n${code + 10}\n${v.y}\n${code + 20}\n${v.z}` // Direct mapping
+                    const formatVert = (code, v) => `${code}\n${v.x}\n${code + 10}\n${v.y}\n${code + 20}\n${v.z}`
                     s += formatVert(10, v1) + '\n'
                     s += formatVert(11, v2) + '\n'
                     s += formatVert(12, v3) + '\n'
@@ -443,17 +437,122 @@ const generateDXF = (group) => {
         }
     })
 
+    // Drawing objects → DXF entities
+    if (drawingObjects && drawingLayers) {
+        s += generateDrawingDXF(drawingObjects, drawingLayers)
+    }
+
     s += `0\nENDSEC\n0\nEOF\n`
     return s
 }
 
+// Generate DXF entities for drawing objects
+const generateDrawingDXF = (drawingObjects, drawingLayers) => {
+    let s = ''
 
-const generateSVG = (group, camera, width, height) => {
+    const dxfLine = (layerName, x1, y1, z1, x2, y2, z2) =>
+        `0\nLINE\n8\n${layerName}\n10\n${x1}\n20\n${y1}\n30\n${z1}\n11\n${x2}\n21\n${y2}\n31\n${z2}\n`
+
+    const dxfLwPolyline = (layerName, points, closed, z) => {
+        let e = `0\nLWPOLYLINE\n8\n${layerName}\n90\n${points.length}\n70\n${closed ? 1 : 0}\n38\n${z}\n`
+        for (const [x, y] of points) {
+            e += `10\n${x}\n20\n${y}\n`
+        }
+        return e
+    }
+
+    const dxfCircle = (layerName, cx, cy, cz, r) =>
+        `0\nCIRCLE\n8\n${layerName}\n10\n${cx}\n20\n${cy}\n30\n${cz}\n40\n${r}\n`
+
+    const dxfEllipse = (layerName, cx, cy, cz, rx, ry) => {
+        // DXF ELLIPSE: center, major axis endpoint (relative), ratio of minor/major
+        const major = rx >= ry
+        const majorLen = major ? rx : ry
+        const minorLen = major ? ry : rx
+        const ratio = minorLen / majorLen
+        const mx = major ? majorLen : 0
+        const my = major ? 0 : majorLen
+        return `0\nELLIPSE\n8\n${layerName}\n10\n${cx}\n20\n${cy}\n30\n${cz}\n11\n${mx}\n21\n${my}\n31\n0\n40\n${ratio}\n41\n0\n42\n${Math.PI * 2}\n`
+    }
+
+    const dxfText = (layerName, x, y, z, height, text) =>
+        `0\nTEXT\n8\n${layerName}\n10\n${x}\n20\n${y}\n30\n${z}\n40\n${height}\n1\n${text}\n`
+
+    for (const obj of Object.values(drawingObjects)) {
+        const layer = drawingLayers[obj.layerId]
+        if (!layer || !layer.visible) continue
+        const layerName = layer.name.replace(/[^a-zA-Z0-9_-]/g, '_')
+        const z = layer.zHeight ?? 0.2
+
+        switch (obj.type) {
+            case 'freehand': {
+                const pts = obj.points.map(([x, y]) => [x, y])
+                s += dxfLwPolyline(layerName, pts, false, z)
+                break
+            }
+            case 'line':
+            case 'arrow': {
+                s += dxfLine(layerName, obj.start[0], obj.start[1], z, obj.end[0], obj.end[1], z)
+                break
+            }
+            case 'rectangle': {
+                const [ox, oy] = obj.origin
+                const pts = [[ox, oy], [ox + obj.width, oy], [ox + obj.width, oy + obj.height], [ox, oy + obj.height]]
+                s += dxfLwPolyline(layerName, pts, true, z)
+                break
+            }
+            case 'roundedRect': {
+                const verts = generateRoundedRectPoints(obj.origin[0], obj.origin[1], obj.width, obj.height, obj.cornerRadius ?? 0)
+                const pts = verts.slice(0, -1).map(([x, y]) => [x, y]) // remove closing duplicate
+                s += dxfLwPolyline(layerName, pts, true, z)
+                break
+            }
+            case 'polygon': {
+                const pts = obj.points.map(([x, y]) => [x, y])
+                s += dxfLwPolyline(layerName, pts, true, z)
+                break
+            }
+            case 'circle': {
+                s += dxfCircle(layerName, obj.center[0], obj.center[1], z, obj.radius)
+                break
+            }
+            case 'ellipse': {
+                s += dxfEllipse(layerName, obj.center[0], obj.center[1], z, obj.radiusX, obj.radiusY)
+                break
+            }
+            case 'star': {
+                const verts = generateStarPoints(obj.center[0], obj.center[1], obj.outerRadius, obj.innerRadius, obj.numPoints ?? 5)
+                const pts = verts.slice(0, -1).map(([x, y]) => [x, y])
+                s += dxfLwPolyline(layerName, pts, true, z)
+                break
+            }
+            case 'octagon': {
+                const verts = generateRegularPolygonPoints(obj.center[0], obj.center[1], obj.radius, 8)
+                const pts = verts.slice(0, -1).map(([x, y]) => [x, y])
+                s += dxfLwPolyline(layerName, pts, true, z)
+                break
+            }
+            case 'text': {
+                s += dxfText(layerName, obj.position[0], obj.position[1], z, obj.fontSize ?? 3, obj.text ?? '')
+                break
+            }
+            case 'leader': {
+                s += dxfLine(layerName, obj.targetPoint[0], obj.targetPoint[1], z, obj.textPosition[0], obj.textPosition[1], z)
+                s += dxfText(layerName, obj.textPosition[0], obj.textPosition[1], z, obj.fontSize ?? 3, obj.text ?? '')
+                break
+            }
+        }
+    }
+    return s
+}
+
+
+const generateSVG = (group, camera, width, height, drawingObjects, drawingLayers) => {
     let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">`
-    svg += `<rect width="100%" height="100%" fill="white"/>` // White background
+    svg += `<rect width="100%" height="100%" fill="white"/>`
     svg += `<g stroke="black" stroke-width="1" fill="none" stroke-linejoin="round" stroke-linecap="round">`
 
-    // Helper to project point to SVG coords
+    // Helper to project 3D point to SVG coords
     const project = (v) => {
         const p = v.clone()
         p.project(camera)
@@ -462,31 +561,189 @@ const generateSVG = (group, camera, width, height) => {
         return { x, y }
     }
 
+    // Project a 2D world point [x,y] at given z to SVG coords
+    const projectXY = (wx, wy, wz) => project(new THREE.Vector3(wx, wy, wz))
+
+    // Estimate screen-space distance for a world-space radius at a given point
+    const projectRadius = (cx, cy, cz, r) => {
+        const pc = projectXY(cx, cy, cz)
+        const pe = projectXY(cx + r, cy, cz)
+        return Math.abs(pe.x - pc.x)
+    }
+
     group.traverse((child) => {
         if (child.isMesh && child.geometry) {
-            // Create EdgesGeometry for clean wireframes
-            const edges = new THREE.EdgesGeometry(child.geometry, 15) // 15 deg threshold
+            const edges = new THREE.EdgesGeometry(child.geometry, 15)
             const positions = edges.attributes.position
-
             if (positions) {
-                const localMatrix = child.matrix // Already has world transform from clone
+                const localMatrix = child.matrix
                 for (let i = 0; i < positions.count; i += 2) {
                     const v1 = new THREE.Vector3().fromBufferAttribute(positions, i).applyMatrix4(localMatrix)
                     const v2 = new THREE.Vector3().fromBufferAttribute(positions, i + 1).applyMatrix4(localMatrix)
-
-                    // Simple check if behind camera (optional, crude clipping)
-                    // A proper clipper is complex, but for simple "Export Current View" of a centralized model, this usually works ok.
-
                     const p1 = project(v1)
                     const p2 = project(v2)
-
                     svg += `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" />`
                 }
             }
         }
     })
 
-    svg += `</g></svg>`
+    svg += `</g>`
+
+    // Drawing objects → SVG elements
+    if (drawingObjects && drawingLayers) {
+        svg += generateDrawingSVG(drawingObjects, drawingLayers, projectXY, projectRadius)
+    }
+
+    svg += `</svg>`
+    return svg
+}
+
+// Generate SVG elements for drawing objects
+const generateDrawingSVG = (drawingObjects, drawingLayers, projectXY, projectRadius) => {
+    let svg = ''
+
+    const esc = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+    const styleAttrs = (obj, hasFill) => {
+        let s = ''
+        if (obj.strokeColor) s += ` stroke="${obj.strokeColor}"`
+        if (obj.strokeWidth != null) s += ` stroke-width="${obj.strokeWidth}"`
+        if (obj.lineType === 'dashed') s += ` stroke-dasharray="4 4"`
+        if (hasFill && obj.fillColor) {
+            s += ` fill="${obj.fillColor}"`
+            s += ` fill-opacity="${obj.fillOpacity ?? 0.3}"`
+        } else if (!hasFill) {
+            s += ` fill="none"`
+        }
+        if (obj.opacity != null && obj.opacity < 1) s += ` opacity="${obj.opacity}"`
+        return s
+    }
+
+    // Project a points array [[x,y],...] to SVG point string
+    const projectPoints = (points, z) =>
+        points.map(([x, y]) => {
+            const p = projectXY(x, y, z)
+            return `${p.x},${p.y}`
+        }).join(' ')
+
+    for (const obj of Object.values(drawingObjects)) {
+        const layer = drawingLayers[obj.layerId]
+        if (!layer || !layer.visible) continue
+        const z = layer.zHeight ?? 0.2
+
+        switch (obj.type) {
+            case 'freehand': {
+                svg += `<polyline points="${projectPoints(obj.points, z)}"${styleAttrs(obj, false)} />`
+                break
+            }
+            case 'line': {
+                const p1 = projectXY(obj.start[0], obj.start[1], z)
+                const p2 = projectXY(obj.end[0], obj.end[1], z)
+                svg += `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}"${styleAttrs(obj, false)} />`
+                break
+            }
+            case 'arrow': {
+                const p1 = projectXY(obj.start[0], obj.start[1], z)
+                const p2 = projectXY(obj.end[0], obj.end[1], z)
+                svg += `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}"${styleAttrs(obj, false)} />`
+                // Arrowhead triangle
+                const arrowHead = obj.arrowHead ?? 'end'
+                const headSize = 6 // screen pixels
+                if (arrowHead === 'end' || arrowHead === 'both') {
+                    const dx = p2.x - p1.x, dy = p2.y - p1.y
+                    const len = Math.sqrt(dx * dx + dy * dy)
+                    if (len > 0) {
+                        const ux = dx / len, uy = dy / len
+                        const ax = p2.x - ux * headSize + uy * headSize * 0.4
+                        const ay = p2.y - uy * headSize - ux * headSize * 0.4
+                        const bx = p2.x - ux * headSize - uy * headSize * 0.4
+                        const by = p2.y - uy * headSize + ux * headSize * 0.4
+                        svg += `<polygon points="${p2.x},${p2.y} ${ax},${ay} ${bx},${by}" fill="${obj.strokeColor ?? 'black'}" stroke="none" />`
+                    }
+                }
+                if (arrowHead === 'start' || arrowHead === 'both') {
+                    const dx = p1.x - p2.x, dy = p1.y - p2.y
+                    const len = Math.sqrt(dx * dx + dy * dy)
+                    if (len > 0) {
+                        const ux = dx / len, uy = dy / len
+                        const ax = p1.x - ux * headSize + uy * headSize * 0.4
+                        const ay = p1.y - uy * headSize - ux * headSize * 0.4
+                        const bx = p1.x - ux * headSize - uy * headSize * 0.4
+                        const by = p1.y - uy * headSize + ux * headSize * 0.4
+                        svg += `<polygon points="${p1.x},${p1.y} ${ax},${ay} ${bx},${by}" fill="${obj.strokeColor ?? 'black'}" stroke="none" />`
+                    }
+                }
+                break
+            }
+            case 'rectangle': {
+                const [ox, oy] = obj.origin
+                const corners = [[ox, oy], [ox + obj.width, oy], [ox + obj.width, oy + obj.height], [ox, oy + obj.height]]
+                svg += `<polygon points="${projectPoints(corners, z)}"${styleAttrs(obj, true)} />`
+                break
+            }
+            case 'roundedRect': {
+                const verts = generateRoundedRectPoints(obj.origin[0], obj.origin[1], obj.width, obj.height, obj.cornerRadius ?? 0)
+                const pts = verts.slice(0, -1) // remove closing duplicate
+                svg += `<polygon points="${projectPoints(pts, z)}"${styleAttrs(obj, true)} />`
+                break
+            }
+            case 'polygon': {
+                svg += `<polygon points="${projectPoints(obj.points, z)}"${styleAttrs(obj, true)} />`
+                break
+            }
+            case 'circle': {
+                const pc = projectXY(obj.center[0], obj.center[1], z)
+                const sr = projectRadius(obj.center[0], obj.center[1], z, obj.radius)
+                svg += `<circle cx="${pc.x}" cy="${pc.y}" r="${sr}"${styleAttrs(obj, true)} />`
+                break
+            }
+            case 'ellipse': {
+                const pc = projectXY(obj.center[0], obj.center[1], z)
+                const srx = projectRadius(obj.center[0], obj.center[1], z, obj.radiusX)
+                const sry = projectRadius(obj.center[0], obj.center[1], z, obj.radiusY)
+                svg += `<ellipse cx="${pc.x}" cy="${pc.y}" rx="${srx}" ry="${sry}"${styleAttrs(obj, true)} />`
+                break
+            }
+            case 'star': {
+                const verts = generateStarPoints(obj.center[0], obj.center[1], obj.outerRadius, obj.innerRadius, obj.numPoints ?? 5)
+                const pts = verts.slice(0, -1)
+                svg += `<polygon points="${projectPoints(pts, z)}"${styleAttrs(obj, true)} />`
+                break
+            }
+            case 'octagon': {
+                const verts = generateRegularPolygonPoints(obj.center[0], obj.center[1], obj.radius, 8)
+                const pts = verts.slice(0, -1)
+                svg += `<polygon points="${projectPoints(pts, z)}"${styleAttrs(obj, true)} />`
+                break
+            }
+            case 'text': {
+                const pt = projectXY(obj.position[0], obj.position[1], z)
+                const screenSize = projectRadius(obj.position[0], obj.position[1], z, obj.fontSize ?? 3)
+                svg += `<text x="${pt.x}" y="${pt.y}" fill="${obj.textColor ?? '#000000'}" font-size="${screenSize}" opacity="${obj.opacity ?? 1}">${esc(obj.text ?? '')}</text>`
+                break
+            }
+            case 'leader': {
+                const pt = projectXY(obj.targetPoint[0], obj.targetPoint[1], z)
+                const tp = projectXY(obj.textPosition[0], obj.textPosition[1], z)
+                svg += `<line x1="${pt.x}" y1="${pt.y}" x2="${tp.x}" y2="${tp.y}"${styleAttrs(obj, false)} />`
+                // Arrowhead at target point
+                const dx = pt.x - tp.x, dy = pt.y - tp.y
+                const len = Math.sqrt(dx * dx + dy * dy)
+                if (len > 0) {
+                    const ux = dx / len, uy = dy / len
+                    const ax = pt.x - ux * 6 + uy * 2.4
+                    const ay = pt.y - uy * 6 - ux * 2.4
+                    const bx = pt.x - ux * 6 - uy * 2.4
+                    const by = pt.y - uy * 6 + ux * 2.4
+                    svg += `<polygon points="${pt.x},${pt.y} ${ax},${ay} ${bx},${by}" fill="${obj.strokeColor ?? 'black'}" stroke="none" />`
+                }
+                const screenSize = projectRadius(obj.textPosition[0], obj.textPosition[1], z, obj.fontSize ?? 3)
+                svg += `<text x="${tp.x}" y="${tp.y}" fill="${obj.textColor ?? '#000000'}" font-size="${screenSize}" opacity="${obj.opacity ?? 1}">${esc(obj.text ?? '')}</text>`
+                break
+            }
+        }
+    }
     return svg
 }
 

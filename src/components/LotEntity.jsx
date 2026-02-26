@@ -146,6 +146,61 @@ const RectLot = ({ width, depth, style, fillStyle, showWidthDimensions = false, 
 }
 
 // ============================================
+// SetbackFillPolygon — buildable area fill inside principal setbacks
+// ============================================
+const SetbackFillPolygon = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, lineScale = 1 }) => {
+    const { front, rear, sideInterior, minSideStreet } = setbacks
+    const leftValue = streetSides.left ? (minSideStreet ?? 0) : (sideInterior ?? 0)
+    const rightValue = streetSides.right ? (minSideStreet ?? 0) : (sideInterior ?? 0)
+    const frontValue = front ?? 0
+    const rearValue = rear ?? 0
+
+    const fillWidth = lotWidth - leftValue - rightValue
+    const fillDepth = lotDepth - frontValue - rearValue
+    if (fillWidth <= 0 || fillDepth <= 0) return null
+
+    const cx = (leftValue - rightValue) / 2
+    const cy = (frontValue - rearValue) / 2
+    const z = 0.06  // 0.5" above lot fill (0.02)
+
+    // Four corners for outline (slightly above fill to avoid z-fight)
+    const x1 = -lotWidth / 2 + leftValue, x2 = lotWidth / 2 - rightValue
+    const y1 = -lotDepth / 2 + frontValue, y2 = lotDepth / 2 - rearValue
+    const p1 = [x1, y1, z + 0.01]
+    const p2 = [x2, y1, z + 0.01]
+    const p3 = [x2, y2, z + 0.01]
+    const p4 = [x1, y2, z + 0.01]
+
+    const lineStyle = {
+        color: style.lineColor ?? '#228B22',
+        width: style.lineWidth ?? 1,
+        dashed: style.lineDashed ?? false,
+        opacity: 1,
+    }
+
+    return (
+        <group>
+            <mesh position={[cx, cy, z]}>
+                <planeGeometry args={[fillWidth, fillDepth]} />
+                <meshStandardMaterial
+                    color={style.color ?? '#90EE90'}
+                    opacity={style.opacity ?? 0.3}
+                    transparent={(style.opacity ?? 0.3) < 1}
+                    side={THREE.DoubleSide}
+                    depthWrite={(style.opacity ?? 0.3) >= 0.95}
+                    roughness={1}
+                    metalness={0}
+                />
+            </mesh>
+            <SingleLine start={p1} end={p2} style={lineStyle} side="front" lineScale={lineScale} />
+            <SingleLine start={p2} end={p3} style={lineStyle} side="right" lineScale={lineScale} />
+            <SingleLine start={p3} end={p4} style={lineStyle} side="rear" lineScale={lineScale} />
+            <SingleLine start={p4} end={p1} style={lineStyle} side="left" lineScale={lineScale} />
+        </group>
+    )
+}
+
+// ============================================
 // SetbackLines — setback rectangle inside lot
 // ============================================
 const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, showDimensions = false, dimensionSettings = {}, lineScale = 1 }) => {
@@ -669,6 +724,20 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                         lineScale={exportLineScale}
                     />
                 )
+            )}
+
+            {/* ============================================ */}
+            {/* Setback Fill (buildable area inside principal setbacks) */}
+            {/* ============================================ */}
+            {layers.setbackFill && visibility.setbackFill && setbacks?.principal && style?.setbackFill && (
+                <SetbackFillPolygon
+                    lotWidth={lotWidth}
+                    lotDepth={lotDepth}
+                    setbacks={setbacks.principal}
+                    style={style.setbackFill}
+                    streetSides={streetSides}
+                    lineScale={exportLineScale}
+                />
             )}
 
             {/* ============================================ */}
