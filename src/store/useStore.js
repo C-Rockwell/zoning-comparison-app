@@ -3,6 +3,18 @@ import { persist } from 'zustand/middleware'
 import { temporal } from 'zundo'
 
 // ============================================
+// Dimension Font Options
+// ============================================
+export const DIMENSION_FONT_OPTIONS = [
+    { label: 'Inter', url: 'https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hjp-Ek-_EeA.woff' },
+    { label: 'Roboto', url: 'https://fonts.gstatic.com/s/roboto/v51/KFOMCnqEu92Fr1ME7kSn66aGLdTylUAMQXC89YmC2DPNWubEbVmUiA8.ttf' },
+    { label: 'Lato', url: 'https://fonts.gstatic.com/s/lato/v24/S6uyw4BMUTPHjx4wWA.woff' },
+    { label: 'Montserrat', url: 'https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCtr6Hw5aX8.ttf' },
+    { label: 'Oswald', url: 'https://fonts.gstatic.com/s/oswald/v57/TK3_WkUHHAIjg75cFRf3bXL8LICs1_FvsUZiYA.ttf' },
+    { label: 'Source Sans', url: 'https://fonts.gstatic.com/s/sourcesans3/v19/nwpBtKy2OAdR1K-IwhWudF-R9QMylBJAV3Bo8Ky462EK9C4.ttf' },
+]
+
+// ============================================
 // Polygon Geometry Utility Functions
 // ============================================
 
@@ -122,7 +134,7 @@ export const createDefaultLot = (overrides = {}) => ({
             minSideStreet: null, maxSideStreet: null, btzSideStreet: null,
         },
         accessory: {
-            front: null, rear: 5, sideInterior: 3, sideStreet: null,
+            front: null, rear: null, sideInterior: null, sideStreet: null,
         },
     },
     lotGeometry: { mode: 'rectangle', editing: false, vertices: null },
@@ -136,7 +148,7 @@ export const createDefaultLot = (overrides = {}) => ({
             roof: { type: 'flat', overrideHeight: false, ridgeHeight: null, ridgeDirection: 'x', shedDirection: '+y' },
         },
         accessory: {
-            width: 12, depth: 16, stories: 1,
+            width: 0, depth: 0, stories: 0,
             firstFloorHeight: 10, upperFloorHeight: 10,
             x: 0, y: 0, maxHeight: 15,
             geometry: { mode: 'rectangle', vertices: null },
@@ -173,11 +185,45 @@ export const createDefaultLotStyle = (overrides = {}) => ({
         }
     },
     lotFill: { color: '#E5E5E5', opacity: 1.0, visible: true },
+    setbackFill: { color: '#90EE90', opacity: 0.3, lineColor: '#228B22', lineWidth: 1, lineDashed: false },
     buildingEdges: { color: '#000000', width: 1.5, visible: true, dashed: false, opacity: 1.0 },
     buildingFaces: { color: '#D5D5D5', opacity: 1.0, transparent: true },
+    principalBuildingEdges: { color: '#000000', width: 1.5, visible: true, dashed: false, opacity: 1.0 },
+    principalBuildingFaces: { color: '#D5D5D5', opacity: 1.0, transparent: true },
+    accessoryBuildingEdges: { color: '#666666', width: 1.5, visible: true, dashed: false, opacity: 1.0 },
+    accessoryBuildingFaces: { color: '#B0B0B0', opacity: 1.0, transparent: true },
     maxHeightPlane: { color: '#FF6B6B', opacity: 0.3, lineColor: '#FF0000', lineWidth: 2, lineDashed: true },
-    roofFaces: { color: '#B8A088', opacity: 0.85, transparent: true },
+    maxSetbacks: {
+        color: '#000000', width: 1, dashed: true, dashSize: 0.5, gapSize: 0.3, dashScale: 1, opacity: 1.0,
+        overrides: {
+            front: { enabled: false, color: '#000000', width: 1, dashed: true },
+            rear: { enabled: false, color: '#000000', width: 1, dashed: true },
+            left: { enabled: false, color: '#000000', width: 1, dashed: true },
+            right: { enabled: false, color: '#000000', width: 1, dashed: true },
+        }
+    },
+    roofFaces: { color: '#B8A088', opacity: 1.0 },
     roofEdges: { color: '#000000', width: 1.5, visible: true, opacity: 1.0 },
+    btzPlanes: { color: '#AA00FF', opacity: 1.0 },
+    accessorySetbacks: {
+        color: '#2196F3', width: 1, dashed: true, dashSize: 0.8, gapSize: 0.4, dashScale: 1, opacity: 1.0,
+        overrides: {
+            front: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+            rear: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+            left: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+            right: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+        }
+    },
+    parkingSetbacks: {
+        color: '#FF9800', width: 1, dashed: true, dashSize: 0.8, gapSize: 0.4, dashScale: 1, opacity: 1.0,
+        overrides: {
+            front: { enabled: false, color: '#FF9800', width: 1, dashed: true },
+            rear: { enabled: false, color: '#FF9800', width: 1, dashed: true },
+            left: { enabled: false, color: '#FF9800', width: 1, dashed: true },
+            right: { enabled: false, color: '#FF9800', width: 1, dashed: true },
+        }
+    },
+    lotAccessArrows: { color: '#FF00FF', opacity: 1.0 },
     ...overrides,
 });
 
@@ -208,10 +254,80 @@ export const createDefaultLotVisibility = () => ({
     buildings: true,
     roof: true,
     maxHeightPlane: true,
+    maxHeightPlanePrincipal: true,
+    maxHeightPlaneAccessory: true,
     dimensions: true,
     accessoryBuilding: true,
-    parkingSetbacks: false,
+    maxSetbacks: true,
+    parkingSetbacks: true,
+    setbackFill: true,
+    btzPlanes: true,
+    accessorySetbacks: true,
+    lotAccessArrows: true,
 });
+
+// Maps district parameter dot-paths to lot property setter functions (mutates lot in place)
+const DISTRICT_TO_LOT_MAP = {
+    'lotWidth.min': (lot, v) => { lot.lotWidth = v },
+    'lotDepth.min': (lot, v) => { lot.lotDepth = v },
+    'setbacksPrincipal.front.min': (lot, v) => { lot.setbacks.principal.front = v },
+    'setbacksPrincipal.front.max': (lot, v) => { lot.setbacks.principal.maxFront = v },
+    'setbacksPrincipal.btzFront': (lot, v) => { lot.setbacks.principal.btzFront = v },
+    'setbacksPrincipal.rear.min': (lot, v) => { lot.setbacks.principal.rear = v },
+    'setbacksPrincipal.sideInterior.min': (lot, v) => { lot.setbacks.principal.sideInterior = v },
+    'setbacksPrincipal.sideStreet.min': (lot, v) => { lot.setbacks.principal.minSideStreet = v },
+    'setbacksPrincipal.sideStreet.max': (lot, v) => { lot.setbacks.principal.maxSideStreet = v },
+    'setbacksPrincipal.btzSideStreet': (lot, v) => { lot.setbacks.principal.btzSideStreet = v },
+    'setbacksAccessory.front.min': (lot, v) => { lot.setbacks.accessory.front = v },
+    'setbacksAccessory.rear.min': (lot, v) => { lot.setbacks.accessory.rear = v },
+    'setbacksAccessory.sideInterior.min': (lot, v) => { lot.setbacks.accessory.sideInterior = v },
+    'setbacksAccessory.sideStreet.min': (lot, v) => { lot.setbacks.accessory.sideStreet = v },
+    'structures.principal.height.max': (lot, v) => { lot.buildings.principal.maxHeight = v },
+    'structures.principal.stories.max': (lot, v) => { lot.buildings.principal.stories = v },
+    'structures.principal.firstStoryHeight.min': (lot, v) => { lot.buildings.principal.firstFloorHeight = v },
+    'structures.principal.upperStoryHeight.min': (lot, v) => { lot.buildings.principal.upperFloorHeight = v },
+    'structures.accessory.height.max': (lot, v) => { lot.buildings.accessory.maxHeight = v },
+    'structures.accessory.stories.max': (lot, v) => { lot.buildings.accessory.stories = v },
+    'structures.accessory.firstStoryHeight.min': (lot, v) => { lot.buildings.accessory.firstFloorHeight = v },
+    'structures.accessory.upperStoryHeight.min': (lot, v) => { lot.buildings.accessory.upperFloorHeight = v },
+    'lotAccess.primaryStreet.permitted': (lot, v) => { lot.lotAccess.front = v },
+    'lotAccess.sharedDrive.permitted': (lot, v) => { lot.lotAccess.sideInterior = v },
+    'lotAccess.secondaryStreet.permitted': (lot, v) => { lot.lotAccess.sideStreet = v },
+    'lotAccess.rearAlley.permitted': (lot, v) => { lot.lotAccess.rear = v },
+    'parkingLocations.front.permitted': (lot, v) => { lot.parking.front = v },
+    'parkingLocations.sideInterior.permitted': (lot, v) => { lot.parking.sideInterior = v },
+    'parkingLocations.sideStreet.permitted': (lot, v) => { lot.parking.sideStreet = v },
+    'parkingLocations.rear.permitted': (lot, v) => { lot.parking.rear = v },
+    'parkingLocations.front.min': (lot, v) => {
+        if (!lot.parkingSetbacks) lot.parkingSetbacks = { front: null, sideInterior: null, sideStreet: null, rear: null };
+        lot.parkingSetbacks.front = v;
+    },
+    'parkingLocations.sideInterior.min': (lot, v) => {
+        if (!lot.parkingSetbacks) lot.parkingSetbacks = { front: null, sideInterior: null, sideStreet: null, rear: null };
+        lot.parkingSetbacks.sideInterior = v;
+    },
+    'parkingLocations.sideStreet.min': (lot, v) => {
+        if (!lot.parkingSetbacks) lot.parkingSetbacks = { front: null, sideInterior: null, sideStreet: null, rear: null };
+        lot.parkingSetbacks.sideStreet = v;
+    },
+    'parkingLocations.rear.min': (lot, v) => {
+        if (!lot.parkingSetbacks) lot.parkingSetbacks = { front: null, sideInterior: null, sideStreet: null, rear: null };
+        lot.parkingSetbacks.rear = v;
+    },
+};
+
+// Apply all current district parameter defaults to a lot object (mutates in place)
+const applyDistrictDefaultsToLot = (lot, dp) => {
+    if (!dp) return;
+    for (const [path, setter] of Object.entries(DISTRICT_TO_LOT_MAP)) {
+        const keys = path.split('.');
+        let val = dp;
+        for (const k of keys) {
+            val = val?.[k];
+        }
+        if (val != null) setter(lot, val);
+    }
+};
 
 export const useStore = create(
     temporal(
@@ -342,6 +458,16 @@ export const useStore = create(
                 nextEntityId: 1,
                 activeEntityId: null,
                 selectedBuildingType: null, // 'principal' | 'accessory' | null
+                moveMode: {
+                    active: false,
+                    phase: null, // 'selectObject' | 'selectBase' | 'moving'
+                    targetType: null, // 'building' | 'lotAccessArrow'
+                    targetLotId: null,
+                    targetBuildingType: null, // 'principal' | 'accessory'
+                    targetDirection: null, // for lot access arrows
+                    basePoint: null, // [x, y]
+                    originalPosition: null, // [x, y]
+                },
                 entityStyles: {},     // { [lotId]: styleData }
                 lotVisibility: {},    // { [lotId]: per-parameter visibility }
                 modelSetup: {
@@ -349,11 +475,15 @@ export const useStore = create(
                     streetEdges: { front: true, left: false, right: false, rear: false },
                     streetTypes: { front: 'S1', left: 'S1', right: 'S2', rear: 'S3' },
                 },
+                stashedRoadModules: {}, // { [direction]: roadModuleData } — preserved when street edge unchecked
                 // Annotation system — shared text labels for lots, setbacks, roads, buildings
                 annotationSettings: {
                     textRotation: 'billboard',   // 'follow-line' | 'billboard' | 'fixed'
                     fontSize: 1.5,
+                    fontFamily: null,            // null = browser default; otherwise URL from DIMENSION_FONT_OPTIONS
                     textColor: '#000000',
+                    outlineColor: '#ffffff',
+                    outlineWidth: 0.15,
                     backgroundColor: '#ffffff',
                     backgroundOpacity: 0.85,
                     backgroundEnabled: true,
@@ -362,7 +492,40 @@ export const useStore = create(
                     leaderLineDashed: false,
                     unitFormat: 'feet',          // 'feet' | 'feet-inches' | 'meters'
                 },
+                annotationCustomLabels: {
+                    // Road labels keyed by direction: { mode: 'default'|'custom', text: '' }
+                    roadFront: { mode: 'default', text: '' },
+                    roadRight: { mode: 'default', text: '' },
+                    roadRear:  { mode: 'default', text: '' },
+                    roadLeft:  { mode: 'default', text: '' },
+                    // Lot labels added dynamically: lot-{lotId}-name: { mode: 'default', text: '' }
+                },
                 annotationPositions: {},  // { [annotationId]: [x, y, z] | null }
+
+                // Drawing Editor system
+                drawingLayers: {},           // { [layerId]: { name, visible, locked, zHeight, renderMode, order } }
+                drawingLayerOrder: [],       // layerId[] in display order
+                activeDrawingLayerId: null,  // currently active layer for new drawings
+                drawingObjects: {},          // { [objectId]: DrawingObject }
+                drawingDefaults: {
+                    strokeColor: '#000000',
+                    strokeWidth: 2,
+                    fillColor: '#cccccc',
+                    fillOpacity: 0.3,
+                    lineType: 'solid',       // 'solid' | 'dashed'
+                    fontSize: 3,
+                    fontFamily: null,
+                    textColor: '#000000',
+                    arrowHead: 'end',        // 'none' | 'start' | 'end' | 'both'
+                    cornerRadius: 0,
+                    starPoints: 5,
+                    outlineWidth: 0.1,
+                    outlineColor: '#ffffff',
+                },
+                // Drawing transient state (excluded from persist/Zundo)
+                drawingMode: null,           // { tool: string, phase: string } | null
+                selectedDrawingIds: [],      // currently selected drawing object IDs
+                textEditState: null,         // { worldPosition, screenPosition, tool, targetPoint?, objectId } | null
 
                 districtParameters: {
                     // Informational/reference fields — not visualized in 3D
@@ -415,14 +578,11 @@ export const useStore = create(
                     },
                 },
 
-                // Sun Simulation Settings (optional, for time-of-day shadows)
+                // Sun Settings (simple azimuth/altitude controls)
                 sunSettings: {
                     enabled: false,
-                    latitude: 37.7749,
-                    longitude: -122.4194,
-                    date: new Date().toISOString().split('T')[0],
-                    time: 12,
-                    animating: false,
+                    azimuth: 45,
+                    altitude: 45,
                     intensity: 1.5,
                     ambientIntensity: 0.4,
                     shadowsEnabled: true,
@@ -431,8 +591,8 @@ export const useStore = create(
                 renderSettings: {
                     quality: 'high', // 'low' | 'medium' | 'high'
                     ambientOcclusion: true,
-                    aoIntensity: 1.5,
-                    aoRadius: 0.5,
+                    aoIntensity: 0.8,
+                    aoRadius: 0.3,
                     toneMapping: true,
                     antialiasing: true,
                     environmentIntensity: 0.8,
@@ -451,29 +611,43 @@ export const useStore = create(
                     layers: {
                         lotLines: true,
                         setbackLines: true,
-                        buildings: true,
+                        principalBuildings: true,
+                        accessoryBuildings: true,
                         zoning: true,
                         streets: true,
                         setbacks: true,
                         dimensionsLotWidth: true, // Renamed from dimensionsLot
                         dimensionsLotDepth: true, // Renamed from dimensionsLot
                         dimensionsSetbacks: true,
-                        dimensionsHeight: true,
+                        dimensionsHeight: true,           // keep for migration fallback
+                        dimensionsHeightPrincipal: true,
+                        dimensionsHeightAccessory: true,
+                        parkingSetbacks: true,
+                        dimensionsParkingSetbacks: true,
+                        setbackFill: true,
                         grid: true,
                         axes: false, // Default axes off
                         gimbal: true,
                         origin: true,
                         roadModule: true, // Road module layer
-                        maxHeightPlane: true, // Max height plane layer
+                        maxHeightPlane: true, // Max height plane layer (legacy)
+                        maxHeightPlanePrincipal: true, // Principal max height plane
+                        maxHeightPlaneAccessory: true, // Accessory max height plane
                         roof: true, // Roof layer
                         // Annotation & intersection layers
                         annotationLabels: false, // Master toggle for all annotation labels
                         labelLotNames: true,     // "Lot 1", "Lot 2" etc.
                         labelLotEdges: true,     // "Front of Lot", "Rear of Lot" etc.
                         labelSetbacks: true,     // "Front Setback" etc.
+                        labelMaxSetbacks: true,  // "Max. Front Setback" etc.
                         labelRoadNames: true,    // "S1 - Primary Street" etc.
                         labelRoadZones: true,    // "Right of Way", "Sidewalk" etc.
-                        labelBuildings: true,    // "Principal Building", "Accessory Building"
+                        labelPrincipalBuildings: true,    // "Principal Building"
+                        labelAccessoryBuildings: true,    // "Accessory Building"
+                        maxSetbacks: true,       // Max setback lines
+                        btzPlanes: true,         // BTZ front + side street planes
+                        accessorySetbacks: true, // Accessory setback lines
+                        lotAccessArrows: true,   // Lot access directional arrows
                         roadIntersections: true, // Road intersection fillet geometry
                     },
                     exportRequested: false,
@@ -481,6 +655,8 @@ export const useStore = create(
                     exportSettings: { width: 1920, height: 1080, label: '1080p (1920x1080)' },
                     exportView: 'current', // 'current' | 'iso' | 'front' | 'top' | 'side' | 'left' | 'right'
                     exportLineScale: 1, // Scale factor for line widths during export (WYSIWYG)
+                    exportQueue: [],          // Array of { presetSlot, cameraView, layers, label } for batch export
+                    isBatchExporting: false,  // Batch export in progress flag
                     // Visual Customization Settings - Split for Existing and Proposed models
                     styleSettings: {
                         existing: {
@@ -539,8 +715,7 @@ export const useStore = create(
                             },
                             roofFaces: {
                                 color: '#B8A088',
-                                opacity: 0.85,
-                                transparent: true,
+                                opacity: 1.0,
                             },
                             roofEdges: {
                                 color: '#000000',
@@ -629,8 +804,7 @@ export const useStore = create(
                             },
                             roofFaces: {
                                 color: '#C4B8A8',
-                                opacity: 0.85,
-                                transparent: true,
+                                opacity: 1.0,
                             },
                             roofEdges: {
                                 color: '#000000',
@@ -701,7 +875,28 @@ export const useStore = create(
                             autoStack: true,           // Auto-offset parallel dimensions
                             stackGap: 8,               // Gap between stacked dimensions
                             unitFormat: 'feet',        // 'feet' | 'feet-inches' | 'meters'
-                            draggableText: false,      // Allow dragging dimension text
+                            draggableText: false,      // Allow dragging dimension text (future)
+                            // Extension line separate styling
+                            extensionLineColor: null,  // null = inherit lineColor
+                            extensionLineStyle: 'dashed', // 'solid' | 'dashed'
+                            // Marker separate styling
+                            markerColor: null,         // null = inherit lineColor
+                            markerScale: 1.0,          // multiplier on marker sizing
+                            // Font choice (resolved to URL in Dimension.jsx)
+                            fontFamily: 'Inter',       // 'Inter' | 'Roboto' | 'Lato' | 'Montserrat' | 'Oswald' | 'Source Sans'
+                            // Dimension offsets (replaces hardcoded values in LotEntity.jsx)
+                            setbackDimOffset: 5,       // offset for setback dimensions
+                            lotDimOffset: 15,          // offset for lot width dimension
+                            lotDepthDimOffset: 15,     // offset for lot depth dimension (independent)
+                            // Vertical mode
+                            verticalMode: false,       // false = XY plan view; true = Z-axis upward
+                            verticalOffset: 20,        // height above ground in vertical mode
+                            textPerpOffset: 0,
+                            textAnchorY: 'bottom',
+                            textPerpOffsetDepth: 0,    // depth dim text perp offset (independent)
+                            textAnchorYDepth: 'center', // depth dim text side (independent)
+                            textModeDepth: 'billboard', // depth dim text mode (billboard faces camera)
+                            lotDepthDimSide: 'right',
                             customLabels: {
                                 lotWidth: { mode: 'value', text: 'A' },
                                 lotDepth: { mode: 'value', text: 'B' },
@@ -710,6 +905,8 @@ export const useStore = create(
                                 setbackLeft: { mode: 'value', text: '' },
                                 setbackRight: { mode: 'value', text: '' },
                                 buildingHeight: { mode: 'value', text: '' },
+                                principalMaxHeight: { mode: 'value', text: '' },
+                                accessoryMaxHeight: { mode: 'value', text: '' },
                             }
                         }
                     },
@@ -1386,12 +1583,44 @@ export const useStore = create(
                 setModelSetup: (key, value) => set((state) => ({
                     modelSetup: { ...state.modelSetup, [key]: value }
                 })),
-                setStreetEdge: (edge, enabled) => set((state) => ({
-                    modelSetup: {
+                setStreetEdge: (edge, enabled) => set((state) => {
+                    const updatedSetup = {
                         ...state.modelSetup,
                         streetEdges: { ...state.modelSetup.streetEdges, [edge]: enabled }
                     }
-                })),
+
+                    if (!enabled) {
+                        // Unchecking: stash road modules for this direction, then remove them
+                        const toStash = Object.entries(state.entities.roadModules)
+                            .find(([, road]) => road.direction === edge)
+                        const remainingRoads = {}
+                        for (const [id, road] of Object.entries(state.entities.roadModules)) {
+                            if (road.direction !== edge) remainingRoads[id] = road
+                        }
+                        return {
+                            modelSetup: updatedSetup,
+                            stashedRoadModules: {
+                                ...state.stashedRoadModules,
+                                [edge]: toStash ? toStash[1] : state.stashedRoadModules[edge],
+                            },
+                            entities: { ...state.entities, roadModules: remainingRoads },
+                        }
+                    } else {
+                        // Checking: restore from stash or create default
+                        const stashed = state.stashedRoadModules[edge]
+                        const roadId = `road-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+                        const roadData = stashed || createDefaultRoadModule(edge, state.modelSetup.streetTypes?.[edge] || 'S1')
+                        const { [edge]: _, ...remainingStash } = state.stashedRoadModules
+                        return {
+                            modelSetup: updatedSetup,
+                            stashedRoadModules: remainingStash,
+                            entities: {
+                                ...state.entities,
+                                roadModules: { ...state.entities.roadModules, [roadId]: roadData },
+                            },
+                        }
+                    }
+                }),
                 setStreetType: (edge, type) => set((state) => ({
                     modelSetup: {
                         ...state.modelSetup,
@@ -1399,7 +1628,7 @@ export const useStore = create(
                     }
                 })),
 
-                // District parameters (informational)
+                // District parameters (informational) — also auto-populates lots
                 setDistrictParameter: (path, value) => set((state) => {
                     // path is dot-separated, e.g. 'lotArea.min' or 'setbacksPrincipal.front.min'
                     const keys = path.split('.');
@@ -1410,13 +1639,42 @@ export const useStore = create(
                         obj = obj[keys[i]];
                     }
                     obj[keys[keys.length - 1]] = value;
+
+                    // Auto-populate all lots with the changed district parameter
+                    const setter = DISTRICT_TO_LOT_MAP[path];
+                    if (setter && value != null && state.entityOrder.length > 0) {
+                        const newEntities = JSON.parse(JSON.stringify(state.entities));
+                        for (const lotId of state.entityOrder) {
+                            if (newEntities.lots[lotId]) {
+                                setter(newEntities.lots[lotId], value);
+                            }
+                        }
+                        return { districtParameters: newParams, entities: newEntities };
+                    }
+
                     return { districtParameters: newParams };
                 }),
 
                 // Lot CRUD
                 addLot: (initialData) => set((state) => {
                     const lotId = generateEntityId('lot');
-                    const lot = createDefaultLot(initialData);
+                    // 1. Create lot with hardcoded defaults
+                    const lot = createDefaultLot();
+                    // 2. Apply district parameter defaults (overrides hardcoded)
+                    applyDistrictDefaultsToLot(lot, state.districtParameters);
+                    // 3. Copy dimensions from the last lot when no explicit overrides
+                    if (!initialData && state.entityOrder.length > 0) {
+                        const lastLotId = state.entityOrder[state.entityOrder.length - 1];
+                        const lastLot = state.entities.lots[lastLotId];
+                        if (lastLot) {
+                            lot.lotWidth = lastLot.lotWidth;
+                            lot.lotDepth = lastLot.lotDepth;
+                        }
+                    }
+                    // 4. Apply explicit overrides (highest priority)
+                    if (initialData) {
+                        Object.assign(lot, initialData);
+                    }
                     const style = createDefaultLotStyle();
                     const visibility = createDefaultLotVisibility();
                     return {
@@ -1479,6 +1737,18 @@ export const useStore = create(
                 updateLotParam: (lotId, key, value) => set((state) => {
                     const lot = state.entities.lots[lotId];
                     if (!lot) return state;
+
+                    // Clear stale lot access arrow positions when dimensions change
+                    let annotationPositions = state.annotationPositions;
+                    if (key === 'lotWidth' || key === 'lotDepth') {
+                        const prefix = `lot-${lotId}-access-`;
+                        const filtered = { ...annotationPositions };
+                        for (const k of Object.keys(filtered)) {
+                            if (k.startsWith(prefix)) delete filtered[k];
+                        }
+                        annotationPositions = filtered;
+                    }
+
                     return {
                         entities: {
                             ...state.entities,
@@ -1487,6 +1757,7 @@ export const useStore = create(
                                 [lotId]: { ...lot, [key]: value },
                             },
                         },
+                        annotationPositions,
                     };
                 }),
 
@@ -1535,6 +1806,65 @@ export const useStore = create(
                             },
                         },
                     };
+                }),
+
+                deleteEntityBuilding: (lotId, buildingType) => set((state) => {
+                    const lot = state.entities.lots[lotId]
+                    if (!lot) return state
+                    const resetBuilding = {
+                        width: 0, depth: 0, stories: 0, x: 0, y: 0,
+                        firstFloorHeight: buildingType === 'principal' ? 12 : 10,
+                        upperFloorHeight: 10,
+                        maxHeight: buildingType === 'principal' ? 30 : 15,
+                        geometry: { mode: 'rectangle', vertices: null },
+                        selected: false,
+                        roof: { type: 'flat', overrideHeight: false, ridgeHeight: null, ridgeDirection: 'x', shedDirection: '+y' },
+                    }
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    buildings: {
+                                        ...lot.buildings,
+                                        [buildingType]: resetBuilding,
+                                    },
+                                },
+                            },
+                        },
+                        selectedBuildingType: null,
+                    }
+                }),
+
+                regenerateEntityBuilding: (lotId, buildingType) => set((state) => {
+                    const lot = state.entities.lots[lotId]
+                    if (!lot) return state
+                    const defaults = buildingType === 'principal'
+                        ? { width: 30, depth: 40, stories: 2, firstFloorHeight: 12, upperFloorHeight: 10, x: 0, y: 0, maxHeight: 30 }
+                        : { width: 15, depth: 20, stories: 1, firstFloorHeight: 10, upperFloorHeight: 10, x: 0, y: 15, maxHeight: 15 }
+                    const newBuilding = {
+                        ...defaults,
+                        geometry: { mode: 'rectangle', vertices: null },
+                        selected: false,
+                        roof: { type: 'flat', overrideHeight: false, ridgeHeight: null, ridgeDirection: 'x', shedDirection: '+y' },
+                    }
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    buildings: {
+                                        ...lot.buildings,
+                                        [buildingType]: newBuilding,
+                                    },
+                                },
+                            },
+                        },
+                    }
                 }),
 
                 // Building roof settings (entity version)
@@ -1656,6 +1986,20 @@ export const useStore = create(
                         selectedBuildingType: null,
                     };
                 }),
+
+                // Move mode actions
+                enterMoveMode: () => set({
+                    moveMode: { active: true, phase: 'selectObject', targetType: null, targetLotId: null, targetBuildingType: null, targetDirection: null, basePoint: null, originalPosition: null }
+                }),
+                exitMoveMode: () => set({
+                    moveMode: { active: false, phase: null, targetType: null, targetLotId: null, targetBuildingType: null, targetDirection: null, basePoint: null, originalPosition: null }
+                }),
+                setMoveTarget: (targetType, lotId, buildingType, direction) => set((state) => ({
+                    moveMode: { ...state.moveMode, phase: 'selectBase', targetType, targetLotId: lotId, targetBuildingType: buildingType, targetDirection: direction }
+                })),
+                setMoveBasePoint: (point, originalPosition) => set((state) => ({
+                    moveMode: { ...state.moveMode, phase: 'moving', basePoint: point, originalPosition }
+                })),
 
                 // Entity building position
                 setEntityBuildingPosition: (lotId, buildingType, newX, newY) => set((state) => {
@@ -2025,6 +2369,29 @@ export const useStore = create(
                     };
                 }),
 
+                resetEntityBuildingGeometryAndPosition: (lotId, buildingType) => set((state) => {
+                    const lot = state.entities.lots[lotId];
+                    if (!lot) return state;
+                    const building = lot.buildings[buildingType];
+                    if (!building) return state;
+                    const defaultPos = buildingType === 'principal' ? { x: 0, y: 0 } : { x: 0, y: 15 };
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    buildings: {
+                                        ...lot.buildings,
+                                        [buildingType]: { ...building, ...defaultPos, geometry: { mode: 'rectangle', vertices: null }, selected: false },
+                                    },
+                                },
+                            },
+                        },
+                    };
+                }),
+
                 // Road module CRUD (entity system)
                 addEntityRoadModule: (direction, type) => set((state) => {
                     const roadId = generateEntityId('road');
@@ -2136,6 +2503,27 @@ export const useStore = create(
                     return { entityStyles: newStyles };
                 }),
 
+                // Style preset helpers
+                getStylePresetData: () => {
+                    const state = get()
+                    const activeLotId = state.selectedEntity || state.entityOrder[0]
+                    return {
+                        entityStyles: activeLotId ? state.entityStyles[activeLotId] : null,
+                        roadModuleStyles: state.roadModuleStyles,
+                    }
+                },
+
+                applyStylePreset: (presetData) => set((state) => {
+                    const newStyles = { ...state.entityStyles }
+                    for (const lotId of state.entityOrder) {
+                        newStyles[lotId] = JSON.parse(JSON.stringify(presetData.entityStyles))
+                    }
+                    return {
+                        entityStyles: newStyles,
+                        ...(presetData.roadModuleStyles ? { roadModuleStyles: presetData.roadModuleStyles } : {}),
+                    }
+                }),
+
                 // Per-lot visibility toggles
                 setLotVisibility: (lotId, key, value) => set((state) => {
                     const vis = state.lotVisibility[lotId];
@@ -2234,6 +2622,19 @@ export const useStore = create(
                 setExportLineScale: (scale) => set((state) => ({
                     viewSettings: { ...state.viewSettings, exportLineScale: scale }
                 })),
+                // Batch export actions
+                addToExportQueue: (items) => set((state) => ({
+                    viewSettings: { ...state.viewSettings, exportQueue: [...state.viewSettings.exportQueue, ...items] }
+                })),
+                shiftExportQueue: () => set((state) => ({
+                    viewSettings: { ...state.viewSettings, exportQueue: state.viewSettings.exportQueue.slice(1) }
+                })),
+                clearExportQueue: () => set((state) => ({
+                    viewSettings: { ...state.viewSettings, exportQueue: [], isBatchExporting: false }
+                })),
+                setIsBatchExporting: (bool) => set((state) => ({
+                    viewSettings: { ...state.viewSettings, isBatchExporting: bool }
+                })),
                 // Sun simulation actions
                 setSunSetting: (key, value) => set((state) => ({
                     sunSettings: { ...state.sunSettings, [key]: value }
@@ -2282,6 +2683,111 @@ export const useStore = create(
                     }
                     return { annotationPositions: filtered }
                 }),
+                setAnnotationCustomLabel: (key, mode, text) => set((state) => ({
+                    annotationCustomLabels: {
+                        ...state.annotationCustomLabels,
+                        [key]: { mode, text },
+                    }
+                })),
+
+                // Drawing Editor actions
+                createDrawingLayer: (name) => set((state) => {
+                    const id = `drawing-layer-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+                    return {
+                        drawingLayers: {
+                            ...state.drawingLayers,
+                            [id]: {
+                                name: name || `Layer ${state.drawingLayerOrder.length + 1}`,
+                                visible: true,
+                                locked: false,
+                                zHeight: 0.20,
+                                renderMode: '3d',
+                                order: state.drawingLayerOrder.length,
+                            },
+                        },
+                        drawingLayerOrder: [...state.drawingLayerOrder, id],
+                        activeDrawingLayerId: id,
+                    }
+                }),
+                deleteDrawingLayer: (layerId) => set((state) => {
+                    const { [layerId]: _, ...remainingLayers } = state.drawingLayers
+                    const remainingObjects = {}
+                    for (const [id, obj] of Object.entries(state.drawingObjects)) {
+                        if (obj.layerId !== layerId) remainingObjects[id] = obj
+                    }
+                    return {
+                        drawingLayers: remainingLayers,
+                        drawingLayerOrder: state.drawingLayerOrder.filter(id => id !== layerId),
+                        drawingObjects: remainingObjects,
+                        activeDrawingLayerId: state.activeDrawingLayerId === layerId ? null : state.activeDrawingLayerId,
+                    }
+                }),
+                renameDrawingLayer: (layerId, name) => set((state) => ({
+                    drawingLayers: {
+                        ...state.drawingLayers,
+                        [layerId]: { ...state.drawingLayers[layerId], name },
+                    },
+                })),
+                setDrawingLayerVisible: (layerId, visible) => set((state) => ({
+                    drawingLayers: {
+                        ...state.drawingLayers,
+                        [layerId]: { ...state.drawingLayers[layerId], visible },
+                    },
+                })),
+                setDrawingLayerLocked: (layerId, locked) => set((state) => ({
+                    drawingLayers: {
+                        ...state.drawingLayers,
+                        [layerId]: { ...state.drawingLayers[layerId], locked },
+                    },
+                })),
+                setDrawingLayerRenderMode: (layerId, renderMode) => set((state) => ({
+                    drawingLayers: {
+                        ...state.drawingLayers,
+                        [layerId]: { ...state.drawingLayers[layerId], renderMode },
+                    },
+                })),
+                setDrawingLayerZHeight: (layerId, zHeight) => set((state) => ({
+                    drawingLayers: {
+                        ...state.drawingLayers,
+                        [layerId]: { ...state.drawingLayers[layerId], zHeight },
+                    },
+                })),
+                setActiveDrawingLayer: (layerId) => set({ activeDrawingLayerId: layerId }),
+                setDrawingMode: (mode) => set({ drawingMode: mode }),
+                setDrawingDefault: (key, value) => set((state) => ({
+                    drawingDefaults: { ...state.drawingDefaults, [key]: value },
+                })),
+                addDrawingObject: (obj) => set((state) => {
+                    const id = `drawing-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+                    return {
+                        drawingObjects: {
+                            ...state.drawingObjects,
+                            [id]: { ...obj, id },
+                        },
+                    }
+                }),
+                updateDrawingObject: (id, updates) => set((state) => ({
+                    drawingObjects: {
+                        ...state.drawingObjects,
+                        [id]: { ...state.drawingObjects[id], ...updates },
+                    },
+                })),
+                updateDrawingObjects: (updates) => set((state) => {
+                    const newObjects = { ...state.drawingObjects }
+                    for (const [id, partialObj] of Object.entries(updates)) {
+                        if (newObjects[id]) {
+                            newObjects[id] = { ...newObjects[id], ...partialObj }
+                        }
+                    }
+                    return { drawingObjects: newObjects }
+                }),
+                deleteDrawingObject: (id) => set((state) => {
+                    const { [id]: _, ...remaining } = state.drawingObjects
+                    return { drawingObjects: remaining }
+                }),
+                setSelectedDrawingIds: (ids) => set({ selectedDrawingIds: ids }),
+                setTextEditState: (state) => set({ textEditState: state }),
+
                 // Update custom label for a specific dimension
                 setCustomLabel: (dimensionKey, mode, text) => set((state) => ({
                     viewSettings: {
@@ -2333,7 +2839,7 @@ export const useStore = create(
                         lineDashed: false,
                         lineOpacity: 1.0,
                         fillColor: '#666666',
-                        fillOpacity: 0.8,
+                        fillOpacity: 1.0,
                     },
                     // Left side styles
                     leftParking: {
@@ -2342,7 +2848,7 @@ export const useStore = create(
                         lineDashed: false,
                         lineOpacity: 1.0,
                         fillColor: '#888888',
-                        fillOpacity: 0.6,
+                        fillOpacity: 1.0,
                     },
                     leftVerge: {
                         lineColor: '#000000',
@@ -2350,7 +2856,7 @@ export const useStore = create(
                         lineDashed: false,
                         lineOpacity: 1.0,
                         fillColor: '#c4a77d',
-                        fillOpacity: 0.7,
+                        fillOpacity: 1.0,
                     },
                     leftSidewalk: {
                         lineColor: '#000000',
@@ -2358,7 +2864,7 @@ export const useStore = create(
                         lineDashed: false,
                         lineOpacity: 1.0,
                         fillColor: '#90EE90',
-                        fillOpacity: 0.7,
+                        fillOpacity: 1.0,
                     },
                     leftTransitionZone: {
                         lineColor: '#000000',
@@ -2366,7 +2872,7 @@ export const useStore = create(
                         lineDashed: false,
                         lineOpacity: 1.0,
                         fillColor: '#98D8AA',
-                        fillOpacity: 0.6,
+                        fillOpacity: 1.0,
                     },
                     // Right side styles
                     rightParking: {
@@ -2375,7 +2881,7 @@ export const useStore = create(
                         lineDashed: false,
                         lineOpacity: 1.0,
                         fillColor: '#888888',
-                        fillOpacity: 0.6,
+                        fillOpacity: 1.0,
                     },
                     rightVerge: {
                         lineColor: '#000000',
@@ -2383,7 +2889,7 @@ export const useStore = create(
                         lineDashed: false,
                         lineOpacity: 1.0,
                         fillColor: '#c4a77d',
-                        fillOpacity: 0.7,
+                        fillOpacity: 1.0,
                     },
                     rightSidewalk: {
                         lineColor: '#000000',
@@ -2391,7 +2897,7 @@ export const useStore = create(
                         lineDashed: false,
                         lineOpacity: 1.0,
                         fillColor: '#90EE90',
-                        fillOpacity: 0.7,
+                        fillOpacity: 1.0,
                     },
                     rightTransitionZone: {
                         lineColor: '#000000',
@@ -2399,8 +2905,25 @@ export const useStore = create(
                         lineDashed: false,
                         lineOpacity: 1.0,
                         fillColor: '#98D8AA',
-                        fillOpacity: 0.6,
+                        fillOpacity: 1.0,
                     },
+                    // Intersection fill style (where perpendicular roads overlap)
+                    intersectionFill: {
+                        fillColor: '#666666',
+                        fillOpacity: 1.0,
+                    },
+                    // Alley intersection fill style (S3 corners — independent from main intersection fills)
+                    alleyIntersectionFill: {
+                        fillColor: '#666666',
+                        fillOpacity: 1.0,
+                    },
+                    // Alley-specific zone styles (null = use regular style)
+                    alleyRoadWidth: null,
+                    alleyRightOfWay: null,
+                    alleyVerge: null,
+                    alleyParking: null,
+                    alleySidewalk: null,
+                    alleyTransitionZone: null,
                 },
                 // ============================================
                 // Comparison Roads (multi-direction, left/right/rear)
@@ -2445,6 +2968,70 @@ export const useStore = create(
                         }
                     }
                 })),
+                setAllRoadLineWidths: (width) => set((state) => {
+                    const updated = { ...state.roadModuleStyles }
+                    // Update rightOfWay width
+                    if (updated.rightOfWay) updated.rightOfWay = { ...updated.rightOfWay, width }
+                    // Update all zone lineWidths
+                    const zoneKeys = ['roadWidth', 'leftParking', 'leftVerge', 'leftSidewalk', 'leftTransitionZone', 'rightParking', 'rightVerge', 'rightSidewalk', 'rightTransitionZone']
+                    for (const key of zoneKeys) {
+                        if (updated[key]) updated[key] = { ...updated[key], lineWidth: width }
+                    }
+                    // Update alley zone lineWidths (only when non-null)
+                    const alleyZoneKeys = ['alleyRoadWidth', 'alleyParking', 'alleyVerge', 'alleySidewalk', 'alleyTransitionZone']
+                    for (const key of alleyZoneKeys) {
+                        if (updated[key]) updated[key] = { ...updated[key], lineWidth: width }
+                    }
+                    if (updated.alleyRightOfWay) updated.alleyRightOfWay = { ...updated.alleyRightOfWay, width }
+                    return { roadModuleStyles: updated }
+                }),
+                setAllRoadZoneColor: (color) => set((state) => {
+                    const updated = { ...state.roadModuleStyles }
+                    if (updated.rightOfWay) updated.rightOfWay = { ...updated.rightOfWay, color }
+                    const zoneKeys = ['roadWidth', 'leftParking', 'leftVerge', 'leftSidewalk', 'leftTransitionZone', 'rightParking', 'rightVerge', 'rightSidewalk', 'rightTransitionZone']
+                    for (const key of zoneKeys) {
+                        if (updated[key]) updated[key] = { ...updated[key], fillColor: color, lineColor: color }
+                    }
+                    if (updated.intersectionFill) updated.intersectionFill = { ...updated.intersectionFill, fillColor: color }
+                    if (updated.alleyIntersectionFill) updated.alleyIntersectionFill = { ...updated.alleyIntersectionFill, fillColor: color }
+                    // Update alley zone colors (only when non-null)
+                    const alleyZoneKeys = ['alleyRoadWidth', 'alleyParking', 'alleyVerge', 'alleySidewalk', 'alleyTransitionZone']
+                    for (const key of alleyZoneKeys) {
+                        if (updated[key]) updated[key] = { ...updated[key], fillColor: color, lineColor: color }
+                    }
+                    if (updated.alleyRightOfWay) updated.alleyRightOfWay = { ...updated.alleyRightOfWay, color }
+                    return { roadModuleStyles: updated }
+                }),
+
+                setAllRoadZoneOpacity: (opacity) => set((state) => {
+                    const updated = { ...state.roadModuleStyles }
+                    if (updated.rightOfWay) updated.rightOfWay = { ...updated.rightOfWay, opacity }
+                    const zoneKeys = ['roadWidth', 'leftParking', 'leftVerge', 'leftSidewalk', 'leftTransitionZone', 'rightParking', 'rightVerge', 'rightSidewalk', 'rightTransitionZone']
+                    for (const key of zoneKeys) {
+                        if (updated[key]) updated[key] = { ...updated[key], fillOpacity: opacity }
+                    }
+                    if (updated.intersectionFill) updated.intersectionFill = { ...updated.intersectionFill, fillOpacity: opacity }
+                    if (updated.alleyIntersectionFill) updated.alleyIntersectionFill = { ...updated.alleyIntersectionFill, fillOpacity: opacity }
+                    const alleyZoneKeys = ['alleyRoadWidth', 'alleyParking', 'alleyVerge', 'alleySidewalk', 'alleyTransitionZone']
+                    for (const key of alleyZoneKeys) {
+                        if (updated[key]) updated[key] = { ...updated[key], fillOpacity: opacity }
+                    }
+                    return { roadModuleStyles: updated }
+                }),
+
+                // Road Module Styles Snapshot (for global toggle revert)
+                roadModuleStylesSnapshot: null,
+                snapshotRoadModuleStyles: () => set((state) => ({
+                    roadModuleStylesSnapshot: JSON.parse(JSON.stringify(state.roadModuleStyles))
+                })),
+                restoreRoadModuleStyles: () => set((state) => {
+                    if (!state.roadModuleStylesSnapshot) return {}
+                    return {
+                        roadModuleStyles: JSON.parse(JSON.stringify(state.roadModuleStylesSnapshot)),
+                        roadModuleStylesSnapshot: null,
+                    }
+                }),
+
                 // Comparison Roads Actions
                 setComparisonRoadSetting: (direction, key, value) => set((state) => ({
                     comparisonRoads: {
@@ -2537,6 +3124,8 @@ export const useStore = create(
                 projects: [], // List of available projects
                 snapshots: [], // Snapshots for current project
                 layerStates: [], // Layer states for current project
+                scenarios: [], // District scenarios for current project [{ name, code, timestamp }]
+                activeScenario: null, // Name of the currently active scenario
                 cameraState: null, // Current camera state for snapshots
 
                 // Auto-save state
@@ -2578,12 +3167,18 @@ export const useStore = create(
                 clearCurrentProject: () => set({
                     currentProject: null,
                     snapshots: [],
-                    layerStates: []
+                    layerStates: [],
+                    scenarios: [],
+                    activeScenario: null,
                 }),
 
                 // Snapshot/Layer state list actions
                 setSnapshots: (snapshots) => set({ snapshots }),
                 setLayerStates: (layerStates) => set({ layerStates }),
+
+                // Scenario actions
+                setScenarios: (scenarios) => set({ scenarios }),
+                setActiveScenario: (name) => set({ activeScenario: name }),
 
                 // Camera state for snapshots
                 setCameraState: (cameraState) => set({ cameraState }),
@@ -2617,12 +3212,21 @@ export const useStore = create(
                         activeModule: state.activeModule,
                         modelSetup: state.modelSetup,
                         districtParameters: state.districtParameters,
+                        // Drawing editor
+                        drawingLayers: state.drawingLayers,
+                        drawingLayerOrder: state.drawingLayerOrder,
+                        drawingObjects: state.drawingObjects,
                     };
                 },
 
                 // Get current state for saving as layer state (styles only, no camera)
                 getLayerStateData: () => {
                     const state = useStore.getState();
+                    // Extract drawing layer visibility
+                    const drawingLayerVisibility = {}
+                    for (const [id, layer] of Object.entries(state.drawingLayers)) {
+                        drawingLayerVisibility[id] = layer.visible
+                    }
                     return {
                         viewSettings: {
                             layers: state.viewSettings.layers,
@@ -2630,6 +3234,7 @@ export const useStore = create(
                             lighting: state.viewSettings.lighting,
                         },
                         renderSettings: state.renderSettings,
+                        drawingLayerVisibility,
                     };
                 },
 
@@ -2663,6 +3268,10 @@ export const useStore = create(
                         activeModule: snapshotData.activeModule || state.activeModule,
                         modelSetup: snapshotData.modelSetup || state.modelSetup,
                         districtParameters: snapshotData.districtParameters || state.districtParameters,
+                        // Drawing editor
+                        drawingLayers: snapshotData.drawingLayers || state.drawingLayers,
+                        drawingLayerOrder: snapshotData.drawingLayerOrder || state.drawingLayerOrder,
+                        drawingObjects: snapshotData.drawingObjects || state.drawingObjects,
                     };
                     // Camera will be restored separately by the CameraHandler
                     if (snapshotData.camera) {
@@ -2673,15 +3282,28 @@ export const useStore = create(
                 }),
 
                 // Apply loaded layer state (styles only)
-                applyLayerState: (layerStateData) => set((state) => ({
-                    viewSettings: {
-                        ...state.viewSettings,
-                        layers: layerStateData.viewSettings?.layers || state.viewSettings.layers,
-                        styleSettings: layerStateData.viewSettings?.styleSettings || state.viewSettings.styleSettings,
-                        lighting: layerStateData.viewSettings?.lighting || state.viewSettings.lighting,
-                    },
-                    renderSettings: layerStateData.renderSettings || state.renderSettings,
-                })),
+                applyLayerState: (layerStateData) => set((state) => {
+                    const newState = {
+                        viewSettings: {
+                            ...state.viewSettings,
+                            layers: layerStateData.viewSettings?.layers || state.viewSettings.layers,
+                            styleSettings: layerStateData.viewSettings?.styleSettings || state.viewSettings.styleSettings,
+                            lighting: layerStateData.viewSettings?.lighting || state.viewSettings.lighting,
+                        },
+                        renderSettings: layerStateData.renderSettings || state.renderSettings,
+                    }
+                    // Restore drawing layer visibility if present
+                    if (layerStateData.drawingLayerVisibility) {
+                        const updatedLayers = { ...state.drawingLayers }
+                        for (const [id, visible] of Object.entries(layerStateData.drawingLayerVisibility)) {
+                            if (updatedLayers[id]) {
+                                updatedLayers[id] = { ...updatedLayers[id], visible }
+                            }
+                        }
+                        newState.drawingLayers = updatedLayers
+                    }
+                    return newState
+                }),
 
                 // Get full project state for saving
                 getProjectState: () => {
@@ -2706,6 +3328,11 @@ export const useStore = create(
                         activeModule: state.activeModule,
                         modelSetup: state.modelSetup,
                         districtParameters: state.districtParameters,
+                        // Drawing editor
+                        drawingLayers: state.drawingLayers,
+                        drawingLayerOrder: state.drawingLayerOrder,
+                        drawingObjects: state.drawingObjects,
+                        drawingDefaults: state.drawingDefaults,
                     };
                 },
 
@@ -2734,6 +3361,11 @@ export const useStore = create(
                     activeModule: projectState.activeModule || state.activeModule,
                     modelSetup: projectState.modelSetup || state.modelSetup,
                     districtParameters: projectState.districtParameters || state.districtParameters,
+                    // Drawing editor
+                    drawingLayers: projectState.drawingLayers || state.drawingLayers,
+                    drawingLayerOrder: projectState.drawingLayerOrder || state.drawingLayerOrder,
+                    drawingObjects: projectState.drawingObjects || state.drawingObjects,
+                    drawingDefaults: projectState.drawingDefaults || state.drawingDefaults,
                 })),
 
                 // Flag to signal camera restoration needed
@@ -2742,7 +3374,7 @@ export const useStore = create(
             }),
             {
                 name: 'zoning-app-storage',
-                version: 17, // Updated to 17 for fillOpacity 1.0 defaults (opacity convention fix)
+                version: 29, // v29: drawing editor foundation
                 migrate: (persistedState, version) => {
                     // Split dimensionsLot into dimensionsLotWidth and dimensionsLotDepth
                     if (persistedState.viewSettings && persistedState.viewSettings.layers && persistedState.viewSettings.layers.dimensionsLot !== undefined) {
@@ -3007,7 +3639,7 @@ export const useStore = create(
                         }
 
                         // Add roof style defaults
-                        const defaultRoofFaces = (color) => ({ color, opacity: 0.85, transparent: true });
+                        const defaultRoofFaces = (color) => ({ color, opacity: 1.0 });
                         const defaultRoofEdges = { color: '#000000', width: 1.5, visible: true, opacity: 1.0 };
                         if (persistedState.viewSettings?.styleSettings?.existing && !persistedState.viewSettings.styleSettings.existing.roofFaces) {
                             persistedState.viewSettings.styleSettings.existing.roofFaces = defaultRoofFaces('#B8A088');
@@ -3138,7 +3770,10 @@ export const useStore = create(
                         persistedState.annotationSettings = {
                             textRotation: 'billboard',
                             fontSize: 1.5,
+                            fontFamily: null,
                             textColor: '#000000',
+                            outlineColor: '#ffffff',
+                            outlineWidth: 0.15,
                             backgroundColor: '#ffffff',
                             backgroundOpacity: 0.85,
                             backgroundEnabled: true,
@@ -3146,6 +3781,19 @@ export const useStore = create(
                             leaderLineWidth: 1,
                             leaderLineDashed: false,
                             unitFormat: 'feet',
+                        };
+                    } else {
+                        // Backfill new annotation settings keys
+                        if (persistedState.annotationSettings.fontFamily === undefined) persistedState.annotationSettings.fontFamily = null;
+                        if (persistedState.annotationSettings.outlineColor === undefined) persistedState.annotationSettings.outlineColor = '#ffffff';
+                        if (persistedState.annotationSettings.outlineWidth === undefined) persistedState.annotationSettings.outlineWidth = 0.15;
+                    }
+                    if (!persistedState.annotationCustomLabels) {
+                        persistedState.annotationCustomLabels = {
+                            roadFront: { mode: 'default', text: '' },
+                            roadRight: { mode: 'default', text: '' },
+                            roadRear:  { mode: 'default', text: '' },
+                            roadLeft:  { mode: 'default', text: '' },
                         };
                     }
                     if (!persistedState.annotationPositions) {
@@ -3162,6 +3810,19 @@ export const useStore = create(
                         if (lyrs.labelRoadZones === undefined) lyrs.labelRoadZones = true;
                         if (lyrs.labelBuildings === undefined) lyrs.labelBuildings = true;
                         if (lyrs.roadIntersections === undefined) lyrs.roadIntersections = true;
+                        // Split labelBuildings -> labelPrincipalBuildings + labelAccessoryBuildings
+                        if (lyrs.labelBuildings !== undefined && lyrs.labelPrincipalBuildings === undefined) {
+                            lyrs.labelPrincipalBuildings = lyrs.labelBuildings;
+                            lyrs.labelAccessoryBuildings = lyrs.labelBuildings;
+                        }
+                        if (lyrs.labelPrincipalBuildings === undefined) lyrs.labelPrincipalBuildings = true;
+                        if (lyrs.labelAccessoryBuildings === undefined) lyrs.labelAccessoryBuildings = true;
+                        // Split buildings -> principalBuildings + accessoryBuildings
+                        if (lyrs.principalBuildings === undefined) lyrs.principalBuildings = lyrs.buildings ?? true;
+                        if (lyrs.accessoryBuildings === undefined) lyrs.accessoryBuildings = lyrs.buildings ?? true;
+                        // Split dimensionsHeight -> dimensionsHeightPrincipal + dimensionsHeightAccessory
+                        if (lyrs.dimensionsHeightPrincipal === undefined) lyrs.dimensionsHeightPrincipal = lyrs.dimensionsHeight ?? true;
+                        if (lyrs.dimensionsHeightAccessory === undefined) lyrs.dimensionsHeightAccessory = lyrs.dimensionsHeight ?? true;
                     }
                     // Enhanced dimension settings
                     const dimS = persistedState.viewSettings?.styleSettings?.dimensionSettings;
@@ -3191,9 +3852,320 @@ export const useStore = create(
                         }
                     }
 
+                    if (version < 18) {
+                        // Migration to 18 — add max setback style, visibility, and layer toggles
+                        if (persistedState.entityStyles) {
+                            for (const lotId of Object.keys(persistedState.entityStyles)) {
+                                const s = persistedState.entityStyles[lotId];
+                                if (!s.maxSetbacks) {
+                                    s.maxSetbacks = {
+                                        color: '#000000', width: 1, dashed: true, dashSize: 0.5, gapSize: 0.3, dashScale: 1, opacity: 1.0,
+                                        overrides: {
+                                            front: { enabled: false, color: '#000000', width: 1, dashed: true },
+                                            rear: { enabled: false, color: '#000000', width: 1, dashed: true },
+                                            left: { enabled: false, color: '#000000', width: 1, dashed: true },
+                                            right: { enabled: false, color: '#000000', width: 1, dashed: true },
+                                        }
+                                    };
+                                }
+                            }
+                        }
+                        if (persistedState.lotVisibility) {
+                            for (const lotId of Object.keys(persistedState.lotVisibility)) {
+                                if (persistedState.lotVisibility[lotId].maxSetbacks === undefined) {
+                                    persistedState.lotVisibility[lotId].maxSetbacks = true;
+                                }
+                            }
+                        }
+                        if (persistedState.viewSettings?.layers) {
+                            if (persistedState.viewSettings.layers.maxSetbacks === undefined) persistedState.viewSettings.layers.maxSetbacks = true;
+                            if (persistedState.viewSettings.layers.labelMaxSetbacks === undefined) persistedState.viewSettings.layers.labelMaxSetbacks = true;
+                        }
+                    }
+
+                    if (version < 19) {
+                        // Migration to 19 — add unifiedRoadPreview layer toggle
+                        if (persistedState.viewSettings?.layers) {
+                            if (persistedState.viewSettings.layers.unifiedRoadPreview === undefined) {
+                                persistedState.viewSettings.layers.unifiedRoadPreview = false;
+                            }
+                        }
+                    }
+
+                    if (version < 20) {
+                        // Migration to 20 — add btzPlanes, accessorySetbacks styles/visibility, layer toggles
+                        if (persistedState.entityStyles) {
+                            for (const lotId of Object.keys(persistedState.entityStyles)) {
+                                const s = persistedState.entityStyles[lotId];
+                                if (!s.btzPlanes) {
+                                    s.btzPlanes = { color: '#AA00FF', opacity: 1.0 };
+                                }
+                                if (!s.accessorySetbacks) {
+                                    s.accessorySetbacks = {
+                                        color: '#2196F3', width: 1, dashed: true, dashSize: 0.8, gapSize: 0.4, dashScale: 1, opacity: 1.0,
+                                        overrides: {
+                                            front: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+                                            rear: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+                                            left: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+                                            right: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+                                        }
+                                    };
+                                }
+                                if (!s.lotAccessArrows) {
+                                    s.lotAccessArrows = { color: '#FF00FF', opacity: 1.0 };
+                                }
+                                // Fix accessory setback colors for users who already migrated to v20 with black
+                                if (s.accessorySetbacks && s.accessorySetbacks.color === '#000000') {
+                                    s.accessorySetbacks.color = '#2196F3';
+                                    if (s.accessorySetbacks.overrides) {
+                                        for (const side of ['front', 'rear', 'left', 'right']) {
+                                            if (s.accessorySetbacks.overrides[side] && s.accessorySetbacks.overrides[side].color === '#000000') {
+                                                s.accessorySetbacks.overrides[side].color = '#2196F3';
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (persistedState.lotVisibility) {
+                            for (const lotId of Object.keys(persistedState.lotVisibility)) {
+                                if (persistedState.lotVisibility[lotId].btzPlanes === undefined) {
+                                    persistedState.lotVisibility[lotId].btzPlanes = true;
+                                }
+                                if (persistedState.lotVisibility[lotId].accessorySetbacks === undefined) {
+                                    persistedState.lotVisibility[lotId].accessorySetbacks = true;
+                                }
+                                if (persistedState.lotVisibility[lotId].lotAccessArrows === undefined) {
+                                    persistedState.lotVisibility[lotId].lotAccessArrows = true;
+                                }
+                            }
+                        }
+                        if (persistedState.viewSettings?.layers) {
+                            if (persistedState.viewSettings.layers.btzPlanes === undefined) persistedState.viewSettings.layers.btzPlanes = true;
+                            if (persistedState.viewSettings.layers.accessorySetbacks === undefined) persistedState.viewSettings.layers.accessorySetbacks = true;
+                            if (persistedState.viewSettings.layers.lotAccessArrows === undefined) persistedState.viewSettings.layers.lotAccessArrows = true;
+                        }
+                    }
+
+                    if (version < 21) {
+                        // v21: Backfill keys that were added to v20 defaults AFTER
+                        // the version was already bumped to 20 in persisted state
+                        if (persistedState.entityStyles) {
+                            for (const lotId of Object.keys(persistedState.entityStyles)) {
+                                const s = persistedState.entityStyles[lotId];
+                                if (!s.maxSetbacks) {
+                                    s.maxSetbacks = {
+                                        color: '#000000', width: 1, dashed: true, dashSize: 0.5, gapSize: 0.3, dashScale: 1, opacity: 1.0,
+                                        overrides: {
+                                            front: { enabled: false, color: '#000000', width: 1, dashed: true },
+                                            rear: { enabled: false, color: '#000000', width: 1, dashed: true },
+                                            left: { enabled: false, color: '#000000', width: 1, dashed: true },
+                                            right: { enabled: false, color: '#000000', width: 1, dashed: true },
+                                        }
+                                    };
+                                }
+                                if (!s.btzPlanes) {
+                                    s.btzPlanes = { color: '#AA00FF', opacity: 1.0 };
+                                }
+                                if (!s.accessorySetbacks) {
+                                    s.accessorySetbacks = {
+                                        color: '#2196F3', width: 1, dashed: true, dashSize: 0.8, gapSize: 0.4, dashScale: 1, opacity: 1.0,
+                                        overrides: {
+                                            front: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+                                            rear: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+                                            left: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+                                            right: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+                                        }
+                                    };
+                                }
+                                if (!s.lotAccessArrows) {
+                                    s.lotAccessArrows = { color: '#FF00FF', opacity: 1.0 };
+                                }
+                            }
+                        }
+                        if (persistedState.lotVisibility) {
+                            for (const lotId of Object.keys(persistedState.lotVisibility)) {
+                                const v = persistedState.lotVisibility[lotId];
+                                if (v.maxSetbacks === undefined) v.maxSetbacks = true;
+                                if (v.btzPlanes === undefined) v.btzPlanes = true;
+                                if (v.accessorySetbacks === undefined) v.accessorySetbacks = true;
+                                if (v.lotAccessArrows === undefined) v.lotAccessArrows = true;
+                            }
+                        }
+                        if (persistedState.viewSettings?.layers) {
+                            const l = persistedState.viewSettings.layers;
+                            if (l.maxSetbacks === undefined) l.maxSetbacks = true;
+                            if (l.btzPlanes === undefined) l.btzPlanes = true;
+                            if (l.accessorySetbacks === undefined) l.accessorySetbacks = true;
+                            if (l.lotAccessArrows === undefined) l.lotAccessArrows = true;
+                        }
+                    }
+
+                    if (version < 22) {
+                        // v22: Split buildingEdges/buildingFaces into principal/accessory variants
+                        if (persistedState.entityStyles) {
+                            for (const lotId of Object.keys(persistedState.entityStyles)) {
+                                const s = persistedState.entityStyles[lotId];
+                                if (!s.principalBuildingEdges) {
+                                    s.principalBuildingEdges = s.buildingEdges
+                                        ? JSON.parse(JSON.stringify(s.buildingEdges))
+                                        : { color: '#000000', width: 1.5, visible: true, dashed: false, opacity: 1.0 };
+                                }
+                                if (!s.principalBuildingFaces) {
+                                    s.principalBuildingFaces = s.buildingFaces
+                                        ? JSON.parse(JSON.stringify(s.buildingFaces))
+                                        : { color: '#D5D5D5', opacity: 1.0, transparent: true };
+                                }
+                                if (!s.accessoryBuildingEdges) {
+                                    s.accessoryBuildingEdges = { color: '#666666', width: 1.5, visible: true, dashed: false, opacity: 1.0 };
+                                }
+                                if (!s.accessoryBuildingFaces) {
+                                    s.accessoryBuildingFaces = { color: '#B0B0B0', opacity: 1.0, transparent: true };
+                                }
+                            }
+                        }
+                    }
+
+                    if (version < 23) {
+                        // v23: Fix remaining sub-1.0 fillOpacity defaults that v17 missed (0.6 values)
+                        const rms = persistedState.roadModuleStyles;
+                        if (rms) {
+                            const allZoneKeys = [
+                                'roadWidth', 'leftParking', 'leftVerge', 'leftSidewalk', 'leftTransitionZone',
+                                'rightParking', 'rightVerge', 'rightSidewalk', 'rightTransitionZone',
+                            ];
+                            for (const key of allZoneKeys) {
+                                if (rms[key] && rms[key].fillOpacity != null && rms[key].fillOpacity < 1) {
+                                    rms[key].fillOpacity = 1.0;
+                                }
+                            }
+                        }
+                        // v23: Reduce AO intensity/radius to prevent dark artifacts at road fillet corners
+                        if (persistedState.renderSettings) {
+                            if (persistedState.renderSettings.aoIntensity >= 1.5) {
+                                persistedState.renderSettings.aoIntensity = 0.8;
+                            }
+                            if (persistedState.renderSettings.aoRadius >= 0.5) {
+                                persistedState.renderSettings.aoRadius = 0.3;
+                            }
+                        }
+                    }
+
+                    if (version < 24) {
+                        // v24: Add alleyIntersectionFill style
+                        const rms = persistedState.roadModuleStyles;
+                        if (rms && !rms.alleyIntersectionFill) {
+                            rms.alleyIntersectionFill = { fillColor: '#666666', fillOpacity: 1.0 };
+                        }
+                    }
+
+                    if (version < 25) {
+                        // v25: split buildings/labelBuildings/dimensionsHeight layer keys
+                        const layers = persistedState.viewSettings?.layers ?? {};
+                        persistedState.viewSettings = {
+                            ...persistedState.viewSettings,
+                            layers: {
+                                ...layers,
+                                principalBuildings: layers.principalBuildings ?? layers.buildings ?? true,
+                                accessoryBuildings: layers.accessoryBuildings ?? layers.buildings ?? true,
+                                labelPrincipalBuildings: layers.labelPrincipalBuildings ?? layers.labelBuildings ?? true,
+                                labelAccessoryBuildings: layers.labelAccessoryBuildings ?? layers.labelBuildings ?? true,
+                                dimensionsHeightPrincipal: layers.dimensionsHeightPrincipal ?? layers.dimensionsHeight ?? true,
+                                dimensionsHeightAccessory: layers.dimensionsHeightAccessory ?? layers.dimensionsHeight ?? true,
+                            }
+                        };
+                    }
+
+                    if (version < 26) {
+                        // v26: parking setback layer keys
+                        const layers = persistedState.viewSettings?.layers ?? {};
+                        if (layers.parkingSetbacks === undefined) layers.parkingSetbacks = true;
+                        if (layers.dimensionsParkingSetbacks === undefined) layers.dimensionsParkingSetbacks = true;
+                    }
+
+                    if (version < 27) {
+                        // v27: fix parking setback visibility default + add setbackFill layer
+                        if (persistedState.lotVisibility) {
+                            for (const lotId of Object.keys(persistedState.lotVisibility)) {
+                                if (persistedState.lotVisibility[lotId].parkingSetbacks === false) {
+                                    persistedState.lotVisibility[lotId].parkingSetbacks = true;
+                                }
+                            }
+                        }
+                        const layers27 = persistedState.viewSettings?.layers ?? {};
+                        if (layers27.setbackFill === undefined) layers27.setbackFill = true;
+
+                        // Reconcile parking setback lot data with district parameters
+                        // District params may have been set before DISTRICT_TO_LOT_MAP entries existed
+                        const dp27 = persistedState.districtParameters;
+                        const lots27 = persistedState.entities?.lots;
+                        if (dp27 && lots27) {
+                            for (const lotId of Object.keys(lots27)) {
+                                const lot = lots27[lotId];
+                                if (!lot.parkingSetbacks) {
+                                    lot.parkingSetbacks = { front: null, sideInterior: null, sideStreet: null, rear: null };
+                                }
+                                if (lot.parkingSetbacks.front == null && dp27.parkingLocations?.front?.min != null) {
+                                    lot.parkingSetbacks.front = dp27.parkingLocations.front.min;
+                                }
+                                if (lot.parkingSetbacks.sideInterior == null && dp27.parkingLocations?.sideInterior?.min != null) {
+                                    lot.parkingSetbacks.sideInterior = dp27.parkingLocations.sideInterior.min;
+                                }
+                                if (lot.parkingSetbacks.sideStreet == null && dp27.parkingLocations?.sideStreet?.min != null) {
+                                    lot.parkingSetbacks.sideStreet = dp27.parkingLocations.sideStreet.min;
+                                }
+                                if (lot.parkingSetbacks.rear == null && dp27.parkingLocations?.rear?.min != null) {
+                                    lot.parkingSetbacks.rear = dp27.parkingLocations.rear.min;
+                                }
+                            }
+                        }
+                    }
+
+                    if (version < 28) {
+                        // v28: reconcile parking setbacks with district parameters
+                        // Fixes v27 migration that was skipped due to HMR auto-saving version
+                        const dp28 = persistedState.districtParameters;
+                        const lots28 = persistedState.entities?.lots;
+                        if (dp28?.parkingLocations && lots28) {
+                            for (const lotId of Object.keys(lots28)) {
+                                const lot = lots28[lotId];
+                                if (!lot.parkingSetbacks) {
+                                    lot.parkingSetbacks = { front: null, sideInterior: null, sideStreet: null, rear: null };
+                                }
+                                if (lot.parkingSetbacks.front == null && dp28.parkingLocations.front?.min != null)
+                                    lot.parkingSetbacks.front = dp28.parkingLocations.front.min;
+                                if (lot.parkingSetbacks.sideInterior == null && dp28.parkingLocations.sideInterior?.min != null)
+                                    lot.parkingSetbacks.sideInterior = dp28.parkingLocations.sideInterior.min;
+                                if (lot.parkingSetbacks.sideStreet == null && dp28.parkingLocations.sideStreet?.min != null)
+                                    lot.parkingSetbacks.sideStreet = dp28.parkingLocations.sideStreet.min;
+                                if (lot.parkingSetbacks.rear == null && dp28.parkingLocations.rear?.min != null)
+                                    lot.parkingSetbacks.rear = dp28.parkingLocations.rear.min;
+                            }
+                        }
+                    }
+
+                    if (version < 29) {
+                        // v29: drawing editor foundation — initialize empty drawing state
+                        if (!persistedState.drawingLayers) persistedState.drawingLayers = {}
+                        if (!persistedState.drawingLayerOrder) persistedState.drawingLayerOrder = []
+                        if (!persistedState.drawingObjects) persistedState.drawingObjects = {}
+                        if (persistedState.activeDrawingLayerId === undefined) persistedState.activeDrawingLayerId = null
+                        if (!persistedState.drawingDefaults) {
+                            persistedState.drawingDefaults = {
+                                strokeColor: '#000000', strokeWidth: 2, fillColor: '#cccccc',
+                                fillOpacity: 0.3, lineType: 'solid', fontSize: 3, fontFamily: null,
+                                textColor: '#000000', arrowHead: 'end', cornerRadius: 0, starPoints: 5,
+                                outlineWidth: 0.1, outlineColor: '#ffffff',
+                            }
+                        }
+                        // Add drawingEditor layer toggle
+                        const layers29 = persistedState.viewSettings?.layers
+                        if (layers29 && layers29.drawingEditor === undefined) layers29.drawingEditor = true
+                    }
+
                     return {
                         ...persistedState,
-                        version: 17 // Update verified version
+                        version: 29
                     };
                 },
                 partialize: (state) => ({
@@ -3221,18 +4193,167 @@ export const useStore = create(
                     modelSetup: state.modelSetup,
                     districtParameters: state.districtParameters,
                     annotationSettings: state.annotationSettings,
+                    annotationCustomLabels: state.annotationCustomLabels,
                     annotationPositions: state.annotationPositions,
+                    // Drawing editor (exclude transient: drawingMode, selectedDrawingIds, textEditState)
+                    drawingLayers: state.drawingLayers,
+                    drawingLayerOrder: state.drawingLayerOrder,
+                    activeDrawingLayerId: state.activeDrawingLayerId,
+                    drawingObjects: state.drawingObjects,
+                    drawingDefaults: state.drawingDefaults,
                 }),
+                merge: (persistedState, currentState) => {
+                    const merged = { ...currentState, ...persistedState };
+                    // Patch missing entityStyles keys for all lots
+                    if (merged.entityStyles) {
+                        const styleDefaults = createDefaultLotStyle();
+                        for (const lotId of Object.keys(merged.entityStyles)) {
+                            for (const [key, val] of Object.entries(styleDefaults)) {
+                                if (merged.entityStyles[lotId][key] === undefined) {
+                                    merged.entityStyles[lotId][key] = JSON.parse(JSON.stringify(val));
+                                }
+                            }
+                        }
+                    }
+                    // Patch missing lotVisibility keys for all lots
+                    if (merged.lotVisibility) {
+                        const visDefaults = createDefaultLotVisibility();
+                        for (const lotId of Object.keys(merged.lotVisibility)) {
+                            for (const [key, val] of Object.entries(visDefaults)) {
+                                if (merged.lotVisibility[lotId][key] === undefined) {
+                                    merged.lotVisibility[lotId][key] = val;
+                                }
+                            }
+                        }
+                    }
+                    // Patch missing lot data keys (parkingSetbacks) + reconcile with district params
+                    if (merged.entities?.lots) {
+                        const dp = merged.districtParameters;
+                        for (const lotId of Object.keys(merged.entities.lots)) {
+                            const lot = merged.entities.lots[lotId];
+                            if (!lot.parkingSetbacks) {
+                                lot.parkingSetbacks = { front: null, sideInterior: null, sideStreet: null, rear: null };
+                            }
+                            // Reconcile: apply district param parking values to lots that still have null
+                            // Only applies when lot value is null AND district value exists
+                            // Does NOT overwrite user-set values (non-null lot values are preserved)
+                            if (dp?.parkingLocations) {
+                                if (lot.parkingSetbacks.front == null && dp.parkingLocations.front?.min != null)
+                                    lot.parkingSetbacks.front = dp.parkingLocations.front.min;
+                                if (lot.parkingSetbacks.sideInterior == null && dp.parkingLocations.sideInterior?.min != null)
+                                    lot.parkingSetbacks.sideInterior = dp.parkingLocations.sideInterior.min;
+                                if (lot.parkingSetbacks.sideStreet == null && dp.parkingLocations.sideStreet?.min != null)
+                                    lot.parkingSetbacks.sideStreet = dp.parkingLocations.sideStreet.min;
+                                if (lot.parkingSetbacks.rear == null && dp.parkingLocations.rear?.min != null)
+                                    lot.parkingSetbacks.rear = dp.parkingLocations.rear.min;
+                            }
+                        }
+                    }
+                    // Patch missing roadModuleStyles keys
+                    if (merged.roadModuleStyles && merged.roadModuleStyles.intersectionFill === undefined) {
+                        merged.roadModuleStyles.intersectionFill = { fillColor: '#666666', fillOpacity: 1.0 };
+                    }
+                    if (merged.roadModuleStyles && merged.roadModuleStyles.alleyIntersectionFill === undefined) {
+                        merged.roadModuleStyles.alleyIntersectionFill = { fillColor: '#666666', fillOpacity: 1.0 };
+                    }
+                    // Patch missing alley zone style keys
+                    if (merged.roadModuleStyles) {
+                        const alleyKeys = ['alleyRoadWidth', 'alleyRightOfWay', 'alleyVerge', 'alleyParking', 'alleySidewalk', 'alleyTransitionZone'];
+                        for (const key of alleyKeys) {
+                            if (merged.roadModuleStyles[key] === undefined) {
+                                merged.roadModuleStyles[key] = null;
+                            }
+                        }
+                    }
+                    // Reset transient batch export state on hydration
+                    if (merged.viewSettings) {
+                        merged.viewSettings.exportQueue = []
+                        merged.viewSettings.isBatchExporting = false
+                    }
+                    // Patch missing dimensionSettings keys (new fields added in v25)
+                    if (merged.viewSettings?.styleSettings?.dimensionSettings) {
+                        const dimDefaults = {
+                            extensionLineColor: null,
+                            extensionLineStyle: 'dashed',
+                            markerColor: null,
+                            markerScale: 1.0,
+                            fontFamily: 'Inter',
+                            setbackDimOffset: 5,
+                            lotDimOffset: 15,
+                            verticalMode: false,
+                            verticalOffset: 20,
+                        };
+                        const ds = merged.viewSettings.styleSettings.dimensionSettings;
+                        for (const [key, val] of Object.entries(dimDefaults)) {
+                            if (ds[key] === undefined) {
+                                ds[key] = val;
+                            }
+                        }
+                        // Patch new dimensionSettings keys (v25)
+                        if (ds.textPerpOffset === undefined) ds.textPerpOffset = 0;
+                        if (ds.textAnchorY === undefined) ds.textAnchorY = 'bottom';
+                        if (ds.lotDepthDimSide === undefined) ds.lotDepthDimSide = 'right';
+                        // Patch new depth-independent keys
+                        if (ds.lotDepthDimOffset === undefined) ds.lotDepthDimOffset = ds.lotDimOffset ?? 15;
+                        if (ds.textPerpOffsetDepth === undefined) ds.textPerpOffsetDepth = 0;
+                        if (ds.textAnchorYDepth === undefined) ds.textAnchorYDepth = 'center';
+                        if (ds.textModeDepth === undefined) ds.textModeDepth = 'billboard';
+                        // Patch missing customLabels keys
+                        if (!ds.customLabels) ds.customLabels = {};
+                        const customLabelDefaults = {
+                            principalMaxHeight: { mode: 'value', text: '' },
+                            accessoryMaxHeight: { mode: 'value', text: '' },
+                        };
+                        for (const [key, val] of Object.entries(customLabelDefaults)) {
+                            if (ds.customLabels[key] === undefined) {
+                                ds.customLabels[key] = val;
+                            }
+                        }
+                    }
+                    // Patch missing viewSettings.layers keys
+                    if (merged.viewSettings?.layers) {
+                        const layerDefaults = { maxSetbacks: true, btzPlanes: true, accessorySetbacks: true, lotAccessArrows: true, maxHeightPlanePrincipal: true, maxHeightPlaneAccessory: true, parkingSetbacks: true, dimensionsParkingSetbacks: true, setbackFill: true, drawingEditor: true };
+                        for (const [key, val] of Object.entries(layerDefaults)) {
+                            if (merged.viewSettings.layers[key] === undefined) {
+                                merged.viewSettings.layers[key] = val;
+                            }
+                        }
+                    }
+                    // Patch missing drawing editor state
+                    if (!merged.drawingLayers) merged.drawingLayers = {}
+                    if (!merged.drawingLayerOrder) merged.drawingLayerOrder = []
+                    if (!merged.drawingObjects) merged.drawingObjects = {}
+                    if (merged.activeDrawingLayerId === undefined) merged.activeDrawingLayerId = null
+                    if (!merged.drawingDefaults) {
+                        merged.drawingDefaults = {
+                            strokeColor: '#000000', strokeWidth: 2, fillColor: '#cccccc',
+                            fillOpacity: 0.3, lineType: 'solid', fontSize: 3, fontFamily: null,
+                            textColor: '#000000', arrowHead: 'end', cornerRadius: 0, starPoints: 5,
+                            outlineWidth: 0.1, outlineColor: '#ffffff',
+                        }
+                    } else {
+                        // Patch individual missing keys (Phase 2+3 additions)
+                        if (merged.drawingDefaults.starPoints === undefined) merged.drawingDefaults.starPoints = 5
+                        if (merged.drawingDefaults.outlineWidth === undefined) merged.drawingDefaults.outlineWidth = 0.1
+                        if (merged.drawingDefaults.outlineColor === undefined) merged.drawingDefaults.outlineColor = '#ffffff'
+                    }
+                    return merged;
+                },
             }
         ),
         {
             limit: 50,
             partialize: (state) => {
-                const { existing, proposed, viewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, comparisonRoads, entities, entityOrder, entityStyles, lotVisibility, annotationSettings, annotationPositions } = state
+                const { existing, proposed, viewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, comparisonRoads, entities, entityOrder, entityStyles, lotVisibility, modelSetup, annotationSettings, annotationCustomLabels, annotationPositions, drawingLayers, drawingLayerOrder, drawingObjects } = state
                 // Exclude export triggers from undo history
-                const { exportRequested, ...trackedViewSettings } = viewSettings
-                return { existing, proposed, viewSettings: trackedViewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, comparisonRoads, entities, entityOrder, entityStyles, lotVisibility, annotationSettings, annotationPositions }
+                const { exportRequested: _exportRequested, exportQueue: _exportQueue, isBatchExporting: _isBatchExporting, ...trackedViewSettings } = viewSettings
+                return { existing, proposed, viewSettings: trackedViewSettings, layoutSettings, sunSettings, renderSettings, roadModule, roadModuleStyles, comparisonRoads, entities, entityOrder, entityStyles, lotVisibility, modelSetup, annotationSettings, annotationCustomLabels, annotationPositions, drawingLayers, drawingLayerOrder, drawingObjects }
             }
         }
     )
 );
+
+// Expose store on window in dev mode for Playwright testing
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
+    window.__store = useStore;
+}

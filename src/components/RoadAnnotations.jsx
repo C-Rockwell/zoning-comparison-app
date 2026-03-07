@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useStore } from '../store/useStore'
+import { useStore, DIMENSION_FONT_OPTIONS } from '../store/useStore'
 import { useShallow } from 'zustand/react/shallow'
 import DraggableLabel from './DraggableLabel'
 
@@ -25,18 +25,17 @@ const RoadAnnotations = ({
     road = {},
     spanWidth = 0,
     lineScale = 1,
+    direction = 'front',
 }) => {
-    const { annotationSettings, annotationPositions, setAnnotationPosition, layers } = useStore(
+    const { annotationSettings, annotationPositions, setAnnotationPosition, layers, annotationCustomLabels } = useStore(
         useShallow((state) => ({
             annotationSettings: state.annotationSettings,
             annotationPositions: state.annotationPositions,
             setAnnotationPosition: state.setAnnotationPosition,
             layers: state.viewSettings?.layers,
+            annotationCustomLabels: state.annotationCustomLabels,
         }))
     )
-
-    // Master toggle — hide everything if annotation labels are off
-    if (!layers?.annotationLabels) return null
 
     const {
         type = 'S1',
@@ -63,37 +62,12 @@ const RoadAnnotations = ({
     const roadTopY = centerlineY + roadHalfWidth
     const roadBottomY = centerlineY - roadHalfWidth
 
-    // Shared style props
-    const sharedProps = {
-        color: annotationSettings.textColor,
-        rotation: annotationSettings.textRotation,
-        background: {
-            enabled: annotationSettings.backgroundEnabled,
-            color: annotationSettings.backgroundColor,
-            opacity: annotationSettings.backgroundOpacity,
-            padding: 0.3,
-        },
-        outlineColor: '#ffffff',
-        outlineWidth: 0.15,
-        leaderLineSettings: {
-            color: annotationSettings.leaderLineColor,
-            width: annotationSettings.leaderLineWidth,
-            dashed: annotationSettings.leaderLineDashed,
-        },
-        lineScale,
-    }
-
     const baseFontSize = annotationSettings.fontSize
     const zoneFontSize = baseFontSize * 0.8
     const midX = spanWidth / 2
 
-    // ---------- Road Name ----------
-    const roadTypeName = ROAD_TYPE_NAMES[type] || type
-    const roadNameId = `road-${roadId}-name`
-    const roadNameDefault = [midX, centerlineY, 0.2]
-
     // ---------- Road Zone Labels ----------
-    // Build zone labels by computing stacking positions
+    // Build zone labels by computing stacking positions (must be before early return — Rules of Hooks)
     const zoneLabels = useMemo(() => {
         const labels = []
 
@@ -197,13 +171,49 @@ const RoadAnnotations = ({
         leftParking, leftVerge, leftSidewalk, leftTransitionZone,
     ])
 
+    // Master toggle — hide everything if annotation labels are off
+    if (!layers?.annotationLabels) return null
+
+    // Shared style props
+    const sharedProps = {
+        color: annotationSettings.textColor,
+        rotation: annotationSettings.textRotation,
+        background: {
+            enabled: annotationSettings.backgroundEnabled,
+            color: annotationSettings.backgroundColor,
+            opacity: annotationSettings.backgroundOpacity,
+            padding: 0.3,
+        },
+        font: DIMENSION_FONT_OPTIONS.find(f => f.label === annotationSettings.fontFamily)?.url,
+        outlineColor: annotationSettings.outlineColor,
+        outlineWidth: annotationSettings.outlineWidth,
+        leaderLineSettings: {
+            color: annotationSettings.leaderLineColor,
+            width: annotationSettings.leaderLineWidth,
+            dashed: annotationSettings.leaderLineDashed,
+        },
+        lineScale,
+    }
+
+    // ---------- Road Name ----------
+    const roadTypeName = ROAD_TYPE_NAMES[type] || type
+    const roadNameId = `road-${roadId}-name`
+    const roadNameDefault = [midX, centerlineY, 0.2]
+
+    // Custom label support — direction maps to annotationCustomLabels key (e.g. 'front' → 'roadFront')
+    const directionKey = `road${direction.charAt(0).toUpperCase()}${direction.slice(1)}`
+    const roadCustomLabel = annotationCustomLabels?.[directionKey]
+    const roadDisplayName = (roadCustomLabel?.mode === 'custom' && roadCustomLabel.text)
+        ? roadCustomLabel.text
+        : `${type} - ${roadTypeName}`
+
     return (
         <group>
             {/* Road Name */}
             {layers.labelRoadNames && (
                 <DraggableLabel
                     {...sharedProps}
-                    text={`${type} - ${roadTypeName}`}
+                    text={roadDisplayName}
                     fontSize={baseFontSize * 1.2}
                     defaultPosition={roadNameDefault}
                     anchorPoint={[midX, centerlineY, 0]}

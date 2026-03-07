@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
+import { useStore } from '../../store/useStore'
 
 // Push/pull handle on edges - drag perpendicular to extrude
 const EdgeHandle = ({ v1, v2, edgeIndex, onExtrude, offsetGroupX = 0 }) => {
@@ -28,8 +29,8 @@ const EdgeHandle = ({ v1, v2, edgeIndex, onExtrude, offsetGroupX = 0 }) => {
         const dy = v2.y - v1.y
         const len = Math.sqrt(dx * dx + dy * dy)
         if (len === 0) return { x: 0, y: 1 }
-        // Rotate 90 degrees counter-clockwise for outward normal
-        return { x: -dy / len, y: dx / len }
+        // Rotate 90 degrees clockwise for outward normal
+        return { x: dy / len, y: -dx / len }
     }, [v1, v2])
 
     // Calculate edge length
@@ -41,7 +42,7 @@ const EdgeHandle = ({ v1, v2, edgeIndex, onExtrude, offsetGroupX = 0 }) => {
     if (edgeLength < 10) return null
 
     // Arrow position (offset from edge center along perpendicular)
-    const arrowOffset = 4
+    const arrowOffset = 5
     const arrowPosition = {
         x: midpoint.x + perpDir.x * arrowOffset,
         y: midpoint.y + perpDir.y * arrowOffset,
@@ -54,6 +55,7 @@ const EdgeHandle = ({ v1, v2, edgeIndex, onExtrude, offsetGroupX = 0 }) => {
         e.stopPropagation()
         if (controls) controls.enabled = false
         setDragging(true)
+        useStore.temporal.getState().pause()
         e.target.setPointerCapture(e.pointerId)
 
         // Store initial position
@@ -69,6 +71,7 @@ const EdgeHandle = ({ v1, v2, edgeIndex, onExtrude, offsetGroupX = 0 }) => {
     const handlePointerUp = (e) => {
         e.stopPropagation()
         setDragging(false)
+        useStore.temporal.getState().resume()
         if (controls) controls.enabled = true
         e.target.releasePointerCapture(e.pointerId)
         dragStartRef.current = null
@@ -90,16 +93,17 @@ const EdgeHandle = ({ v1, v2, edgeIndex, onExtrude, offsetGroupX = 0 }) => {
         // Project movement onto perpendicular direction
         const distance = dx * perpDir.x + dy * perpDir.y
 
-        // Only update if distance changed significantly
+        // Only update if distance changed significantly — send DELTA, not cumulative
         if (Math.abs(distance - initialDistanceRef.current) > 0.5) {
+            const delta = distance - initialDistanceRef.current
             initialDistanceRef.current = distance
             if (onExtrude) {
-                onExtrude(edgeIndex, distance)
+                onExtrude(edgeIndex, delta)
             }
         }
     }
 
-    const size = dragging ? 1.5 : (hovered ? 1.3 : 1.0)
+    const size = dragging ? 2.0 : (hovered ? 1.75 : 1.4)
     const color = dragging ? '#ffff00' : (hovered ? '#00aaff' : '#4488ff')
 
     return (
@@ -116,7 +120,7 @@ const EdgeHandle = ({ v1, v2, edgeIndex, onExtrude, offsetGroupX = 0 }) => {
                     onPointerUp={handlePointerUp}
                     onPointerMove={handlePointerMove}
                 >
-                    <coneGeometry args={[size * 0.8, size * 2, 8]} />
+                    <coneGeometry args={[size * 0.9, size * 2.2, 8]} />
                     <meshBasicMaterial
                         color={color}
                         transparent

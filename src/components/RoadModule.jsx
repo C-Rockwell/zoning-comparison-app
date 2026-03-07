@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
-import { Line } from '@react-three/drei'
 import * as THREE from 'three'
+import { Line } from '@react-three/drei'
 
 /**
  * Direction-to-rotation mapping for multi-direction road rendering.
@@ -19,6 +19,88 @@ const DIRECTION_ROTATION = {
     left: -Math.PI / 2,
     right: Math.PI / 2,
     rear: Math.PI,
+}
+
+/**
+ * RoadPolygon Component (module-level — never define inside a render function)
+ *
+ * Renders a filled rectangle with optional border lines for road zones.
+ */
+const RoadPolygon = ({ xMin, xMax, yMin, yMax, style, zOffset = 0.01, suppressLeftEnd: polyLeftEnd = false, suppressRightEnd: polyRightEnd = false, lineScale = 1 }) => {
+    const width = xMax - xMin
+    const depth = yMax - yMin
+    const centerX = (xMin + xMax) / 2
+    const centerY = (yMin + yMax) / 2
+
+    // Corner points for the outline
+    const p1 = [xMin, yMin, zOffset]
+    const p2 = [xMax, yMin, zOffset]
+    const p3 = [xMax, yMax, zOffset]
+    const p4 = [xMin, yMax, zOffset]
+
+    return (
+        <group>
+            {/* Fill */}
+            <mesh position={[centerX, centerY, zOffset]} receiveShadow>
+                <planeGeometry args={[width, depth]} />
+                <meshStandardMaterial
+                    color={style.fillColor}
+                    opacity={style.fillOpacity}
+                    transparent={style.fillOpacity < 1}
+                    side={THREE.DoubleSide}
+                    depthWrite={style.fillOpacity >= 0.95}
+                    roughness={1}
+                    metalness={0}
+                />
+            </mesh>
+
+            {/* Border lines — drei Line2 with adjustable lineWidth */}
+            <Line
+                points={[p1, p2]}
+                color={style.lineColor}
+                lineWidth={(style.lineWidth || 1) * lineScale}
+                opacity={style.lineOpacity}
+                transparent={style.lineOpacity < 1}
+                dashed={style.lineDashed}
+                dashSize={style.lineDashed ? 1 : undefined}
+                gapSize={style.lineDashed ? 0.5 : undefined}
+            />
+            {!polyRightEnd && (
+                <Line
+                    points={[p2, p3]}
+                    color={style.lineColor}
+                    lineWidth={(style.lineWidth || 1) * lineScale}
+                    opacity={style.lineOpacity}
+                    transparent={style.lineOpacity < 1}
+                    dashed={style.lineDashed}
+                    dashSize={style.lineDashed ? 1 : undefined}
+                    gapSize={style.lineDashed ? 0.5 : undefined}
+                />
+            )}
+            <Line
+                points={[p3, p4]}
+                color={style.lineColor}
+                lineWidth={(style.lineWidth || 1) * lineScale}
+                opacity={style.lineOpacity}
+                transparent={style.lineOpacity < 1}
+                dashed={style.lineDashed}
+                dashSize={style.lineDashed ? 1 : undefined}
+                gapSize={style.lineDashed ? 0.5 : undefined}
+            />
+            {!polyLeftEnd && (
+                <Line
+                    points={[p4, p1]}
+                    color={style.lineColor}
+                    lineWidth={(style.lineWidth || 1) * lineScale}
+                    opacity={style.lineOpacity}
+                    transparent={style.lineOpacity < 1}
+                    dashed={style.lineDashed}
+                    dashSize={style.lineDashed ? 1 : undefined}
+                    gapSize={style.lineDashed ? 0.5 : undefined}
+                />
+            )}
+        </group>
+    )
 }
 
 /**
@@ -43,12 +125,9 @@ const DIRECTION_ROTATION = {
  * @param {number} lineScale - Line width multiplier for export scaling
  */
 const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', lineScale = 1, suppressLeftEnd = false, suppressRightEnd = false }) => {
-    // Early return if missing required data
-    if (!roadModule || !styles || !lotWidth) {
-        return null
-    }
-
+    // All hooks must come before any conditional return (Rules of Hooks)
     const {
+        type: roadType,
         rightOfWay = 50,
         roadWidth = 24,
         leftParking,
@@ -59,7 +138,7 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
         rightSidewalk,
         leftTransitionZone,
         rightTransitionZone,
-    } = roadModule
+    } = roadModule ?? {}
 
     // Calculate centerline Y position (negative, measured from lot front)
     const centerlineY = -rightOfWay / 2
@@ -70,14 +149,10 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
     const roadBottomY = centerlineY - roadHalfWidth // Farther from lot (toward Y=-rightOfWay)
 
     // Calculate X positions based on model type
-    // Existing: lot extends to negative X from origin (0,0 is bottom-right of lot)
-    // Proposed: lot extends to positive X from origin (0,0 is bottom-left of lot)
-    const xMin = model === 'existing' ? -lotWidth : 0
-    const xMax = model === 'existing' ? 0 : lotWidth
+    const xMin = model === 'existing' ? -(lotWidth ?? 0) : 0
+    const xMax = model === 'existing' ? 0 : (lotWidth ?? 0)
 
-    // Build the layer stack for left and right sides
-    // Left side: stacks from road edge toward negative Y (outer right-of-way)
-    // Right side: stacks from road edge toward positive Y (lot front)
+    // Build the layer stack for left and right sides (must be before early return — Rules of Hooks)
     const leftLayers = useMemo(() => {
         const layers = []
         let currentY = roadBottomY // Start at left edge of road
@@ -172,87 +247,17 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
         return layers
     }, [roadTopY, rightParking, rightVerge, rightSidewalk, rightTransitionZone])
 
-    // Render a polygon (filled rectangle with optional border)
-    const RoadPolygon = ({ xMin, xMax, yMin, yMax, style, zOffset = 0.01, lineScale: polyLineScale = 1, suppressLeftEnd: polyLeftEnd = false, suppressRightEnd: polyRightEnd = false }) => {
-        const width = xMax - xMin
-        const depth = yMax - yMin
-        const centerX = (xMin + xMax) / 2
-        const centerY = (yMin + yMax) / 2
-
-        // Corner points for the outline
-        const p1 = [xMin, yMin, zOffset]
-        const p2 = [xMax, yMin, zOffset]
-        const p3 = [xMax, yMax, zOffset]
-        const p4 = [xMin, yMax, zOffset]
-
-        return (
-            <group>
-                {/* Fill */}
-                <mesh position={[centerX, centerY, zOffset]} receiveShadow>
-                    <planeGeometry args={[width, depth]} />
-                    <meshStandardMaterial
-                        color={style.fillColor}
-                        opacity={style.fillOpacity}
-                        transparent={style.fillOpacity < 1}
-                        side={THREE.DoubleSide}
-                        depthWrite={style.fillOpacity >= 0.95}
-                        roughness={1}
-                        metalness={0}
-                    />
-                </mesh>
-
-                {/* Border lines */}
-                <Line
-                    points={[p1, p2]}
-                    color={style.lineColor}
-                    lineWidth={style.lineWidth * polyLineScale}
-                    dashed={style.lineDashed}
-                    dashSize={style.lineDashed ? 1 : undefined}
-                    gapSize={style.lineDashed ? 0.5 : undefined}
-                    transparent
-                    opacity={style.lineOpacity}
-                />
-                {!polyRightEnd && (
-                    <Line
-                        points={[p2, p3]}
-                        color={style.lineColor}
-                        lineWidth={style.lineWidth * polyLineScale}
-                        dashed={style.lineDashed}
-                        dashSize={style.lineDashed ? 1 : undefined}
-                        gapSize={style.lineDashed ? 0.5 : undefined}
-                        transparent
-                        opacity={style.lineOpacity}
-                    />
-                )}
-                <Line
-                    points={[p3, p4]}
-                    color={style.lineColor}
-                    lineWidth={style.lineWidth * polyLineScale}
-                    dashed={style.lineDashed}
-                    dashSize={style.lineDashed ? 1 : undefined}
-                    gapSize={style.lineDashed ? 0.5 : undefined}
-                    transparent
-                    opacity={style.lineOpacity}
-                />
-                {!polyLeftEnd && (
-                    <Line
-                        points={[p4, p1]}
-                        color={style.lineColor}
-                        lineWidth={style.lineWidth * polyLineScale}
-                        dashed={style.lineDashed}
-                        dashSize={style.lineDashed ? 1 : undefined}
-                        gapSize={style.lineDashed ? 0.5 : undefined}
-                        transparent
-                        opacity={style.lineOpacity}
-                    />
-                )}
-            </group>
-        )
+    // Early return AFTER all hooks
+    if (!roadModule || !styles || !lotWidth) {
+        return null
     }
 
-    // Default styles if not provided
-    const rowStyle = styles.rightOfWay || { color: '#000000', width: 1, dashed: true, dashSize: 2, gapSize: 1, opacity: 1 }
-    const roadStyle = styles.roadWidth || { lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1, fillColor: '#666666', fillOpacity: 0.8 }
+    // Default styles if not provided — S3 alleys merge alley-specific overrides onto regular styles
+    const isS3 = roadType === 'S3'
+    const baseRowStyle = styles.rightOfWay ?? { color: '#000000', width: 1, dashed: true, dashSize: 2, gapSize: 1, opacity: 1 }
+    const rowStyle = (isS3 && styles.alleyRightOfWay) ? { ...baseRowStyle, ...styles.alleyRightOfWay } : baseRowStyle
+    const baseRoadStyle = styles.roadWidth ?? { lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1, fillColor: '#666666', fillOpacity: 1.0 }
+    const roadStyle = (isS3 && styles.alleyRoadWidth) ? { ...baseRoadStyle, ...styles.alleyRoadWidth } : baseRoadStyle
 
     // Resolve rotation angle from direction prop
     const rotationZ = DIRECTION_ROTATION[direction] || 0
@@ -264,25 +269,25 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
             <Line
                 points={[[xMin, 0, 0.03], [xMax, 0, 0.03]]}
                 color={rowStyle.color}
-                lineWidth={rowStyle.width * lineScale}
+                lineWidth={(rowStyle.width || 1) * lineScale}
+                opacity={rowStyle.opacity}
+                transparent={rowStyle.opacity < 1}
                 dashed={rowStyle.dashed}
-                dashScale={rowStyle.dashed ? 5 : 1}
                 dashSize={rowStyle.dashSize}
                 gapSize={rowStyle.gapSize}
-                transparent
-                opacity={rowStyle.opacity}
+                dashScale={rowStyle.dashed ? 5 : 1}
             />
             {/* Line 2: At Y=-rightOfWay (outer edge of right-of-way) */}
             <Line
                 points={[[xMin, -rightOfWay, 0.03], [xMax, -rightOfWay, 0.03]]}
                 color={rowStyle.color}
-                lineWidth={rowStyle.width * lineScale}
+                lineWidth={(rowStyle.width || 1) * lineScale}
+                opacity={rowStyle.opacity}
+                transparent={rowStyle.opacity < 1}
                 dashed={rowStyle.dashed}
-                dashScale={rowStyle.dashed ? 5 : 1}
                 dashSize={rowStyle.dashSize}
                 gapSize={rowStyle.gapSize}
-                transparent
-                opacity={rowStyle.opacity}
+                dashScale={rowStyle.dashed ? 5 : 1}
             />
 
             {/* Road Width Polygon (centered on centerline) */}
@@ -293,16 +298,19 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
                 yMax={roadTopY}
                 style={roadStyle}
                 zOffset={0.01}
-                lineScale={lineScale}
                 suppressLeftEnd={suppressLeftEnd}
                 suppressRightEnd={suppressRightEnd}
+                lineScale={lineScale}
             />
 
             {/* Left Side Layers (toward outer right-of-way) */}
             {leftLayers.map((layer, index) => {
                 // Use side-specific style key (e.g., 'leftParking' instead of 'parking')
                 const styleKey = `left${layer.type.charAt(0).toUpperCase()}${layer.type.slice(1)}`
-                const layerStyle = styles[styleKey] || styles[layer.type] || { lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1, fillColor: '#888888', fillOpacity: 0.6 }
+                // S3 alleys merge symmetric alley-specific overrides (e.g., alleyParking for both sides)
+                const alleyKey = `alley${layer.type.charAt(0).toUpperCase()}${layer.type.slice(1)}`
+                const baseStyle = styles[styleKey] ?? styles[layer.type] ?? { lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1, fillColor: '#888888', fillOpacity: 1.0 }
+                const layerStyle = (isS3 && styles[alleyKey]) ? { ...baseStyle, ...styles[alleyKey] } : baseStyle
                 return (
                     <RoadPolygon
                         key={`left-${layer.type}-${index}`}
@@ -312,9 +320,9 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
                         yMax={layer.topY}
                         style={layerStyle}
                         zOffset={0.01 + (index + 1) * 0.001}
-                        lineScale={lineScale}
                         suppressLeftEnd={suppressLeftEnd}
                         suppressRightEnd={suppressRightEnd}
+                        lineScale={lineScale}
                     />
                 )
             })}
@@ -323,7 +331,10 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
             {rightLayers.map((layer, index) => {
                 // Use side-specific style key (e.g., 'rightParking' instead of 'parking')
                 const styleKey = `right${layer.type.charAt(0).toUpperCase()}${layer.type.slice(1)}`
-                const layerStyle = styles[styleKey] || styles[layer.type] || { lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1, fillColor: '#888888', fillOpacity: 0.6 }
+                // S3 alleys merge symmetric alley-specific overrides (e.g., alleyParking for both sides)
+                const alleyKey = `alley${layer.type.charAt(0).toUpperCase()}${layer.type.slice(1)}`
+                const baseStyle = styles[styleKey] ?? styles[layer.type] ?? { lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1, fillColor: '#888888', fillOpacity: 1.0 }
+                const layerStyle = (isS3 && styles[alleyKey]) ? { ...baseStyle, ...styles[alleyKey] } : baseStyle
                 return (
                     <RoadPolygon
                         key={`right-${layer.type}-${index}`}
@@ -333,9 +344,9 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
                         yMax={layer.topY}
                         style={layerStyle}
                         zOffset={0.01 + (index + 1) * 0.001}
-                        lineScale={lineScale}
                         suppressLeftEnd={suppressLeftEnd}
                         suppressRightEnd={suppressRightEnd}
+                        lineScale={lineScale}
                     />
                 )
             })}

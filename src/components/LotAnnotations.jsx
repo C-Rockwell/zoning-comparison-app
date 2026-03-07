@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useStore } from '../store/useStore'
+import { useStore, DIMENSION_FONT_OPTIONS } from '../store/useStore'
 import { useShallow } from 'zustand/react/shallow'
 import DraggableLabel from './DraggableLabel'
 
@@ -15,17 +15,20 @@ const LotAnnotations = ({
     lotWidth,
     lotDepth,
     setbacks = {},
+    maxSetbacks = {},
     buildings = {},
     lotIndex = 1,
     lotCenter = [0, 0],
     lineScale = 1,
 }) => {
-    const { annotationSettings, annotationPositions, setAnnotationPosition, layers } = useStore(
+    const { annotationSettings, annotationPositions, setAnnotationPosition, layers, annotationCustomLabels, setAnnotationCustomLabel } = useStore(
         useShallow((state) => ({
             annotationSettings: state.annotationSettings,
             annotationPositions: state.annotationPositions,
             setAnnotationPosition: state.setAnnotationPosition,
             layers: state.viewSettings?.layers,
+            annotationCustomLabels: state.annotationCustomLabels,
+            setAnnotationCustomLabel: state.setAnnotationCustomLabel,
         }))
     )
 
@@ -42,8 +45,9 @@ const LotAnnotations = ({
             opacity: annotationSettings.backgroundOpacity,
             padding: 0.3,
         },
-        outlineColor: '#ffffff',
-        outlineWidth: 0.15,
+        font: DIMENSION_FONT_OPTIONS.find(f => f.label === annotationSettings.fontFamily)?.url,
+        outlineColor: annotationSettings.outlineColor,
+        outlineWidth: annotationSettings.outlineWidth,
         leaderLineSettings: {
             color: annotationSettings.leaderLineColor,
             width: annotationSettings.leaderLineWidth,
@@ -119,6 +123,32 @@ const LotAnnotations = ({
         })
     }
 
+    // ---------- Max Setback Labels ----------
+    const maxSetbackLabels = []
+    const { front: maxFront = 0, sideStreet: maxSideStreet = 0, streetSides = {} } = maxSetbacks
+
+    if (maxFront > 0) {
+        maxSetbackLabels.push({
+            id: `lot-${lotId}-maxsetback-front`,
+            text: 'Max. Front Setback',
+            defaultPosition: [lotWidth / 2, maxFront / 2, 0.17],
+        })
+    }
+    if (maxSideStreet > 0 && streetSides.left) {
+        maxSetbackLabels.push({
+            id: `lot-${lotId}-maxsetback-left`,
+            text: 'Max. Side Setback',
+            defaultPosition: [maxSideStreet / 2, lotDepth / 2, 0.17],
+        })
+    }
+    if (maxSideStreet > 0 && streetSides.right) {
+        maxSetbackLabels.push({
+            id: `lot-${lotId}-maxsetback-right`,
+            text: 'Max. Side Setback',
+            defaultPosition: [lotWidth - maxSideStreet / 2, lotDepth / 2, 0.17],
+        })
+    }
+
     // ---------- Building Labels ----------
     const buildingLabels = []
     const principal = buildings?.principal
@@ -131,7 +161,8 @@ const LotAnnotations = ({
         buildingLabels.push({
             id: `lot-${lotId}-bldg-principal`,
             text: 'Principal Building',
-            defaultPosition: [px, py, pz],
+            anchorPoint: [px, py, pz],
+            defaultPosition: [px + principal.width * 0.5 + 5, py, pz + 3],
         })
     }
 
@@ -142,9 +173,15 @@ const LotAnnotations = ({
         buildingLabels.push({
             id: `lot-${lotId}-bldg-accessory`,
             text: 'Accessory Building',
-            defaultPosition: [ax, ay, az],
+            anchorPoint: [ax, ay, az],
+            defaultPosition: [ax + accessory.width * 0.5 + 5, ay, az + 3],
         })
     }
+
+    const lotNameText = (() => {
+        const cl = annotationCustomLabels?.[`lot-${lotId}-name`]
+        return (cl?.mode === 'custom' && cl.text) ? cl.text : `Lot ${lotIndex}`
+    })()
 
     return (
         <group>
@@ -152,7 +189,7 @@ const LotAnnotations = ({
             {layers.labelLotNames && (
                 <DraggableLabel
                     {...sharedProps}
-                    text={`Lot ${lotIndex}`}
+                    text={lotNameText}
                     fontSize={baseFontSize * 1.3}
                     defaultPosition={lotNameDefault}
                     anchorPoint={[lotWidth / 2, lotDepth / 2, 0]}
@@ -189,8 +226,8 @@ const LotAnnotations = ({
                 />
             ))}
 
-            {/* Building Labels */}
-            {layers.labelBuildings && buildingLabels.map((label) => (
+            {/* Max Setback Labels */}
+            {layers.labelMaxSetbacks && maxSetbackLabels.map((label) => (
                 <DraggableLabel
                     key={label.id}
                     {...sharedProps}
@@ -202,6 +239,27 @@ const LotAnnotations = ({
                     onPositionChange={(pos) => setAnnotationPosition(label.id, pos)}
                 />
             ))}
+
+            {/* Building Labels */}
+            {buildingLabels.map((label) => {
+                const isPrincipal = label.id.includes('bldg-principal')
+                const layerOn = isPrincipal
+                    ? (layers.labelPrincipalBuildings ?? layers.labelBuildings ?? true)
+                    : (layers.labelAccessoryBuildings ?? layers.labelBuildings ?? true)
+                if (!layerOn) return null
+                return (
+                    <DraggableLabel
+                        key={label.id}
+                        {...sharedProps}
+                        text={label.text}
+                        fontSize={baseFontSize}
+                        defaultPosition={label.defaultPosition}
+                        anchorPoint={label.anchorPoint}
+                        customPosition={annotationPositions[label.id] || null}
+                        onPositionChange={(pos) => setAnnotationPosition(label.id, pos)}
+                    />
+                )
+            })}
         </group>
     )
 }

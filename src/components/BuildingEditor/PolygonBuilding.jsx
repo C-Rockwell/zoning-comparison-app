@@ -9,7 +9,8 @@ const PolygonBuilding = ({
     styles,
     lineScale = 1,
     scaleFactor = 1,
-    dragging = false,
+    isMoveModeTarget = false,
+    moveMode = null,
     onPointerDown,
     onPointerUp,
     onPointerMove,
@@ -17,6 +18,10 @@ const PolygonBuilding = ({
     onPointerOut,
 }) => {
     const { faces, edges } = styles
+
+    // Move mode highlight: green if target, blue if selectObject phase, else normal
+    const effectiveColor = isMoveModeTarget ? '#00ff88' : (moveMode?.active && moveMode.phase === 'selectObject') ? '#88ccff' : faces.color
+    const effectiveOpacity = isMoveModeTarget ? 0.7 : (moveMode?.active && moveMode.phase === 'selectObject') ? 0.8 : faces.opacity
 
     // Create THREE.Shape from building footprint vertices
     const shape = useMemo(() => {
@@ -44,6 +49,7 @@ const PolygonBuilding = ({
                         position={[0, 0, floor.zBottom]}
                         castShadow
                         receiveShadow
+                        renderOrder={4}
                         onPointerOver={index === 0 ? onPointerOver : undefined}
                         onPointerOut={index === 0 ? onPointerOut : undefined}
                         onPointerDown={index === 0 ? onPointerDown : undefined}
@@ -52,11 +58,11 @@ const PolygonBuilding = ({
                     >
                         <extrudeGeometry args={[shape, extrudeSettings]} />
                         <meshStandardMaterial
-                            color={dragging ? '#ffff00' : faces.color}
-                            transparent={true}
-                            opacity={dragging ? 0.8 : faces.opacity}
+                            color={effectiveColor}
+                            transparent={effectiveOpacity < 1}
+                            opacity={effectiveOpacity}
                             side={THREE.DoubleSide}
-                            depthWrite={faces.opacity >= 0.95}
+                            depthWrite={effectiveOpacity >= 0.95}
                             roughness={0.7}
                             metalness={0.1}
                         />

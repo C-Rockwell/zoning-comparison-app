@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
+import CameraControlsImpl from 'camera-controls'
 import { useStore } from '../store/useStore'
 
 const CameraHandler = ({ controlsRef }) => {
@@ -67,11 +68,7 @@ const CameraHandler = ({ controlsRef }) => {
                     const index = parseInt(cameraView.split('-')[1])
                     const viewData = useStore.getState().savedViews[index]
 
-                    if (viewData) {
-                        // Restore saved view
-                        // If it was saved in Ortho, should we switch to Ortho?
-                        // For now, let's respect the current projection or maybe store projection too?
-                        // Let's just restore position/target.
+                    if (viewData && viewData.position && viewData.target) {
                         const { position, target, zoom } = viewData
                         controls.setLookAt(
                             position.x, position.y, position.z,
@@ -84,6 +81,15 @@ const CameraHandler = ({ controlsRef }) => {
                 break
         }
     }, [viewVersion, controlsRef, setProjection, camera, cameraView, projection]) // Depend on version
+
+    // Remap mouse buttons: left=none (free for drawing), middle=orbit, right=pan (unchanged)
+    useEffect(() => {
+        if (!controlsRef.current) return
+        const controls = controlsRef.current
+        controls.mouseButtons.left = CameraControlsImpl.ACTION.NONE
+        controls.mouseButtons.middle = CameraControlsImpl.ACTION.ROTATE
+        // right stays as TRUCK (pan), wheel stays as DOLLY
+    }, [controlsRef])
 
     return null
 }

@@ -7,7 +7,10 @@ import * as api from '../services/api'
  * - Ctrl/Cmd+Z: Undo
  * - Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y: Redo
  * - Ctrl/Cmd+S: Save project
- * - Delete/Backspace: Delete selected entity (if applicable)
+ * - Delete/Backspace: Delete selected building
+ * - V/F/L/R: Drawing tools (select/freehand/line/rectangle) when layer active
+ * - M: Enter move mode (AutoCAD-style, district module only)
+ * - Escape: Exit move mode / cancel move
  */
 export function useKeyboardShortcuts() {
   const currentProject = useStore(state => state.currentProject)
@@ -52,6 +55,89 @@ export function useKeyboardShortcuts() {
           showToast?.('Project saved', 'success')
         } catch (err) {
           showToast?.(`Save failed: ${err.message}`, 'error')
+        }
+        return
+      }
+
+      // Delete/Backspace: Delete selected drawing objects, then selected building
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const { selectedDrawingIds, deleteDrawingObject, setSelectedDrawingIds: setSelIds } = useStore.getState()
+        if (selectedDrawingIds?.length > 0) {
+          e.preventDefault()
+          for (const id of selectedDrawingIds) deleteDrawingObject(id)
+          setSelIds([])
+          showToast?.(`${selectedDrawingIds.length} drawing object(s) deleted`, 'info')
+          return
+        }
+        const { selectedBuildingType, activeEntityId, activeModule, deleteEntityBuilding } = useStore.getState()
+        if (activeModule === 'district' && selectedBuildingType && activeEntityId) {
+          e.preventDefault()
+          deleteEntityBuilding(activeEntityId, selectedBuildingType)
+          showToast?.(`${selectedBuildingType === 'principal' ? 'Principal' : 'Accessory'} building deleted`, 'info')
+        }
+        return
+      }
+
+      // Drawing tool shortcuts (V/F/L/R/P/C/A/T — only when drawing layer is active)
+      if (!isMod && 'vflrpcate'.includes(e.key.toLowerCase())) {
+        const { activeDrawingLayerId, drawingMode: dm, setDrawingMode: setDM } = useStore.getState()
+        if (activeDrawingLayerId) {
+          e.preventDefault()
+          const toolMap = { v: 'select', f: 'freehand', l: 'line', r: 'rectangle', p: 'polygon', c: 'circle', a: 'arrow', t: 'text', e: 'eraser' }
+          const toolId = toolMap[e.key.toLowerCase()]
+          setDM(dm?.tool === toolId ? null : { tool: toolId, phase: 'idle' })
+          return
+        }
+      }
+
+      // M: Enter Move Mode (district module only)
+      if ((e.key === 'm' || e.key === 'M') && !isMod) {
+        const { activeModule, moveMode, enterMoveMode } = useStore.getState()
+        if (activeModule === 'district' && !moveMode?.active) {
+          e.preventDefault()
+          enterMoveMode()
+          showToast?.('Move mode: click an object to move', 'info')
+        }
+        return
+      }
+
+      // Escape: Clear text input, then Drawing Mode, then Move Mode
+      if (e.key === 'Escape') {
+        const { textEditState, setTextEditState } = useStore.getState()
+        if (textEditState) {
+          e.preventDefault()
+          setTextEditState(null)
+          return
+        }
+        const { drawingMode, setDrawingMode, setSelectedDrawingIds } = useStore.getState()
+        if (drawingMode) {
+          e.preventDefault()
+          setDrawingMode(null)
+          setSelectedDrawingIds([])
+          showToast?.('Drawing mode deactivated', 'info')
+          return
+        }
+        const { moveMode, exitMoveMode, setEntityBuildingPosition, setAnnotationPosition } = useStore.getState()
+        if (moveMode?.active) {
+          e.preventDefault()
+          // Resume undo tracking before restoring so the restore is recorded cleanly
+          useStore.temporal.getState().resume()
+          // Restore original position if in 'moving' phase
+          if (moveMode.phase === 'moving' && moveMode.originalPosition) {
+            if (moveMode.targetType === 'building') {
+              setEntityBuildingPosition(
+                moveMode.targetLotId, moveMode.targetBuildingType,
+                moveMode.originalPosition[0], moveMode.originalPosition[1]
+              )
+            } else if (moveMode.targetType === 'lotAccessArrow') {
+              setAnnotationPosition(
+                `lot-${moveMode.targetLotId}-access-${moveMode.targetDirection}`,
+                moveMode.originalPosition
+              )
+            }
+          }
+          exitMoveMode()
+          showToast?.('Move cancelled', 'info')
         }
         return
       }

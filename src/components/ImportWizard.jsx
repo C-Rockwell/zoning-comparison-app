@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef } from 'react'
 import { Upload, FileText, ArrowRight, ArrowLeft, Check, X, AlertCircle } from 'lucide-react'
 import { useStore } from '../store/useStore'
-import { parseCSV, APP_FIELDS, autoMatchHeaders, applyMapping } from '../utils/importParser'
+import { parseCSV, APP_FIELDS, DISTRICT_FIELDS, autoMatchHeaders, applyMapping, parseAllDistrictRows } from '../utils/importParser'
+import * as api from '../services/api'
 
 /**
  * ImportWizard - A 3-step modal for importing CSV data into the entity lot system.
@@ -14,12 +15,17 @@ import { parseCSV, APP_FIELDS, autoMatchHeaders, applyMapping } from '../utils/i
  */
 const ImportWizard = ({ isOpen, onClose }) => {
   const addLot = useStore(state => state.addLot)
+  const setDistrictParameter = useStore(state => state.setDistrictParameter)
+  const currentProject = useStore(state => state.currentProject)
+  const setScenarios = useStore(state => state.setScenarios)
+  const getSnapshotData = useStore(state => state.getSnapshotData)
 
   // Wizard state
   const [step, setStep] = useState(1)
   const [error, setError] = useState('')
   const [fileName, setFileName] = useState('')
   const [dragActive, setDragActive] = useState(false)
+  const [importType, setImportType] = useState('lot') // 'lot' | 'district'
 
   // Parsed data
   const [headers, setHeaders] = useState([])
@@ -40,6 +46,7 @@ const ImportWizard = ({ isOpen, onClose }) => {
 
   const processFile = useCallback((file) => {
     setError('')
+    setImportType('lot') // Reset default
 
     if (!file) return
 
@@ -76,11 +83,20 @@ const ImportWizard = ({ isOpen, onClose }) => {
         setHeaders(parsed.headers)
         setRows(parsed.rows)
 
-        // Auto-match headers and convert to index-based mapping
-        const headerMapping = autoMatchHeaders(parsed.headers)
+        // Auto-detect import type by comparing match counts
+        const lotHeaderMapping = autoMatchHeaders(parsed.headers, APP_FIELDS)
+        const districtHeaderMapping = autoMatchHeaders(parsed.headers, DISTRICT_FIELDS)
+        const lotMatchCount = Object.values(lotHeaderMapping).filter(v => v !== null).length
+        const districtMatchCount = Object.values(districtHeaderMapping).filter(v => v !== null).length
+
+        const detectedType = districtMatchCount > 0 && districtMatchCount > lotMatchCount ? 'district' : 'lot'
+        setImportType(detectedType)
+
+        // Use the winning mapping
+        const activeMapping = detectedType === 'district' ? districtHeaderMapping : lotHeaderMapping
         const indexMapping = {}
         parsed.headers.forEach((header, index) => {
-          indexMapping[index] = headerMapping[header] || null
+          indexMapping[index] = activeMapping[header] || null
         })
         setMapping(indexMapping)
 
@@ -143,31 +159,76 @@ const ImportWizard = ({ isOpen, onClose }) => {
     }))
   }, [])
 
-  // Get mapped lots preview data
-  const getMappedLots = useCallback(() => {
+  // Get mapped data preview — lots array or district scenarios array
+  const getMappedData = useCallback(() => {
+    if (importType === 'district') {
+      if (rows.length === 0) return []
+      return parseAllDistrictRows(rows, mapping)
+    }
     return applyMapping(rows, mapping)
-  }, [rows, mapping])
+  }, [rows, mapping, importType])
 
   // ============================================
   // Import Handler
   // ============================================
 
-  const handleImport = useCallback(() => {
-    const lots = getMappedLots()
+  const handleImport = useCallback(async () => {
+    const data = getMappedData()
 
-    if (lots.length === 0) {
-      setError('No valid data to import. Check your field mapping.')
-      return
+    if (importType === 'district') {
+      if (!data || data.length === 0) {
+        setError('No valid district parameters to import.')
+        return
+      }
+
+      if (currentProject) {
+        // Save each district as a scenario on the backend
+        try {
+          const baseState = getSnapshotData()
+          for (const district of data) {
+            await api.saveScenario(currentProject.id, district.name, {
+              code: district.code,
+              // Merge the imported districtParameters over the current base state
+              ...baseState,
+              districtParameters: {
+                ...baseState.districtParameters,
+                ...Object.fromEntries(
+                  Object.entries(district.districtParameters).reduce((acc, [dotPath, value]) => {
+                    acc.push([dotPath, value])
+                    return acc
+                  }, [])
+                ),
+              },
+            })
+          }
+          // Refresh scenario list in store
+          const updatedList = await api.listScenarios(currentProject.id)
+          setScenarios(updatedList)
+          setImportCount(data.length)
+        } catch (err) {
+          setError(`Failed to save scenarios: ${err.message}`)
+          return
+        }
+      } else {
+        // No project open — import first district's params directly into store
+        const first = data[0]
+        for (const [path, value] of Object.entries(first.districtParameters)) {
+          setDistrictParameter(path, value)
+        }
+        setImportCount(1)
+      }
+    } else {
+      if (!data || data.length === 0) {
+        setError('No valid data to import. Check your field mapping.')
+        return
+      }
+      for (const lotData of data) {
+        addLot(lotData)
+      }
+      setImportCount(data.length)
     }
-
-    // Create lots in the store
-    for (const lotData of lots) {
-      addLot(lotData)
-    }
-
-    setImportCount(lots.length)
     setImported(true)
-  }, [getMappedLots, addLot])
+  }, [getMappedData, addLot, setDistrictParameter, importType, currentProject, getSnapshotData, setScenarios])
 
   // ============================================
   // Reset / Close
@@ -183,6 +244,7 @@ const ImportWizard = ({ isOpen, onClose }) => {
     setMapping({})
     setImportCount(0)
     setImported(false)
+    setImportType('lot')
     onClose()
   }, [onClose])
 
@@ -196,6 +258,7 @@ const ImportWizard = ({ isOpen, onClose }) => {
       setHeaders([])
       setRows([])
       setMapping({})
+      setImportType('lot')
     }
   }, [step])
 
@@ -205,26 +268,37 @@ const ImportWizard = ({ isOpen, onClose }) => {
 
   if (!isOpen) return null
 
-  // Group APP_FIELDS by group for the dropdown
+  // Group fields by group for the dropdown (switches based on importType)
+  const activeFields = importType === 'district' ? DISTRICT_FIELDS : APP_FIELDS
   const fieldGroups = {}
-  for (const field of APP_FIELDS) {
+  for (const field of activeFields) {
     if (!fieldGroups[field.group]) fieldGroups[field.group] = []
     fieldGroups[field.group].push(field)
   }
 
   // Get a friendly label for a field key
   const getFieldLabel = (key) => {
-    const field = APP_FIELDS.find(f => f.key === key)
+    const field = activeFields.find(f => f.key === key)
     return field ? field.label : key
+  }
+
+  // Helper to switch import type and re-match headers
+  const switchImportType = (type) => {
+    setImportType(type)
+    const fields = type === 'district' ? DISTRICT_FIELDS : APP_FIELDS
+    const headerMapping = autoMatchHeaders(headers, fields)
+    const indexMapping = {}
+    headers.forEach((h, i) => { indexMapping[i] = headerMapping[h] || null })
+    setMapping(indexMapping)
   }
 
   // Count how many columns are mapped
   const mappedCount = Object.values(mapping).filter(v => v !== null).length
 
-  // Preview lots for step 3
-  const previewLots = step === 3 ? getMappedLots() : []
+  // Preview data for step 3 — always an array (districts or lots)
+  const previewData = step === 3 ? getMappedData() : []
 
-  // Get all field keys that are mapped (for preview table columns)
+  // Get all field keys that are mapped (for lot preview table columns)
   const mappedFieldKeys = step === 3
     ? [...new Set(Object.values(mapping).filter(v => v !== null))]
     : []
@@ -256,7 +330,7 @@ const ImportWizard = ({ isOpen, onClose }) => {
           <div className="flex items-center gap-3">
             <FileText size={18} style={{ color: 'var(--ui-accent)' }} />
             <h2 className="text-base font-semibold" style={{ color: 'var(--ui-text-primary)' }}>
-              Import CSV Data
+              {importType === 'district' ? 'Import District Parameters' : 'Import CSV Data'}
             </h2>
           </div>
           <div className="flex items-center gap-4">
@@ -316,7 +390,7 @@ const ImportWizard = ({ isOpen, onClose }) => {
           {step === 1 && (
             <div>
               <p className="text-sm mb-4" style={{ color: 'var(--ui-text-secondary)' }}>
-                Upload a CSV file to import lot data. Each row in the CSV will create a new lot.
+                Upload a CSV file to import data. Column headers will be auto-matched to fields.
               </p>
 
               {/* Drop Zone */}
@@ -374,9 +448,34 @@ const ImportWizard = ({ isOpen, onClose }) => {
           {/* Step 2: Field Mapping */}
           {step === 2 && (
             <div>
+              {/* Import Type Toggle */}
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs" style={{ color: 'var(--ui-text-secondary)' }}>Import as:</span>
+                <button
+                  onClick={() => switchImportType('lot')}
+                  className="text-xs px-2 py-1 rounded transition-colors"
+                  style={{
+                    backgroundColor: importType === 'lot' ? 'var(--ui-accent)' : 'var(--ui-bg-tertiary)',
+                    color: importType === 'lot' ? '#fff' : 'var(--ui-text-secondary)',
+                  }}
+                >
+                  Lot Data
+                </button>
+                <button
+                  onClick={() => switchImportType('district')}
+                  className="text-xs px-2 py-1 rounded transition-colors"
+                  style={{
+                    backgroundColor: importType === 'district' ? 'var(--ui-accent)' : 'var(--ui-bg-tertiary)',
+                    color: importType === 'district' ? '#fff' : 'var(--ui-text-secondary)',
+                  }}
+                >
+                  District Parameters
+                </button>
+              </div>
+
               <div className="flex items-center justify-between mb-4">
                 <p className="text-sm" style={{ color: 'var(--ui-text-secondary)' }}>
-                  Map CSV columns to lot parameters. {mappedCount} of {headers.length} columns mapped.
+                  Map CSV columns to {importType === 'district' ? 'district parameter' : 'lot'} fields. {mappedCount} of {headers.length} columns mapped.
                 </p>
                 {fileName && (
                   <span className="text-xs px-2 py-1 rounded" style={{
@@ -527,16 +626,59 @@ const ImportWizard = ({ isOpen, onClose }) => {
           )}
 
           {/* Step 3: Preview & Import */}
-          {step === 3 && !imported && (
+          {step === 3 && !imported && importType === 'district' && (
             <div>
-              <p className="text-sm mb-4" style={{ color: 'var(--ui-text-secondary)' }}>
-                {previewLots.length === 0
-                  ? 'No lots can be created with the current mapping. Go back and adjust your field mapping.'
-                  : `Ready to create ${previewLots.length} lot${previewLots.length !== 1 ? 's' : ''} with the following data:`
+              <p className="text-sm mb-3" style={{ color: 'var(--ui-text-secondary)' }}>
+                {previewData.length === 0
+                  ? 'No valid district rows found. Go back and adjust your field mapping.'
+                  : currentProject
+                    ? `Ready to create ${previewData.length} district scenario${previewData.length !== 1 ? 's' : ''} in this project:`
+                    : `No project open — only the first district will be imported into the current state.`
                 }
               </p>
 
-              {previewLots.length > 0 && (
+              {previewData.length > 0 && (
+                <div
+                  className="rounded border overflow-y-auto max-h-60 mb-4"
+                  style={{ borderColor: 'var(--ui-border)' }}
+                >
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr style={{ backgroundColor: 'var(--ui-bg-tertiary)' }}>
+                        <th className="text-left px-2 py-1.5 font-medium" style={{ color: 'var(--ui-text-secondary)' }}>#</th>
+                        <th className="text-left px-2 py-1.5 font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Name</th>
+                        <th className="text-left px-2 py-1.5 font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Code</th>
+                        <th className="text-right px-2 py-1.5 font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Params</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {previewData.map((district, i) => (
+                        <tr key={i} className="border-t" style={{ borderColor: 'var(--ui-border)' }}>
+                          <td className="px-2 py-1" style={{ color: 'var(--ui-text-secondary)' }}>{i + 1}</td>
+                          <td className="px-2 py-1 font-medium" style={{ color: 'var(--ui-text-primary)' }}>{district.name}</td>
+                          <td className="px-2 py-1" style={{ color: 'var(--ui-text-secondary)' }}>{district.code || '—'}</td>
+                          <td className="px-2 py-1 text-right" style={{ color: 'var(--ui-text-secondary)' }}>
+                            {Object.keys(district.districtParameters).length}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === 3 && !imported && importType !== 'district' && (
+            <div>
+              <p className="text-sm mb-4" style={{ color: 'var(--ui-text-secondary)' }}>
+                {previewData.length === 0
+                  ? 'No lots can be created with the current mapping. Go back and adjust your field mapping.'
+                  : `Ready to create ${previewData.length} lot${previewData.length !== 1 ? 's' : ''} with the following data:`
+                }
+              </p>
+
+              {previewData.length > 0 && (
                 <div
                   className="rounded border overflow-x-auto mb-4"
                   style={{ borderColor: 'var(--ui-border)' }}
@@ -562,7 +704,7 @@ const ImportWizard = ({ isOpen, onClose }) => {
                       </tr>
                     </thead>
                     <tbody>
-                      {previewLots.map((lot, index) => (
+                      {previewData.map((lot, index) => (
                         <tr
                           key={index}
                           className="border-t"
@@ -605,7 +747,12 @@ const ImportWizard = ({ isOpen, onClose }) => {
                 Import Complete
               </p>
               <p className="text-sm" style={{ color: 'var(--ui-text-secondary)' }}>
-                Successfully created {importCount} lot{importCount !== 1 ? 's' : ''}.
+                {importType === 'district'
+                  ? currentProject
+                    ? `Successfully created ${importCount} district scenario${importCount !== 1 ? 's' : ''}.`
+                    : `Imported district parameters into current state.`
+                  : `Successfully created ${importCount} lot${importCount !== 1 ? 's' : ''}.`
+                }
               </p>
             </div>
           )}
@@ -656,20 +803,26 @@ const ImportWizard = ({ isOpen, onClose }) => {
               </button>
             )}
 
-            {step === 3 && !imported && (
-              <button
-                onClick={handleImport}
-                disabled={previewLots.length === 0}
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded text-sm font-medium transition-opacity disabled:opacity-40"
-                style={{
-                  backgroundColor: 'var(--ui-accent)',
-                  color: '#fff',
-                }}
-              >
-                <Check size={14} />
-                Import {previewLots.length} Lot{previewLots.length !== 1 ? 's' : ''}
-              </button>
-            )}
+            {step === 3 && !imported && (() => {
+              const count = previewData.length
+              const label = importType === 'district'
+                ? `Create ${count} Scenario${count !== 1 ? 's' : ''}`
+                : `Import ${count} Lot${count !== 1 ? 's' : ''}`
+              return (
+                <button
+                  onClick={handleImport}
+                  disabled={count === 0}
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded text-sm font-medium transition-opacity disabled:opacity-40"
+                  style={{
+                    backgroundColor: 'var(--ui-accent)',
+                    color: '#fff',
+                  }}
+                >
+                  <Check size={14} />
+                  {label}
+                </button>
+              )
+            })()}
           </div>
         </div>
       </div>

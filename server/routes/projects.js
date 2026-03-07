@@ -84,6 +84,7 @@ router.post('/', async (req, res) => {
     await fs.mkdir(join(projectPath, 'models'))
     await fs.mkdir(join(projectPath, 'snapshots'))
     await fs.mkdir(join(projectPath, 'layer-states'))
+    await fs.mkdir(join(projectPath, 'scenarios'))
 
     const now = new Date().toISOString()
     const project = {

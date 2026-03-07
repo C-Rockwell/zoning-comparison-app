@@ -3,10 +3,12 @@ import { useThree } from '@react-three/fiber'
 import { Line, Edges } from '@react-three/drei'
 import { Select } from '@react-three/postprocessing'
 import * as THREE from 'three'
+import { useStore } from '../../store/useStore'
 import VertexHandle from '../LotEditor/VertexHandle'
 import MidpointHandle from '../LotEditor/MidpointHandle'
 import EdgeHandle from '../LotEditor/EdgeHandle'
 import HeightHandle from './HeightHandle'
+import MoveHandle from './MoveHandle'
 import PolygonBuilding from './PolygonBuilding'
 import RoofMesh from './RoofMesh'
 import Dimension from '../Dimension'
@@ -32,6 +34,7 @@ const BuildingEditor = ({
     // Building polygon state
     buildingGeometry,
     selected = false,
+    buildingType = 'principal',
     // Story system
     stories = 1,
     firstFloorHeight = 12,
@@ -53,21 +56,29 @@ const BuildingEditor = ({
     heightDimensionKey = 'buildingHeight',
     // Layout
     offsetGroupX = 0,
+    offsetGroupY = 0,
     // Callbacks
     onSelect,
-    onPositionChange,
     enableBuildingPolygonMode,
     updateBuildingVertex,
     splitBuildingEdge,
     extrudeBuildingEdge,
     setBuildingTotalHeight,
+    onBuildingMove,
 }) => {
     const { faces, edges } = styles
+    const maxHeightDimKey = buildingType === 'principal' ? 'principalMaxHeight' : 'accessoryMaxHeight'
     const [hovered, setHovered] = useState(false)
-    const [dragging, setDragging] = useState(false)
     const { controls } = useThree()
     const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), [])
     const planeIntersectPoint = new THREE.Vector3()
+
+    // Move mode state
+    const moveMode = useStore((s) => s.moveMode)
+    const setMoveTarget = useStore((s) => s.setMoveTarget)
+    const setMoveBasePoint = useStore((s) => s.setMoveBasePoint)
+    // Is this building the current move target?
+    const isMoveModeTarget = moveMode?.active && moveMode.targetType === 'building' && moveMode.targetLotId === model && moveMode.targetBuildingType === buildingType
 
     const isPolygon = buildingGeometry?.mode === 'polygon' && buildingGeometry?.vertices?.length >= 3
     const vertices = buildingGeometry?.vertices
@@ -141,36 +152,37 @@ const BuildingEditor = ({
     // ============================================
 
     const handlePointerDown = (e) => {
-        e.stopPropagation()
-        // Select building on click
-        if (onSelect) onSelect()
-        if (controls) controls.enabled = false
-        setDragging(true)
-        e.target.setPointerCapture(e.pointerId)
-    }
-
-    const handlePointerUp = (e) => {
-        e.stopPropagation()
-        setDragging(false)
-        if (controls) controls.enabled = true
-        e.target.releasePointerCapture(e.pointerId)
-    }
-
-    const handlePointerMove = (e) => {
-        if (!dragging) return
-        e.stopPropagation()
-
-        if (!e.ray.intersectPlane(plane, planeIntersectPoint)) return
-
-        const localX = planeIntersectPoint.x - offsetGroupX
-        const localY = planeIntersectPoint.y
-        const snappedX = Math.round(localX)
-        const snappedY = Math.round(localY)
-
-        if (onPositionChange && (snappedX !== x || snappedY !== y)) {
-            onPositionChange(snappedX, snappedY)
+        // Move mode: select object phase
+        if (moveMode?.active && moveMode.phase === 'selectObject') {
+            e.stopPropagation()
+            if (onSelect) onSelect()
+            setMoveTarget('building', model, buildingType, null)
+            return
         }
+
+        // Move mode: select base point phase
+        if (moveMode?.active && moveMode.phase === 'selectBase' && isMoveModeTarget) {
+            e.stopPropagation()
+            if (e.ray.intersectPlane(plane, planeIntersectPoint)) {
+                const localX = planeIntersectPoint.x - offsetGroupX
+                const localY = planeIntersectPoint.y - offsetGroupY
+                setMoveBasePoint([localX, localY], [x, y])
+            }
+            useStore.temporal.getState().pause()
+            if (controls) controls.enabled = false
+            return
+        }
+
+        // During moving phase, DON'T stopPropagation — let capture plane handle finalize
+        if (moveMode?.active) return
+
+        // Normal click: select building
+        e.stopPropagation()
+        if (onSelect) onSelect()
     }
+
+    const handlePointerUp = () => {}
+    const handlePointerMove = () => {}
 
     // ============================================
     // Handle callbacks for polygon editing
@@ -243,7 +255,8 @@ const BuildingEditor = ({
                     styles={styles}
                     lineScale={lineScale}
                     scaleFactor={scaleFactor}
-                    dragging={dragging}
+                    isMoveModeTarget={isMoveModeTarget}
+                    moveMode={moveMode}
                     onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
                     onPointerOut={() => setHovered(false)}
                     onPointerDown={handlePointerDown}
@@ -252,12 +265,15 @@ const BuildingEditor = ({
                 />
             ) : (
                 // Rectangle mode: use boxGeometry (existing behavior)
-                floors.map((floor, index) => (
+                floors.map((floor, index) => {
+                    const effectiveOpacity = isMoveModeTarget ? 0.7 : (moveMode?.active && moveMode.phase === 'selectObject') ? 0.8 : faces.opacity
+                    return (
                     <Select key={floor.index} enabled={hovered && index === 0}>
                         <mesh
                             position={[x, y, floor.zCenter]}
                             castShadow
                             receiveShadow
+                            renderOrder={4}
                             onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
                             onPointerOut={() => setHovered(false)}
                             onPointerDown={index === 0 ? handlePointerDown : undefined}
@@ -266,11 +282,11 @@ const BuildingEditor = ({
                         >
                             <boxGeometry args={[width, depth, floor.height]} />
                             <meshStandardMaterial
-                                color={dragging ? '#ffff00' : faces.color}
-                                transparent={true}
-                                opacity={dragging ? 0.8 : faces.opacity}
+                                color={isMoveModeTarget ? '#00ff88' : (moveMode?.active && moveMode.phase === 'selectObject') ? '#88ccff' : faces.color}
+                                transparent={effectiveOpacity < 1}
+                                opacity={effectiveOpacity}
                                 side={THREE.DoubleSide}
-                                depthWrite={faces.opacity >= 0.95}
+                                depthWrite={effectiveOpacity >= 0.95}
                                 roughness={0.7}
                                 metalness={0.1}
                             />
@@ -285,7 +301,8 @@ const BuildingEditor = ({
                             )}
                         </mesh>
                     </Select>
-                ))
+                    )
+                })
             )}
 
             {/* ============================================ */}
@@ -309,13 +326,13 @@ const BuildingEditor = ({
             {/* ============================================ */}
 
             {showMaxHeightPlane && maxHeight > 0 && (
-                <group position={[bounds.cx, bounds.cy, maxHeight]}>
-                    <mesh>
+                <group position={[bounds.cx, bounds.cy, maxHeight + 0.05]}>
+                    <mesh renderOrder={6}>
                         <planeGeometry args={[bounds.w, bounds.d]} />
                         <meshStandardMaterial
-                            color={maxHeightPlaneStyle.color || '#FF6B6B'}
+                            color={maxHeightPlaneStyle.color ?? '#FF6B6B'}
                             transparent={true}
-                            opacity={maxHeightPlaneStyle.opacity || 0.3}
+                            opacity={maxHeightPlaneStyle.opacity ?? 0.3}
                             side={THREE.DoubleSide}
                             depthWrite={false}
                         />
@@ -345,12 +362,30 @@ const BuildingEditor = ({
                 start={dimStart}
                 end={dimEnd}
                 label={resolveDimensionLabel(totalBuildingHeight, heightDimensionKey, dimensionSettings)}
-                offset={10}
+                offset={-10}
                 color="black"
                 visible={showHeightDimensions}
                 settings={dimensionSettings}
                 lineScale={lineScale}
+                plane="XZ"
+                textMode="billboard"
             />
+
+            {/* Max height dimension — offset further out, only when maxHeight is set */}
+            {showHeightDimensions && maxHeight > 0 && (
+                <Dimension
+                    start={dimStart}
+                    end={[dimStart[0], dimStart[1], maxHeight]}
+                    label={resolveDimensionLabel(maxHeight, maxHeightDimKey, dimensionSettings)}
+                    offset={-20}
+                    color="black"
+                    visible={true}
+                    settings={dimensionSettings}
+                    lineScale={lineScale}
+                    plane="XZ"
+                    textMode="billboard"
+                />
+            )}
 
             {/* ============================================ */}
             {/* Selection Handles (shown when selected) */}
@@ -407,6 +442,17 @@ const BuildingEditor = ({
                         offsetGroupX={offsetGroupX}
                     />
 
+                    {/* Move handle at ground level, 13ft in front of building */}
+                    <MoveHandle
+                        position={[bounds.cx, bounds.cy - bounds.d / 2]}
+                        zPosition={0}
+                        displayOffset={[0, -13]}
+                        offsetGroupX={offsetGroupX}
+                        offsetGroupY={offsetGroupY}
+                        onDrag={(newX, newY) => { if (onBuildingMove) onBuildingMove(newX, newY) }}
+                        onDragEnd={() => {}}
+                    />
+
                     {/* Footprint edge dimensions */}
                     {footprintEdges.map((edge) => (
                         <Dimension
@@ -424,17 +470,6 @@ const BuildingEditor = ({
                 </>
             )}
 
-            {/* Capture Plane for smooth dragging outside the box */}
-            {dragging && (
-                <mesh
-                    visible={false}
-                    position={[0, 0, 0]}
-                    onPointerMove={handlePointerMove}
-                    onPointerUp={handlePointerUp}
-                >
-                    <planeGeometry args={[1000, 1000]} />
-                </mesh>
-            )}
         </group>
     )
 }

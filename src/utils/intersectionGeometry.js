@@ -264,3 +264,113 @@ export function computeCornerZoneStack(roadA, roadB, corner, styles, sideA = 'ri
 
     return result
 }
+
+/**
+ * Computes the total fillet outer radius for one sub-corner of an intersection.
+ *
+ * Uses the same zone-merging logic as computeCornerZoneStack: gathers
+ * toward-lot zones from both roads, merges matching zone types by averaging
+ * depths, then sums all merged zone depths to get the total radius.
+ *
+ * @param {object} roadA - First road module data
+ * @param {object} roadB - Second road module data
+ * @param {'left' | 'right'} sideA - Which side of roadA
+ * @param {'left' | 'right'} sideB - Which side of roadB
+ * @returns {number} Total fillet outer radius (sum of all zone depths)
+ */
+export function computeFilletOuterRadius(roadA, roadB, sideA = 'right', sideB = 'right') {
+    let innerZonesA = computeZoneStack(roadA, sideA)
+    if (innerZonesA.length === 0) innerZonesA = computeZoneStack(roadA, sideA === 'right' ? 'left' : 'right')
+
+    let innerZonesB = computeZoneStack(roadB, sideB)
+    if (innerZonesB.length === 0) innerZonesB = computeZoneStack(roadB, sideB === 'right' ? 'left' : 'right')
+
+    const allZoneTypes = [
+        { type: 'TransitionZone', leftKey: 'leftTransitionZone', rightKey: 'rightTransitionZone' },
+        { type: 'Sidewalk', leftKey: 'leftSidewalk', rightKey: 'rightSidewalk' },
+        { type: 'Verge', leftKey: 'leftVerge', rightKey: 'rightVerge' },
+        { type: 'Parking', leftKey: 'leftParking', rightKey: 'rightParking' },
+    ]
+
+    let totalRadius = 0
+    for (const { type, leftKey, rightKey } of allZoneTypes) {
+        const zA = innerZonesA.find(z => z.zoneType === leftKey || z.zoneType === rightKey)
+        const zB = innerZonesB.find(z => z.zoneType === leftKey || z.zoneType === rightKey)
+        if (!zA && !zB) continue
+        let depth
+        if (zA && zB) {
+            depth = (zA.depth + zB.depth) / 2
+        } else if (zA) {
+            depth = zA.depth
+        } else {
+            depth = zB.depth
+        }
+        if (depth > 0) totalRadius += depth
+    }
+
+    return totalRadius
+}
+
+/**
+ * Creates a THREE.Shape rectangle with concave quarter-circle notches at corners.
+ *
+ * The shape is centered at origin (matching planeGeometry convention).
+ * For each corner with radius > 0, the sharp corner is replaced with a
+ * concave arc that curves inward, matching the fillet outer radius so the
+ * intersection fill and fillet arcs don't overlap.
+ *
+ * @param {number} w - Rectangle width
+ * @param {number} h - Rectangle height
+ * @param {{ topLeft: number, topRight: number, bottomLeft: number, bottomRight: number }} radii
+ *   Notch radius for each corner (0 = sharp corner)
+ * @param {number} segments - Number of arc segments per corner
+ * @returns {THREE.Shape} Shape centered at origin
+ */
+export function createNotchedRectShape(w, h, radii, segments = 16) {
+    const hw = w / 2
+    const hh = h / 2
+    const shape = new THREE.Shape()
+
+    const rTR = Math.min(radii.topRight ?? 0, hw, hh)
+    const rTL = Math.min(radii.topLeft ?? 0, hw, hh)
+    const rBL = Math.min(radii.bottomLeft ?? 0, hw, hh)
+    const rBR = Math.min(radii.bottomRight ?? 0, hw, hh)
+
+    // Start at top-right corner, trace clockwise
+    // Top edge: left to right
+    shape.moveTo(-hw + rTL, hh)
+    shape.lineTo(hw - rTR, hh)
+
+    // Top-right corner notch (concave: arc center at corner, curving inward)
+    if (rTR > 0) {
+        // Arc from (hw - rTR, hh) to (hw, hh - rTR), concave inward
+        shape.absarc(hw, hh, rTR, Math.PI, Math.PI * 1.5, false)
+    }
+
+    // Right edge: top to bottom
+    shape.lineTo(hw, -hh + rBR)
+
+    // Bottom-right corner notch
+    if (rBR > 0) {
+        shape.absarc(hw, -hh, rBR, Math.PI * 0.5, Math.PI, false)
+    }
+
+    // Bottom edge: right to left
+    shape.lineTo(-hw + rBL, -hh)
+
+    // Bottom-left corner notch
+    if (rBL > 0) {
+        shape.absarc(-hw, -hh, rBL, 0, Math.PI * 0.5, false)
+    }
+
+    // Left edge: bottom to top
+    shape.lineTo(-hw, hh - rTL)
+
+    // Top-left corner notch
+    if (rTL > 0) {
+        shape.absarc(-hw, hh, rTL, Math.PI * 1.5, Math.PI * 2, false)
+    }
+
+    shape.closePath()
+    return shape
+}

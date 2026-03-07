@@ -143,6 +143,52 @@ export async function deleteLayerState(projectId, name) {
   })
 }
 
+// ============ Style Presets ============
+
+export async function listStylePresets() {
+  return fetchJSON('/style-presets')
+}
+
+export async function saveStylePreset(name, presetData) {
+  return fetchJSON('/style-presets', {
+    method: 'POST',
+    body: JSON.stringify({ name, ...presetData })
+  })
+}
+
+export async function loadStylePreset(name) {
+  return fetchJSON(`/style-presets/${encodeURIComponent(name)}`)
+}
+
+export async function deleteStylePreset(name) {
+  return fetchJSON(`/style-presets/${encodeURIComponent(name)}`, {
+    method: 'DELETE'
+  })
+}
+
+// ============ Scenarios ============
+
+export async function listScenarios(projectId) {
+  return fetchJSON(`/projects/${encodeURIComponent(projectId)}/scenarios`)
+}
+
+export async function saveScenario(projectId, name, scenarioData) {
+  return fetchJSON(`/projects/${encodeURIComponent(projectId)}/scenarios`, {
+    method: 'POST',
+    body: JSON.stringify({ name, ...scenarioData })
+  })
+}
+
+export async function loadScenario(projectId, name) {
+  return fetchJSON(`/projects/${encodeURIComponent(projectId)}/scenarios/${encodeURIComponent(name)}`)
+}
+
+export async function deleteScenario(projectId, name) {
+  return fetchJSON(`/projects/${encodeURIComponent(projectId)}/scenarios/${encodeURIComponent(name)}`, {
+    method: 'DELETE'
+  })
+}
+
 // ============ Health Check ============
 
 export async function healthCheck() {

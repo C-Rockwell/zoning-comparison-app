@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore'
 import * as api from '../services/api'
 import { FolderOpen, Plus, Save, FolderCog, ChevronDown, Home } from 'lucide-react'
+import SunControls from './SunControls'
 
 const ProjectManager = () => {
   const navigate = useNavigate()
@@ -239,16 +240,14 @@ const ProjectManager = () => {
         </div>
 
         {/* Quick Save Button */}
-        {currentProject && (
-          <button
-            onClick={handleSaveProject}
-            disabled={loading || !hasUnsavedChanges}
-            title="Save Project"
-            className="p-1.5 hover-bg-secondary rounded transition-colors disabled:opacity-50"
-          >
-            <Save size={16} />
-          </button>
-        )}
+        <button
+          onClick={currentProject ? handleSaveProject : () => setShowNewProject(true)}
+          disabled={currentProject ? (loading || !hasUnsavedChanges) : false}
+          title={currentProject ? "Save Project" : "Save As New Project"}
+          className="p-1.5 hover-bg-secondary rounded transition-colors disabled:opacity-50"
+        >
+          <Save size={16} />
+        </button>
 
         {/* Module Switcher */}
         <div className="flex items-center gap-0.5 ml-4 rounded p-0.5" style={{ backgroundColor: 'var(--ui-bg-tertiary)' }}>
@@ -273,6 +272,9 @@ const ProjectManager = () => {
             District
           </button>
         </div>
+
+        {/* Sun Settings */}
+        <SunControls />
 
         {/* Project path display */}
         {currentProject && (

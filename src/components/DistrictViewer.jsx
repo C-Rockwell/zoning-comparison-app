@@ -3,6 +3,8 @@ import * as THREE from 'three'
 import { useStore } from '../store/useStore'
 import SharedCanvas from './SharedCanvas'
 import DistrictSceneContent from './DistrictSceneContent'
+import DrawingToolbar from './DrawingEditor/DrawingToolbar'
+import DrawingTextInput from './DrawingEditor/DrawingTextInput'
 
 // ============================================
 // DistrictViewer — main 3D viewer for the
@@ -186,6 +188,10 @@ const DistrictViewer = () => {
                     </button>
                 </div>
             </div>
+
+            {/* Drawing Editor Toolbar */}
+            <DrawingToolbar />
+            <DrawingTextInput />
 
             {/* 3D Canvas */}
             <SharedCanvas

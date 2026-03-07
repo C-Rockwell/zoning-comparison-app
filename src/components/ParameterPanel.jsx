@@ -1,4 +1,4 @@
-import { useStore, calculatePolygonArea } from '../store/useStore'
+import { useStore, calculatePolygonArea, DIMENSION_FONT_OPTIONS } from '../store/useStore'
 import { useStore as useZustandStore } from 'zustand'
 import { useState } from 'react'
 import { calculateRoofPitch } from '../utils/roofGeometry'
@@ -1426,13 +1426,83 @@ const ParameterPanel = () => {
                             <ControlRow label="Ext. Width">
                                 <SliderInput value={styleSettings.dimensionSettings?.extensionWidth ?? 0.5} onChange={(v) => setDimensionSetting('extensionWidth', v)} min={0.1} max={2} step={0.1} />
                             </ControlRow>
+                            <ControlRow label="Ext. Color">
+                                <div className="flex items-center gap-1">
+                                    <ColorPicker value={styleSettings.dimensionSettings?.extensionLineColor ?? styleSettings.dimensionSettings?.lineColor ?? '#000000'} onChange={(c) => setDimensionSetting('extensionLineColor', c)} />
+                                    <button
+                                        onClick={() => setDimensionSetting('extensionLineColor', null)}
+                                        className="text-[8px] px-1 py-0.5 rounded border"
+                                        style={{ borderColor: styleSettings.dimensionSettings?.extensionLineColor == null ? 'var(--ui-accent)' : 'var(--ui-border)', color: styleSettings.dimensionSettings?.extensionLineColor == null ? 'var(--ui-accent)' : 'var(--ui-text-muted)', backgroundColor: 'var(--ui-bg-primary)' }}
+                                        title="Use same color as main line"
+                                    >auto</button>
+                                </div>
+                            </ControlRow>
+                            <ControlRow label="Ext. Style">
+                                <div className="flex gap-1 text-[9px]">
+                                    {[{ key: 'dashed', label: 'Dashed' }, { key: 'solid', label: 'Solid' }].map(({ key, label }) => (
+                                        <button key={key}
+                                            onClick={() => setDimensionSetting('extensionLineStyle', key)}
+                                            className="px-2 py-0.5 rounded border"
+                                            style={{
+                                                backgroundColor: (styleSettings.dimensionSettings?.extensionLineStyle ?? 'dashed') === key ? 'var(--ui-accent)' : 'var(--ui-bg-primary)',
+                                                borderColor: (styleSettings.dimensionSettings?.extensionLineStyle ?? 'dashed') === key ? 'var(--ui-accent)' : 'var(--ui-border)',
+                                                color: (styleSettings.dimensionSettings?.extensionLineStyle ?? 'dashed') === key ? '#fff' : 'var(--ui-text-secondary)',
+                                            }}
+                                        >{label}</button>
+                                    ))}
+                                </div>
+                            </ControlRow>
+                            <ControlRow label="Marker Clr">
+                                <div className="flex items-center gap-1">
+                                    <ColorPicker value={styleSettings.dimensionSettings?.markerColor ?? styleSettings.dimensionSettings?.lineColor ?? '#000000'} onChange={(c) => setDimensionSetting('markerColor', c)} />
+                                    <button
+                                        onClick={() => setDimensionSetting('markerColor', null)}
+                                        className="text-[8px] px-1 py-0.5 rounded border"
+                                        style={{ borderColor: styleSettings.dimensionSettings?.markerColor == null ? 'var(--ui-accent)' : 'var(--ui-border)', color: styleSettings.dimensionSettings?.markerColor == null ? 'var(--ui-accent)' : 'var(--ui-text-muted)', backgroundColor: 'var(--ui-bg-primary)' }}
+                                        title="Use same color as main line"
+                                    >auto</button>
+                                </div>
+                            </ControlRow>
+                            <ControlRow label="Marker Scale">
+                                <SliderInput value={styleSettings.dimensionSettings?.markerScale ?? 1} onChange={(v) => setDimensionSetting('markerScale', v)} min={0.5} max={3} step={0.1} />
+                            </ControlRow>
                             <div className="my-1 pt-1" style={{ borderTop: '1px solid var(--ui-bg-primary)' }}>
+                                <ControlRow label="Font">
+                                    <select
+                                        value={styleSettings.dimensionSettings?.fontFamily ?? 'Inter'}
+                                        onChange={(e) => setDimensionSetting('fontFamily', e.target.value)}
+                                        className="w-full px-1 py-0.5 text-[9px] rounded focus:outline-none"
+                                        style={{ backgroundColor: 'var(--ui-bg-primary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-primary)' }}
+                                    >
+                                        {DIMENSION_FONT_OPTIONS.map(f => (
+                                            <option key={f.label} value={f.label}>{f.label}</option>
+                                        ))}
+                                    </select>
+                                </ControlRow>
                                 <ControlRow label="Outline Clr">
                                     <ColorPicker value={styleSettings.dimensionSettings?.outlineColor ?? '#ffffff'} onChange={(c) => setDimensionSetting('outlineColor', c)} />
                                 </ControlRow>
                                 <ControlRow label="Outline Wid">
                                     <SliderInput value={styleSettings.dimensionSettings?.outlineWidth ?? 0.1} onChange={(v) => setDimensionSetting('outlineWidth', v)} min={0} max={0.5} step={0.05} />
                                 </ControlRow>
+                                <ControlRow label="Text BG">
+                                    <input
+                                        type="checkbox"
+                                        checked={!!styleSettings.dimensionSettings?.textBackground?.enabled}
+                                        onChange={(e) => setDimensionSetting('textBackground', { ...(styleSettings.dimensionSettings?.textBackground ?? {}), enabled: e.target.checked })}
+                                        className="rounded accent-theme"
+                                    />
+                                </ControlRow>
+                                {styleSettings.dimensionSettings?.textBackground?.enabled && (
+                                    <>
+                                        <ControlRow label="BG Color">
+                                            <ColorPicker value={styleSettings.dimensionSettings?.textBackground?.color ?? '#ffffff'} onChange={(c) => setDimensionSetting('textBackground', { ...(styleSettings.dimensionSettings?.textBackground ?? {}), color: c })} />
+                                        </ControlRow>
+                                        <ControlRow label="BG Opacity">
+                                            <SliderInput value={styleSettings.dimensionSettings?.textBackground?.opacity ?? 0.85} onChange={(v) => setDimensionSetting('textBackground', { ...(styleSettings.dimensionSettings?.textBackground ?? {}), opacity: v })} min={0} max={1} step={0.05} />
+                                        </ControlRow>
+                                    </>
+                                )}
                             </div>
                             <div className="my-1 pt-1" style={{ borderTop: '1px solid var(--ui-bg-primary)' }}>
                                 <ControlRow label="Unit Format">
@@ -1469,6 +1539,34 @@ const ParameterPanel = () => {
                                         ))}
                                     </div>
                                 </ControlRow>
+                            </div>
+                            <div className="my-1 pt-1" style={{ borderTop: '1px solid var(--ui-bg-primary)' }}>
+                                <ControlRow label="Setbk Offset">
+                                    <SliderInput value={styleSettings.dimensionSettings?.setbackDimOffset ?? 5} onChange={(v) => setDimensionSetting('setbackDimOffset', v)} min={1} max={30} step={1} />
+                                </ControlRow>
+                                <ControlRow label="Lot Offset">
+                                    <SliderInput value={styleSettings.dimensionSettings?.lotDimOffset ?? 15} onChange={(v) => setDimensionSetting('lotDimOffset', v)} min={5} max={40} step={1} />
+                                </ControlRow>
+                                <ControlRow label="View Mode">
+                                    <div className="flex gap-1 text-[9px]">
+                                        {[{ key: false, label: '2D' }, { key: true, label: '3D Vert' }].map(({ key, label }) => (
+                                            <button key={String(key)}
+                                                onClick={() => setDimensionSetting('verticalMode', key)}
+                                                className="px-2 py-0.5 rounded border"
+                                                style={{
+                                                    backgroundColor: (styleSettings.dimensionSettings?.verticalMode ?? false) === key ? 'var(--ui-accent)' : 'var(--ui-bg-primary)',
+                                                    borderColor: (styleSettings.dimensionSettings?.verticalMode ?? false) === key ? 'var(--ui-accent)' : 'var(--ui-border)',
+                                                    color: (styleSettings.dimensionSettings?.verticalMode ?? false) === key ? '#fff' : 'var(--ui-text-secondary)',
+                                                }}
+                                            >{label}</button>
+                                        ))}
+                                    </div>
+                                </ControlRow>
+                                {styleSettings.dimensionSettings?.verticalMode && (
+                                    <ControlRow label="Vert. Height">
+                                        <SliderInput value={styleSettings.dimensionSettings?.verticalOffset ?? 20} onChange={(v) => setDimensionSetting('verticalOffset', v)} min={5} max={60} step={1} />
+                                    </ControlRow>
+                                )}
                             </div>
                         </SubSection>
 

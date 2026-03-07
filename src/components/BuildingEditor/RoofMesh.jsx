@@ -39,23 +39,24 @@ const RoofMesh = ({
 
     return (
         <group>
-            <mesh castShadow receiveShadow>
+            <mesh castShadow receiveShadow renderOrder={4}>
                 <primitive object={geometry} attach="geometry" />
                 <meshStandardMaterial
                     color={roofFaces.color}
-                    transparent={true}
+                    transparent={roofFaces.opacity < 1}
                     opacity={roofFaces.opacity}
-                    side={THREE.DoubleSide}
+                    side={THREE.FrontSide}
                     depthWrite={roofFaces.opacity >= 0.95}
                     roughness={0.7}
                     metalness={0.1}
+                    flatShading
                 />
                 {roofEdges.visible && (
                     <Edges
                         linewidth={roofEdges.width * scaleFactor * lineScale}
                         threshold={15}
                         color={roofEdges.color}
-                        transparent
+                        transparent={roofEdges.opacity < 1}
                         opacity={roofEdges.opacity}
                     />
                 )}

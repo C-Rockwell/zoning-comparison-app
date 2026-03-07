@@ -24,6 +24,23 @@ const AnnotationText = ({
     depthTest = true,
     visible = true,
 }) => {
+    // All hooks must come before any conditional return (Rules of Hooks)
+    const [textBounds, setTextBounds] = useState(null)
+    const handleSync = useCallback((troika) => {
+        if (troika?.geometry) {
+            troika.geometry.computeBoundingBox()
+            const box = troika.geometry.boundingBox
+            if (box) {
+                setTextBounds({
+                    width: box.max.x - box.min.x,
+                    height: box.max.y - box.min.y,
+                    centerX: (box.max.x + box.min.x) / 2,
+                    centerY: (box.max.y + box.min.y) / 2,
+                })
+            }
+        }
+    }, [])
+
     if (!visible || !text) return null
 
     const dampenedScale = Math.pow(lineScale, 0.15)
@@ -42,23 +59,6 @@ const AnnotationText = ({
         : rotation === 'fixed'
             ? fixedRotation
             : [0, 0, 0]
-
-    // Track text bounds for background sizing
-    const [textBounds, setTextBounds] = useState(null)
-    const handleSync = useCallback((troika) => {
-        if (troika?.geometry) {
-            troika.geometry.computeBoundingBox()
-            const box = troika.geometry.boundingBox
-            if (box) {
-                setTextBounds({
-                    width: box.max.x - box.min.x,
-                    height: box.max.y - box.min.y,
-                    centerX: (box.max.x + box.min.x) / 2,
-                    centerY: (box.max.y + box.min.y) / 2,
-                })
-            }
-        }
-    }, [])
 
     const bg = background?.enabled ? background : null
     const padding = bg?.padding ?? 0.3
