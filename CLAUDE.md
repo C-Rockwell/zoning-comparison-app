@@ -287,12 +287,15 @@ The `lotPositions` useMemo in `DistrictSceneContent.jsx` previously depended onl
 - Lots positioned in simple row layout (no arbitrary placement)
 - Fillet arc lines may appear slightly thicker than straight edges (drei Line2 artifact)
 - Comparison Module road intersections lack end-edge suppression
-- `origin/codex-fix` branch: abandoned unified polygon approach — do not use
 
 ## Git
 
 - **Remote**: https://github.com/C-Rockwell/zoning-comparison-app.git
-- **Branches**: `gemini-fix` (active), `main` (stable)
+- **Branches**: `main` only (all branches merged and cleaned up Mar 2026)
+
+## Desktop Launcher
+
+`ZoningApp.app` on the Desktop — double-click to start the dev servers and open the app in a browser automatically. Opens Terminal + waits 5s + opens `http://localhost:5173`. Right-click → Open the first time if macOS shows a security warning.
 
 ## User Shortcuts
 
