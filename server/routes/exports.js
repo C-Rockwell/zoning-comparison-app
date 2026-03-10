@@ -84,6 +84,26 @@ router.get('/:id/exports', async (req, res) => {
   }
 })
 
+// GET /api/projects/:id/exports/:filename - Serve individual export file
+router.get('/:id/exports/:filename.:ext', async (req, res) => {
+  try {
+    const projectsDir = await getProjectsDir(req)
+    const projectPath = join(projectsDir, req.params.id)
+    const filename = `${req.params.filename}.${req.params.ext}`
+    const ext = extname(filename).toLowerCase()
+    const folder = FOLDER_MAP[ext] || 'models'
+    const filePath = join(projectPath, folder, filename)
+
+    if (!existsSync(filePath)) {
+      return res.status(404).json({ error: 'File not found' })
+    }
+
+    res.sendFile(filePath)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // POST /api/projects/:id/exports - Save export file
 router.post('/:id/exports', upload.single('file'), async (req, res) => {
   try {
@@ -115,6 +135,7 @@ router.post('/:id/exports', upload.single('file'), async (req, res) => {
     const folderPath = join(projectPath, folder)
     const filePath = join(folderPath, filename)
 
+    await fs.mkdir(folderPath, { recursive: true })
     await fs.writeFile(filePath, data)
 
     const stat = await fs.stat(filePath)
@@ -135,11 +156,11 @@ router.post('/:id/exports', upload.single('file'), async (req, res) => {
 })
 
 // DELETE /api/projects/:id/exports/:filename - Delete export file
-router.delete('/:id/exports/:filename', async (req, res) => {
+router.delete('/:id/exports/:filename.:ext', async (req, res) => {
   try {
     const projectsDir = await getProjectsDir(req)
     const projectPath = join(projectsDir, req.params.id)
-    const filename = req.params.filename
+    const filename = `${req.params.filename}.${req.params.ext}`
 
     // Try to find file in images or models
     const ext = extname(filename).toLowerCase()

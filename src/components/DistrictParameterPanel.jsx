@@ -898,7 +898,7 @@ const ModelSetupSection = () => {
     const streetTypes = modelSetup.streetTypes ?? { front: 'S1', left: 'S1', right: 'S2', rear: 'S3' }
 
     return (
-        <Section title="Model Setup" icon={<Settings className="w-4 h-4" />} defaultOpen={true}>
+        <Section title="Model Setup" icon={<Settings className="w-4 h-4" />} defaultOpen={false}>
             {/* Number of Lots */}
             <div className="mb-3">
                 <label className="text-xs block mb-1" style={{ color: 'var(--ui-text-secondary)' }}>Number of Lots</label>
@@ -1008,6 +1008,7 @@ const LAYER_GROUPS = [
             { key: 'accessoryBuildings', label: 'Accessory Buildings' },
             { key: 'roof', label: 'Roof' },
             { key: 'maxHeightPlane', label: 'Max Height Plane' },
+            { key: 'importedModels', label: 'Imported Models' },
         ],
     },
     {
@@ -1061,7 +1062,7 @@ const LayersSection = () => {
     const toggleGroup = (id) => setOpenGroups(prev => ({ ...prev, [id]: !prev[id] }))
 
     return (
-        <Section title="Layers" icon={<Layers className="w-4 h-4" />} defaultOpen={true}>
+        <Section title="Layers" icon={<Layers className="w-4 h-4" />} defaultOpen={false}>
             <div className="space-y-1">
                 {LAYER_GROUPS.map((group) => (
                     <div key={group.id}>
@@ -1413,6 +1414,161 @@ const DistrictParametersSection = () => {
 // BUILDING & ROOF SECTION
 // ============================================
 
+// ============================================
+// MODEL IMPORT SECTION
+// ============================================
+
+const ModelImportSection = () => {
+    const lotIds = useLotIds()
+    const lots = useStore((s) => s.entities?.lots ?? {})
+    const currentProject = useStore((s) => s.currentProject)
+    const setImportedModel = useStore((s) => s.setImportedModel)
+    const removeImportedModel = useStore((s) => s.removeImportedModel)
+    const removeAllImportedModels = useStore((s) => s.removeAllImportedModels)
+    const setImportedModelUnits = useStore((s) => s.setImportedModelUnits)
+    const [selectedLot, setSelectedLot] = useState('all')
+    const [uploading, setUploading] = useState(false)
+    const fileInputRef = useRef(null)
+
+    const handleImport = async (e) => {
+        const file = e.target.files?.[0]
+        if (!file || !currentProject?.id) return
+
+        setUploading(true)
+        try {
+            await api.saveExportBinary(currentProject.id, file.name, file)
+            const targetLots = selectedLot === 'all' ? lotIds : [selectedLot]
+            for (const lotId of targetLots) {
+                setImportedModel(lotId, file.name)
+            }
+        } catch (err) {
+            console.error('IFC upload failed:', err)
+        }
+        setUploading(false)
+        if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+
+    if (lotIds.length === 0) {
+        return (
+            <Section title="Imported Models" icon={<Upload className="w-4 h-4" />} defaultOpen={false}>
+                <p className="text-xs italic" style={{ color: 'var(--ui-text-muted)' }}>No lots available.</p>
+            </Section>
+        )
+    }
+
+    return (
+        <Section title="Imported Models" icon={<Upload className="w-4 h-4" />} defaultOpen={false}>
+            {!currentProject?.id && (
+                <p className="text-xs italic mb-2" style={{ color: 'var(--ui-text-muted)' }}>
+                    Open a project to import models.
+                </p>
+            )}
+
+            <div className="space-y-2">
+                {/* Lot selector */}
+                <div className="flex items-center gap-2">
+                    <label className="text-xs whitespace-nowrap" style={{ color: 'var(--ui-text-muted)' }}>Target:</label>
+                    <select
+                        value={selectedLot}
+                        onChange={(e) => setSelectedLot(e.target.value)}
+                        className="flex-1 text-xs rounded px-1 py-0.5"
+                        style={{ background: 'var(--ui-input-bg)', color: 'var(--ui-text)', border: '1px solid var(--ui-border)' }}
+                    >
+                        <option value="all">All Lots</option>
+                        {lotIds.map((id, i) => (
+                            <option key={id} value={id}>Lot {i + 1}</option>
+                        ))}
+                    </select>
+                </div>
+
+                {/* Import button */}
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".ifc"
+                    onChange={handleImport}
+                    className="hidden"
+                />
+                <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={!currentProject?.id || uploading}
+                    className="w-full text-xs py-1 px-2 rounded flex items-center justify-center gap-1"
+                    style={{
+                        background: currentProject?.id ? 'var(--ui-accent)' : 'var(--ui-input-bg)',
+                        color: currentProject?.id ? '#fff' : 'var(--ui-text-muted)',
+                        border: '1px solid var(--ui-border)',
+                        opacity: uploading ? 0.5 : 1,
+                    }}
+                >
+                    <Upload className="w-3 h-3" />
+                    {uploading ? 'Uploading...' : 'Import IFC'}
+                </button>
+
+                {/* Delete All button */}
+                {lotIds.some(id => lots[id]?.importedModel) && (
+                    <button
+                        onClick={() => {
+                            if (window.confirm('Remove imported models from all lots?')) {
+                                removeAllImportedModels()
+                            }
+                        }}
+                        className="w-full text-xs py-1 px-2 rounded flex items-center justify-center gap-1"
+                        style={{
+                            background: 'var(--ui-input-bg)',
+                            color: '#ef4444',
+                            border: '1px solid var(--ui-border)',
+                        }}
+                    >
+                        <X className="w-3 h-3" />
+                        Delete All Models
+                    </button>
+                )}
+
+                {/* Per-lot status */}
+                {lotIds.map((lotId, i) => {
+                    const lot = lots[lotId]
+                    const model = lot?.importedModel
+                    if (!model) return null
+                    return (
+                        <div key={lotId} className="text-xs py-1 px-1 rounded space-y-1" style={{ background: 'var(--ui-input-bg)' }}>
+                            <div className="flex items-center justify-between">
+                                <span style={{ color: 'var(--ui-text)' }}>
+                                    Lot {i + 1}: <span style={{ color: 'var(--ui-text-muted)' }}>{model.filename}</span>
+                                </span>
+                                <button
+                                    onClick={() => removeImportedModel(lotId)}
+                                    className="p-0.5 rounded hover:bg-red-500/20"
+                                    style={{ color: 'var(--ui-text-muted)' }}
+                                    title="Remove model"
+                                >
+                                    <X className="w-3 h-3" />
+                                </button>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <label className="text-xs whitespace-nowrap" style={{ color: 'var(--ui-text-muted)' }}>Units:</label>
+                                <select
+                                    value={model.units ?? 'auto'}
+                                    onChange={(e) => setImportedModelUnits(lotId, e.target.value)}
+                                    className="flex-1 text-xs rounded px-1 py-0.5"
+                                    style={{ background: 'var(--ui-bg)', color: 'var(--ui-text)', border: '1px solid var(--ui-border)' }}
+                                >
+                                    <option value="auto">Auto</option>
+                                    <option value="meters">Meters</option>
+                                    <option value="feet">Feet</option>
+                                </select>
+                            </div>
+                        </div>
+                    )
+                })}
+            </div>
+        </Section>
+    )
+}
+
+// ============================================
+// BUILDING & ROOF SECTION
+// ============================================
+
 const BuildingRoofSection = () => {
     const lotIds = useLotIds()
     const activeLotId = useActiveLotId()
@@ -1428,7 +1584,7 @@ const BuildingRoofSection = () => {
 
     if (!lot || lotIds.length === 0) {
         return (
-            <Section title="Building & Roof" icon={<Building2 className="w-4 h-4" />} defaultOpen={true}>
+            <Section title="Building & Roof" icon={<Building2 className="w-4 h-4" />} defaultOpen={false}>
                 <p className="text-xs italic" style={{ color: 'var(--ui-text-muted)' }}>No lots available. Add a lot first.</p>
             </Section>
         )
@@ -1628,7 +1784,7 @@ const BuildingRoofSection = () => {
     }
 
     return (
-        <Section title="Building & Roof" icon={<Building2 className="w-4 h-4" />} defaultOpen={true}>
+        <Section title="Building & Roof" icon={<Building2 className="w-4 h-4" />} defaultOpen={false}>
             {/* Active lot indicator */}
             <div className="flex items-center justify-between mb-2">
                 <span className="text-xs" style={{ color: 'var(--ui-text-secondary)' }}>Active: <strong style={{ color: 'var(--ui-text-primary)' }}>{lotLabel}</strong></span>
@@ -1680,7 +1836,7 @@ const RoadModulesSection = () => {
         .map(([edge]) => edge)
 
     return (
-        <Section title="Road Module(s)" icon={<Route className="w-4 h-4" />} defaultOpen={true}>
+        <Section title="Road Module(s)" icon={<Route className="w-4 h-4" />} defaultOpen={false}>
             {/* Add road module button */}
             <div className="flex items-center gap-2 mb-2">
                 <span className="text-xs" style={{ color: 'var(--ui-text-secondary)' }}>Add road for:</span>
@@ -2578,7 +2734,7 @@ const InlineStyleControls = ({ lotId, category, style }) => {
     }
 
     // Mesh-only categories: only color + opacity (no line width/dashed)
-    const isMeshCategory = ['btzPlanes', 'lotAccessArrows', 'principalBuildingFaces', 'accessoryBuildingFaces', 'buildingFaces', 'roofFaces'].includes(category)
+    const isMeshCategory = ['lotFill', 'btzPlanes', 'lotAccessArrows', 'principalBuildingFaces', 'accessoryBuildingFaces', 'buildingFaces', 'roofFaces', 'importedModelFaces'].includes(category)
     // Hybrid categories: mesh controls (fill color/opacity) + line controls (lineColor/lineWidth/lineDashed)
     const isHybridCategory = ['maxHeightPlane', 'setbackFill'].includes(category)
 
@@ -2647,6 +2803,16 @@ const InlineStyleControls = ({ lotId, category, style }) => {
                         max={1}
                         step={0.05}
                     />
+                    {category === 'lotAccessArrows' && (
+                        <SliderInput
+                            label="Scale"
+                            value={style.scale ?? 1}
+                            onChange={(v) => handleChange('scale', v)}
+                            min={0.5}
+                            max={5}
+                            step={0.1}
+                        />
+                    )}
                 </div>
             ) : (
                 <LineStyleSelector
@@ -2746,7 +2912,7 @@ const ModelParametersSection = () => {
     }
 
     return (
-        <Section title="Model Parameters" defaultOpen={true} headerRight={
+        <Section title="Model Parameters" defaultOpen={false} headerRight={
             <button
                 onClick={toggleModelCollapseAll}
                 className="px-1.5 py-0.5 rounded text-[10px] transition-opacity hover:opacity-80"
@@ -2792,6 +2958,7 @@ const StylesSection = () => {
     if (!styleLotId || !entityStyles[styleLotId]) return null
 
     const styleCategories = [
+        { key: 'lotFill', label: 'Lot Fill' },
         { key: 'lotLines', label: 'Lot Lines' },
         { key: 'setbackFill', label: 'Setback Fill' },
         { key: 'setbacks', label: 'Setbacks' },
@@ -2806,6 +2973,8 @@ const StylesSection = () => {
         { key: 'accessoryBuildingFaces', label: 'Accessory Building Faces' },
         { key: 'roofFaces', label: 'Roof' },
         { key: 'maxHeightPlane', label: 'Max Height Plane' },
+        { key: 'importedModelFaces', label: 'Imported Model Faces' },
+        { key: 'importedModelEdges', label: 'Imported Model Edges' },
     ]
 
     const handleSavePreset = async (e) => {
@@ -3325,7 +3494,7 @@ const DimensionStylesSection = () => {
         <Section title="Dimensions" icon={<Settings className="w-4 h-4" />} defaultOpen={false}>
 
             {/* ── Line & Marker Styles ── */}
-            <DimSubSection title="Line & Marker Styles" defaultOpen={true}>
+            <DimSubSection title="Line & Marker Styles" defaultOpen={false}>
                 <ColorPicker
                     label="Line Color"
                     value={ds.lineColor ?? '#000000'}
@@ -3592,7 +3761,7 @@ const AnalyticsSection = () => {
     ]
 
     return (
-        <Section title="Analytics" icon={<BarChart3 className="w-4 h-4" />} defaultOpen={true}>
+        <Section title="Analytics" icon={<BarChart3 className="w-4 h-4" />} defaultOpen={false}>
             <div className="overflow-x-auto">
                 <table className="w-full text-xs border-collapse">
                     <thead>
@@ -3809,7 +3978,7 @@ const ScenariosSection = () => {
         <Section
             title="Scenarios"
             icon={<Hexagon className="w-4 h-4" />}
-            defaultOpen={true}
+            defaultOpen={false}
             headerRight={
                 <button
                     onClick={(e) => { e.stopPropagation(); setShowImportWizard(true) }}
@@ -3980,6 +4149,7 @@ const DistrictParameterPanel = () => {
                 <DimensionStylesSection />
                 <AnalyticsSection />
                 <BuildingRoofSection />
+                <ModelImportSection />
                 <RoadModulesSection />
                 <RoadModuleStylesSection />
                 <ViewsSection />

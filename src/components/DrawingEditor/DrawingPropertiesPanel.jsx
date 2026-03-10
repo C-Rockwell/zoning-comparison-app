@@ -121,7 +121,7 @@ const DrawingPropertiesPanel = () => {
     const showShape = allAreRoundedRect || allAreStar
 
     return (
-        <Section title="Drawing Properties" icon={<Settings2 size={16} />} defaultOpen={true}>
+        <Section title="Drawing Properties" icon={<Settings2 size={16} />} defaultOpen={false}>
             {/* Selection header */}
             <div className="text-[10px] font-medium px-1" style={{ color: 'var(--ui-text-secondary)' }}>
                 {selectionLabel}

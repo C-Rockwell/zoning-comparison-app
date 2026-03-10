@@ -162,6 +162,7 @@ export const createDefaultLot = (overrides = {}) => ({
     parking: { front: false, sideInterior: false, sideStreet: false, rear: false },
     // Parking setbacks (Model Parameters)
     parkingSetbacks: { front: null, sideInterior: null, sideStreet: null, rear: null },
+    importedModel: null, // { filename, x, y, rotation, scale } or null
     ...overrides,
 });
 
@@ -223,7 +224,9 @@ export const createDefaultLotStyle = (overrides = {}) => ({
             right: { enabled: false, color: '#FF9800', width: 1, dashed: true },
         }
     },
-    lotAccessArrows: { color: '#FF00FF', opacity: 1.0 },
+    lotAccessArrows: { color: '#FF00FF', opacity: 1.0, scale: 1 },
+    importedModelFaces: { color: '#D5D5D5', opacity: 1.0, transparent: true },
+    importedModelEdges: { color: '#000000', width: 1.5, visible: true, opacity: 1.0 },
     ...overrides,
 });
 
@@ -264,6 +267,7 @@ export const createDefaultLotVisibility = () => ({
     btzPlanes: true,
     accessorySetbacks: true,
     lotAccessArrows: true,
+    importedModel: true,
 });
 
 // Maps district parameter dot-paths to lot property setter functions (mutates lot in place)
@@ -649,6 +653,7 @@ export const useStore = create(
                         accessorySetbacks: true, // Accessory setback lines
                         lotAccessArrows: true,   // Lot access directional arrows
                         roadIntersections: true, // Road intersection fillet geometry
+                        importedModels: true, // Imported IFC models
                     },
                     exportRequested: false,
                     exportFormat: 'obj', // 'obj' | 'glb' | 'dae' | 'dxf' | 'png' | 'jpg' | 'svg'
@@ -1923,6 +1928,90 @@ export const useStore = create(
                             },
                         },
                     };
+                }),
+
+                // Imported model actions
+                setImportedModel: (lotId, filename) => set((state) => {
+                    const lot = state.entities.lots[lotId]
+                    if (!lot) return state
+                    const principal = lot.buildings?.principal
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    importedModel: {
+                                        filename,
+                                        x: principal?.x ?? 0,
+                                        y: principal?.y ?? 0,
+                                        rotation: 0,
+                                        scale: 1,
+                                        units: 'auto',
+                                    },
+                                },
+                            },
+                        },
+                    }
+                }),
+
+                setImportedModelUnits: (lotId, units) => set((state) => {
+                    const lot = state.entities.lots[lotId]
+                    if (!lot?.importedModel) return state
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    importedModel: { ...lot.importedModel, units },
+                                },
+                            },
+                        },
+                    }
+                }),
+
+                setImportedModelPosition: (lotId, newX, newY) => set((state) => {
+                    const lot = state.entities.lots[lotId]
+                    if (!lot?.importedModel) return state
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    importedModel: { ...lot.importedModel, x: newX, y: newY },
+                                },
+                            },
+                        },
+                    }
+                }),
+
+                removeImportedModel: (lotId) => set((state) => {
+                    const lot = state.entities.lots[lotId]
+                    if (!lot) return state
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: { ...lot, importedModel: null },
+                            },
+                        },
+                    }
+                }),
+
+                removeAllImportedModels: () => set((state) => {
+                    const newLots = { ...state.entities.lots }
+                    for (const lotId of state.entityOrder) {
+                        if (newLots[lotId]?.importedModel) {
+                            newLots[lotId] = { ...newLots[lotId], importedModel: null }
+                        }
+                    }
+                    return { entities: { ...state.entities, lots: newLots } }
                 }),
 
                 // Entity selection
@@ -3374,7 +3463,7 @@ export const useStore = create(
             }),
             {
                 name: 'zoning-app-storage',
-                version: 29, // v29: drawing editor foundation
+                version: 30, // v30: imported IFC models
                 migrate: (persistedState, version) => {
                     // Split dimensionsLot into dimensionsLotWidth and dimensionsLotDepth
                     if (persistedState.viewSettings && persistedState.viewSettings.layers && persistedState.viewSettings.layers.dimensionsLot !== undefined) {
@@ -4163,9 +4252,24 @@ export const useStore = create(
                         if (layers29 && layers29.drawingEditor === undefined) layers29.drawingEditor = true
                     }
 
+                    if (version < 30) {
+                        // v30: imported IFC models — patch lots missing importedModel
+                        const lots30 = persistedState.entities?.lots
+                        if (lots30) {
+                            for (const lotId of Object.keys(lots30)) {
+                                if (lots30[lotId].importedModel === undefined) {
+                                    lots30[lotId].importedModel = null
+                                }
+                            }
+                        }
+                        // Add importedModels layer
+                        const layers30 = persistedState.viewSettings?.layers
+                        if (layers30 && layers30.importedModels === undefined) layers30.importedModels = true
+                    }
+
                     return {
                         ...persistedState,
-                        version: 29
+                        version: 30
                     };
                 },
                 partialize: (state) => ({
@@ -4226,11 +4330,14 @@ export const useStore = create(
                             }
                         }
                     }
-                    // Patch missing lot data keys (parkingSetbacks) + reconcile with district params
+                    // Patch missing lot data keys (parkingSetbacks, importedModel) + reconcile with district params
                     if (merged.entities?.lots) {
                         const dp = merged.districtParameters;
                         for (const lotId of Object.keys(merged.entities.lots)) {
                             const lot = merged.entities.lots[lotId];
+                            if (lot.importedModel === undefined) {
+                                lot.importedModel = null;
+                            }
                             if (!lot.parkingSetbacks) {
                                 lot.parkingSetbacks = { front: null, sideInterior: null, sideStreet: null, rear: null };
                             }
@@ -4264,6 +4371,10 @@ export const useStore = create(
                                 merged.roadModuleStyles[key] = null;
                             }
                         }
+                    }
+                    // Patch importedModels layer key
+                    if (merged.viewSettings?.layers && merged.viewSettings.layers.importedModels === undefined) {
+                        merged.viewSettings.layers.importedModels = true;
                     }
                     // Reset transient batch export state on hydration
                     if (merged.viewSettings) {

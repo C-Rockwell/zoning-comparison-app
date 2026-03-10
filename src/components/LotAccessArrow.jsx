@@ -111,6 +111,7 @@ const LotAccessArrow = ({
     // Style prop takes precedence over color prop for backwards compat
     const color = styleProp?.color ?? colorProp ?? '#FF00FF'
     const opacity = styleProp?.opacity ?? 1.0
+    const scale = styleProp?.scale ?? 1
     const isTransparent = opacity < 1
     const [dragging, setDragging] = useState(false)
     const { controls } = useThree()
@@ -127,9 +128,9 @@ const LotAccessArrow = ({
     const planeIntersectPoint = useRef(new THREE.Vector3())
     const dragOffset = useRef(new THREE.Vector3())
 
-    // Create the arrow shape geometry (memoized)
+    // Create the arrow shape geometry (memoized, scaled width)
     const arrowGeometry = useMemo(() => {
-        const shape = createArrowShape(8, 4, 3, 1.5)
+        const shape = createArrowShape(8, 4 * scale, 3, 1.5 * scale)
         const geo = new THREE.ShapeGeometry(shape)
         // Center the geometry on its own center for easier rotation
         geo.computeBoundingBox()
@@ -137,12 +138,12 @@ const LotAccessArrow = ({
         geo.boundingBox.getCenter(center)
         geo.translate(-center.x, -center.y, 0)
         return geo
-    }, [])
+    }, [scale])
 
-    // Create the shared drive T-junction geometry (dynamic stem length based on lotDepth)
+    // Create the shared drive T-junction geometry (dynamic stem length based on lotDepth, scaled width)
     const sharedDriveGeometry = useMemo(() => {
         const stemLen = (lotDepth || 100) / 2
-        const shape = createSharedDriveShape(stemLen, 2, 14, 4, 2.5, 1.5)
+        const shape = createSharedDriveShape(stemLen, 2 * scale, 14 * scale, 4 * scale, 2.5, 1.5 * scale)
         const geo = new THREE.ShapeGeometry(shape)
         geo.computeBoundingBox()
         const center = new THREE.Vector3()
@@ -150,7 +151,7 @@ const LotAccessArrow = ({
         // Only center X — keep Y origin at bottom of stem so position Y = front edge
         geo.translate(-center.x, 0, 0)
         return geo
-    }, [lotDepth])
+    }, [lotDepth, scale])
 
     const isSharedDrive = direction === 'sharedDrive'
     const activeGeometry = isSharedDrive ? sharedDriveGeometry : arrowGeometry

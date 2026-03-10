@@ -7,6 +7,8 @@ import LotEditor from './LotEditor'
 import BuildingEditor from './BuildingEditor'
 import LotAnnotations from './LotAnnotations'
 import LotAccessArrow from './LotAccessArrow'
+import ImportedModelMesh from './ImportedModelMesh'
+import MoveHandle from './BuildingEditor/MoveHandle'
 import { formatDimension } from '../utils/formatUnits'
 
 // Helper: compute total building height from story data
@@ -668,6 +670,9 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
     const splitEntityEdge = useStore(state => state.splitEntityEdge)
     const extrudeEntityEdge = useStore(state => state.extrudeEntityEdge)
 
+    // Imported model actions
+    const setImportedModelPosition = useStore(state => state.setImportedModelPosition)
+
     // Annotation positions for draggable elements (lot access arrows, etc.)
     const annotationPositions = useStore(state => state.annotationPositions)
     const setAnnotationPosition = useStore(state => state.setAnnotationPosition)
@@ -888,6 +893,39 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     setBuildingTotalHeight={(_model, newHeight) => setEntityBuildingTotalHeight(lotId, 'accessory', newHeight)}
                     onBuildingMove={(newX, newY) => setEntityBuildingPosition(lotId, 'accessory', newX, newY)}
                 />
+            )}
+
+            {/* ============================================ */}
+            {/* Imported Model */}
+            {/* ============================================ */}
+            {layers.importedModels && visibility.importedModel && lot.importedModel && (
+                <>
+                    <ImportedModelMesh
+                        lotId={lotId}
+                        filename={lot.importedModel.filename}
+                        x={lot.importedModel.x}
+                        y={lot.importedModel.y}
+                        rotation={lot.importedModel.rotation ?? 0}
+                        scale={lot.importedModel.scale ?? 1}
+                        units={lot.importedModel.units ?? 'auto'}
+                        style={{
+                            faces: style.importedModelFaces,
+                            edges: style.importedModelEdges,
+                        }}
+                    />
+                    {principal?.selected && (
+                        <MoveHandle
+                            position={[lot.importedModel.x ?? 0, lot.importedModel.y ?? 0]}
+                            zPosition={0}
+                            displayOffset={[0, -13]}
+                            offsetGroupX={offset + lotWidth / 2}
+                            offsetGroupY={lotDepth / 2}
+                            onDrag={(newX, newY) => {
+                                useStore.getState().setImportedModelPosition(lotId, newX, newY)
+                            }}
+                        />
+                    )}
+                </>
             )}
 
             {/* ============================================ */}

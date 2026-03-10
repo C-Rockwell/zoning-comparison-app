@@ -216,8 +216,8 @@ AutoCAD-style 3-phase: selectObject → selectBase (pause undo, disable camera) 
 - **NEVER define components inside render functions** — causes React to unmount/remount on every render, triggering render loops and locking the app. Always define at module level. Use `DimSubSection`/`DimDivider` in `DistrictParameterPanel.jsx` as the correct pattern.
 - **NEVER put `return null` before hooks** — all `useState`, `useRef`, `useMemo`, `useCallback`, `useThree`, `useStore` etc. must come BEFORE any early return. Putting `if (!visible) return null` above hooks causes "Rendered more hooks than during the previous render" crash (white screen). Fixed in: `DraggableLabel.jsx`, `AnnotationText.jsx`, `RoadAnnotations.jsx`, `RoadModule.jsx`.
 
-## Style Categories (14)
-Lot Lines, Setback Fill, Setbacks, Accessory Setbacks, Max Setbacks, Parking Setbacks, BTZ Planes, Lot Access Arrows, Principal Building Edges/Faces, Accessory Building Edges/Faces, Roof, Max Height Plane
+## Style Categories (16)
+Lot Lines, Setback Fill, Setbacks, Accessory Setbacks, Max Setbacks, Parking Setbacks, BTZ Planes, Lot Access Arrows, Principal Building Edges/Faces, Accessory Building Edges/Faces, Roof, Max Height Plane, Imported Model Faces/Edges
 
 ## Backend API
 
@@ -280,10 +280,32 @@ Endpoints: `/api/health`, `/api/config` (GET/PUT), `/api/projects/:id` (CRUD), `
 
 The `lotPositions` useMemo in `DistrictSceneContent.jsx` previously depended only on `[lotIds]`, causing stale positions when lot widths changed via district parameter auto-population. Fixed by adding a `lotDimsKey` Zustand selector (serialized string of all lot widths/depths) as an additional dependency. Applied to both the main rendering positions and the `MoveModeCapturePlane` positions.
 
+## IFC Model Import (v30 — WORKING)
+
+**Status**: Import, rendering, edge display, and per-lot style controls all working. Models render with correct scale, orientation, and grounding. `removeAllImportedModels` action clears all lots at once.
+
+**Architecture**: `web-ifc@0.0.77` WASM parser → manual Three.js mesh building. No `web-ifc-three` (risks Three.js 0.182 incompatibility).
+
+**Files**:
+- `src/utils/ifcLoader.js` — WASM init + `loadIFCMeshes(url)` returns `{ positions, normals, indices, transform, color }[]`
+- `src/components/ImportedModelMesh.jsx` — R3F component: fetches IFC from backend, parses, builds BufferGeometry, auto-centers, meters→feet, Y-up→Z-up rotation
+- `src/components/DistrictParameterPanel.jsx` — `ModelImportSection` (after Building & Roof): lot selector, IFC upload, per-lot status/remove
+- `src/components/LotEntity.jsx` — renders `ImportedModelMesh` when `layers.importedModels && visibility.importedModel && lot.importedModel`
+- `server/routes/exports.js` — added `GET /:id/exports/:filename` route to serve files
+- `public/web-ifc.wasm` — WASM binary
+
+**Store (v30)**:
+- `createDefaultLot()`: `importedModel: null` (when set: `{ filename, x, y, rotation, scale }`)
+- `createDefaultLotVisibility()`: `importedModel: true`
+- `viewSettings.layers.importedModels: true`
+- `createDefaultLotStyle()`: `importedModelFaces: { color, opacity, transparent }`, `importedModelEdges: { color, width, visible, opacity }`
+- Actions: `setImportedModel(lotId, filename)`, `setImportedModelPosition(lotId, x, y)`, `removeImportedModel(lotId)`, `removeAllImportedModels()`
+- v30 migration + persist merge patches
+
+
 ## Known Limitations
 
 - Setback visualization: rectangular lots only (not polygon)
-- No 3D model import, no test suite
 - Lots positioned in simple row layout (no arbitrary placement)
 - Fillet arc lines may appear slightly thicker than straight edges (drei Line2 artifact)
 - Comparison Module road intersections lack end-edge suppression
@@ -304,3 +326,9 @@ The `lotPositions` useMemo in `DistrictSceneContent.jsx` previously depended onl
 ## RESOLVED BUG: Parking Setback Auto-Population (Feb 2026)
 
 **Fixed in v28**. Parking setback auto-population from district parameters now works. The v27 migration was permanently skipped due to HMR auto-saving the version before migration code was deployed. Fix: added district→lot parking reconciliation to both the persist `merge` function (runs every hydration, idempotent) and a v28 migration. Also fixed falsy-based checks (`!value` → `=== undefined`) in the entityStyles and roadModuleStyles merge patching for correctness.
+## Completed: Parallel Agent Tasks (Mar 2026)
+
+1. **All sidebar sections default collapsed** — every `<Section>` in `DistrictParameterPanel.jsx` + `DrawingPropertiesPanel.jsx` now has `defaultOpen={false}`
+2. **Lot Access Arrow width scale** — `scale: 1` default in `createDefaultLotStyle()`, slider (0.5–5) in Styles UI, applied to head/shaft widths in `LotAccessArrow.jsx`
+3. **Lot Fill in Styles section** — `lotFill` added to `styleCategories` (first entry) + `isMeshCategory` array
+4. **Imported Model move gizmo** — `MoveHandle` rendered next to `ImportedModelMesh` in `LotEntity.jsx`, wired to `setImportedModelPosition`. Gated by `principal?.selected` — only visible when the lot's principal building is selected (matches principal building MoveHandle pattern)
