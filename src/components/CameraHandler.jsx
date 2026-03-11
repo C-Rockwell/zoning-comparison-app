@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import * as THREE from 'three'
 import { useThree } from '@react-three/fiber'
 import CameraControlsImpl from 'camera-controls'
 import { useStore } from '../store/useStore'
@@ -8,7 +9,8 @@ const CameraHandler = ({ controlsRef }) => {
     const viewVersion = useStore((state) => state.viewSettings.viewVersion) // Trigger for updates
     const projection = useStore((state) => state.viewSettings.projection)
     const setProjection = useStore((state) => state.setProjection)
-    const { camera } = useThree()
+    const sceneBounds = useStore((state) => state.sceneBounds)
+    const { camera, gl } = useThree()
 
     useEffect(() => {
         if (!controlsRef.current) return
@@ -16,52 +18,68 @@ const CameraHandler = ({ controlsRef }) => {
         const controls = controlsRef.current
         const transition = true
 
-        // Note: We deliberately DO NOT force Perspective on Top/Front/Side views anymore.
-        // This allows the user to stay in their preferred mode (2D or 3D).
-        // ISO view default logic is handled in the switch case.
-
         // Enforce Z-Up always to prevent rotation issues
         camera.up.set(0, 0, 1)
         camera.updateProjectionMatrix()
 
+        // Scene bounds with defaults
+        const b = sceneBounds ?? { minX: -50, maxX: 50, minY: 0, maxY: 100, maxZ: 40 }
+
+        // Scene center
+        const cx = (b.minX + b.maxX) / 2
+        const cy = (b.minY + b.maxY) / 2
+        const cz = b.maxZ / 2
+
+        // Extents
+        const extX = Math.max(b.maxX - b.minX, 1)
+        const extY = Math.max(b.maxY - b.minY, 1)
+        const extZ = Math.max(b.maxZ, 1)
+
+        // Compute ortho zoom to fit worldW × worldH into canvas
+        const canvas = gl.domElement
+        const PADDING = 0.75
+        const fitZoom = (worldW, worldH) => {
+            const zoomW = canvas.clientWidth / worldW
+            const zoomH = canvas.clientHeight / worldH
+            return Math.min(zoomW, zoomH) * PADDING
+        }
+
         switch (cameraView) {
             case 'top':
-                // Top: Looking from +Z down
-                // Offset Y slightly to avoid gimbal lock singularity with Z-Up
-                // Center model at Y=50
-                controls.setLookAt(0, 49.99, 150, 0, 50, 0, transition)
-                // Orthographic Zoom Handling: Distance doesn't affect scale, Zoom does.
+                // Top: Looking from +Z down, slight Y offset to avoid gimbal lock
+                controls.setLookAt(cx, cy - 0.01, 150, cx, cy, 0, transition)
                 if (projection === 'orthographic') {
-                    controls.zoomTo(6, transition)
+                    controls.zoomTo(fitZoom(extX, extY), transition)
                 } else {
                     controls.zoomTo(1, transition)
                 }
                 break
             case 'front':
                 // Front: Looking from -Y (South) towards +Y
-                // Shift Pos/Target Y by +50.
-                controls.setLookAt(0, -50, 20, 0, 50, 20, transition)
-                if (projection === 'orthographic') controls.zoomTo(6, transition)
+                controls.setLookAt(cx, cy - 100, cz, cx, cy, cz, transition)
+                if (projection === 'orthographic') controls.zoomTo(fitZoom(extX, Math.max(extZ, extX * 0.4)), transition)
                 else controls.zoomTo(1, transition)
                 break
             case 'right': // East Side
-                // Shift Pos/Target Y by +50
-                controls.setLookAt(150, 50, 20, 0, 50, 20, transition)
-                if (projection === 'orthographic') controls.zoomTo(6, transition)
+                controls.setLookAt(cx + 150, cy, cz, cx, cy, cz, transition)
+                if (projection === 'orthographic') controls.zoomTo(fitZoom(extY, Math.max(extZ, extY * 0.4)), transition)
                 else controls.zoomTo(1, transition)
                 break
             case 'left': // West Side
-                // Shift Pos/Target Y by +50 (Pos Y was 0, now 50)
-                controls.setLookAt(-150, 50, 20, 0, 50, 20, transition)
-                if (projection === 'orthographic') controls.zoomTo(6, transition)
+                controls.setLookAt(cx - 150, cy, cz, cx, cy, cz, transition)
+                if (projection === 'orthographic') controls.zoomTo(fitZoom(extY, Math.max(extZ, extY * 0.4)), transition)
                 else controls.zoomTo(1, transition)
                 break
             case 'iso':
                 setProjection('orthographic')
-                // Iso: Balanced X, -Y, Z. Shift Y by +50.
-                // Orig Pos: 200, -200, 200. New Pos: 200, -150, 200.
-                controls.setLookAt(200, -150, 200, 0, 50, 0, transition)
-                controls.zoomTo(6, transition)
+                // Fixed direction vector — keeps angle constant regardless of model size
+                const dir = new THREE.Vector3(200, -150, 200).normalize()
+                const isoPos = new THREE.Vector3(cx, cy, 0).addScaledVector(dir, 300)
+                controls.setLookAt(isoPos.x, isoPos.y, isoPos.z, cx, cy, 0, transition)
+                // ISO projection: use larger of XY extents + height, with slight extra margin
+                const isoW = Math.max(extX, extY) * 1.15
+                const isoH = Math.max(Math.max(extX, extY) * 0.7 + extZ * 0.7, extZ)
+                controls.zoomTo(fitZoom(isoW, isoH), transition)
                 break
             default:
                 if (cameraView.startsWith('custom-')) {
@@ -80,7 +98,7 @@ const CameraHandler = ({ controlsRef }) => {
                 }
                 break
         }
-    }, [viewVersion, controlsRef, setProjection, camera, cameraView, projection]) // Depend on version
+    }, [viewVersion, controlsRef, setProjection, camera, cameraView, projection, sceneBounds, gl])
 
     // Remap mouse buttons: left=none (free for drawing), middle=orbit, right=pan (unchanged)
     useEffect(() => {

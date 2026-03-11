@@ -49,6 +49,10 @@ export const DISTRICT_FIELDS = [
   { key: 'lotWidthAtSetback.max', label: 'Max Width at Setback', group: 'Lot Dimensions' },
   { key: 'lotDepth.min', label: 'Min Lot Depth', group: 'Lot Dimensions' },
   { key: 'lotDepth.max', label: 'Max Lot Depth', group: 'Lot Dimensions' },
+  { key: 'widthToDepthRatio.min', label: 'Min W:D Ratio', group: 'Lot Dimensions' },
+  { key: 'widthToDepthRatio.max', label: 'Max W:D Ratio', group: 'Lot Dimensions' },
+  { key: 'maxImperviousSurface.min', label: 'Min Impervious Surface', group: 'Lot Dimensions' },
+  { key: 'maxImperviousSurface.max', label: 'Max Impervious Surface', group: 'Lot Dimensions' },
 
   // Setbacks - Principal
   { key: 'setbacksPrincipal.front.min', label: 'Min Front Setback', group: 'Setbacks Principal' },
@@ -73,6 +77,8 @@ export const DISTRICT_FIELDS = [
   { key: 'setbacksAccessory.sideInterior.max', label: 'Acc Max Side Interior', group: 'Setbacks Accessory' },
   { key: 'setbacksAccessory.sideStreet.min', label: 'Acc Min Side Street', group: 'Setbacks Accessory' },
   { key: 'setbacksAccessory.sideStreet.max', label: 'Acc Max Side Street', group: 'Setbacks Accessory' },
+  { key: 'setbacksAccessory.btzFront', label: 'Acc BTZ Front (%)', group: 'Setbacks Accessory' },
+  { key: 'setbacksAccessory.btzSideStreet', label: 'Acc BTZ Side Street (%)', group: 'Setbacks Accessory' },
   { key: 'setbacksAccessory.distanceBetweenBuildings.min', label: 'Acc Min Dist Between Bldgs', group: 'Setbacks Accessory' },
   { key: 'setbacksAccessory.distanceBetweenBuildings.max', label: 'Acc Max Dist Between Bldgs', group: 'Setbacks Accessory' },
 
@@ -546,4 +552,242 @@ export function parseAllDistrictRows(rows, mapping) {
   })
 
   return results
+}
+
+// ============================================
+// Transposed CSV Support
+// ============================================
+
+/**
+ * Row label → field path mapping for transposed CSVs.
+ * Organized by section header (ALL-CAPS row in col A).
+ *
+ * Field type defaults to 'minMax' (min col → path.min, max col → path.max).
+ * Override with { path, type } for special handling:
+ *  - 'single': use min col value only → path (no .min/.max)
+ *  - 'boolean': Y/N → boolean, min col only → path
+ *  - 'accessMinMax': min/max + auto-set permitted=true when any value present
+ */
+const TRANSPOSED_ROW_MAP = {
+  'LOT DIMENSIONS': {
+    'Lot Area': 'lotArea',
+    'Lot Coverage': 'lotCoverage',
+    'Lot Width': 'lotWidth',
+    'Lot Width at Setback': 'lotWidthAtSetback',
+    'Lot Depth': 'lotDepth',
+    'Width to Depth Ratio (%)': 'widthToDepthRatio',
+    'Max. Impervious Surface (%)': 'maxImperviousSurface',
+  },
+  'SETBACKS — PRINCIPAL STRUCTURE': {
+    'Front': 'setbacksPrincipal.front',
+    'Rear': 'setbacksPrincipal.rear',
+    'Side Interior': 'setbacksPrincipal.sideInterior',
+    'Side Street': 'setbacksPrincipal.sideStreet',
+    'Dist. Between Buildings': 'setbacksPrincipal.distanceBetweenBuildings',
+  },
+  'SETBACKS — ACCESSORY STRUCTURE': {
+    'Front': 'setbacksAccessory.front',
+    'Rear': 'setbacksAccessory.rear',
+    'Side Interior': 'setbacksAccessory.sideInterior',
+    'Side Street': 'setbacksAccessory.sideStreet',
+    'Dist. Between Buildings': 'setbacksAccessory.distanceBetweenBuildings',
+  },
+  'STRUCTURE DIMENSIONS — PRINCIPAL': {
+    'Height (max)': 'structures.principal.height',
+    'Stories (max)': 'structures.principal.stories',
+    'First Story Height (min)': 'structures.principal.firstStoryHeight',
+    'Upper Story Height': 'structures.principal.upperStoryHeight',
+  },
+  'STRUCTURE DIMENSIONS — ACCESSORY': {
+    'Height (max)': 'structures.accessory.height',
+    'Stories (max)': 'structures.accessory.stories',
+    'First Story Height (min)': 'structures.accessory.firstStoryHeight',
+    'Upper Story Height': 'structures.accessory.upperStoryHeight',
+  },
+  'BUILD-TO ZONE — PRINCIPAL': {
+    'Front (%)': { path: 'setbacksPrincipal.btzFront', type: 'single' },
+    'Side Street (%)': { path: 'setbacksPrincipal.btzSideStreet', type: 'single' },
+  },
+  'BUILD-TO ZONE — ACCESSORY': {
+    'Front (%)': { path: 'setbacksAccessory.btzFront', type: 'single' },
+    'Side Street (%)': { path: 'setbacksAccessory.btzSideStreet', type: 'single' },
+  },
+  'LOT ACCESS': {
+    'Primary Street (Front Street)': { path: 'lotAccess.primaryStreet', type: 'accessMinMax' },
+    'Secondary Street (Side Streets)': { path: 'lotAccess.secondaryStreet', type: 'accessMinMax' },
+    'Rear Alley': { path: 'lotAccess.rearAlley', type: 'accessMinMax' },
+    'Shared Drive': { path: 'lotAccess.sharedDrive', type: 'accessMinMax' },
+  },
+  'PARKING LOCATIONS': {
+    'Front': { path: 'parkingLocations.front.permitted', type: 'boolean' },
+    'Side Interior': { path: 'parkingLocations.sideInterior.permitted', type: 'boolean' },
+    'Side Street': { path: 'parkingLocations.sideStreet.permitted', type: 'boolean' },
+    'Rear': { path: 'parkingLocations.rear.permitted', type: 'boolean' },
+  },
+  'PARKING SETBACKS': {
+    'Front': { path: 'parkingLocations.front.min', type: 'single' },
+    'Side Interior': { path: 'parkingLocations.sideInterior.min', type: 'single' },
+    'Side Street': { path: 'parkingLocations.sideStreet.min', type: 'single' },
+    'Rear': { path: 'parkingLocations.rear.min', type: 'single' },
+  },
+}
+
+/**
+ * Parse a raw transposed cell value into a typed value.
+ * @param {string} rawValue
+ * @returns {number|boolean|null}
+ */
+function parseTransposedValue(rawValue) {
+  if (rawValue == null) return null
+  const trimmed = rawValue.trim()
+  if (trimmed === '' || trimmed.toLowerCase() === 'no minimum' || trimmed.toLowerCase() === 'n/a') return null
+  if (trimmed === 'Y' || trimmed === 'y') return true
+  if (trimmed === 'N' || trimmed === 'n') return false
+  // Strip % suffix
+  const stripped = trimmed.endsWith('%') ? trimmed.slice(0, -1).trim() : trimmed
+  const num = parseFloat(stripped)
+  return isNaN(num) ? null : num
+}
+
+/**
+ * Detect whether a parsed CSV is in transposed format (params as rows, districts as columns).
+ * @param {string[]} headers - CSV header row
+ * @param {string[][]} rows - CSV data rows
+ * @returns {boolean}
+ */
+export function detectTransposedFormat(headers, rows) {
+  if (!headers || headers.length === 0) return false
+  // Check if first header is "Parameter"
+  if (headers[0].toLowerCase().trim() === 'parameter') return true
+  // Check if any early row looks like an ALL-CAPS section header
+  for (let i = 0; i < Math.min(10, rows.length); i++) {
+    const row = rows[i]
+    if (!row || row.length === 0) continue
+    const firstCell = (row[0] || '').trim()
+    if (firstCell.length > 2 && firstCell === firstCell.toUpperCase() && /[A-Z]/.test(firstCell)) {
+      // Check remaining cols are empty
+      const restEmpty = row.slice(1).every(c => (c || '').trim() === '')
+      if (restEmpty) return true
+    }
+  }
+  return false
+}
+
+/**
+ * Parse a transposed CSV into district scenario objects.
+ *
+ * Expected layout:
+ *   Row 0 (headers): "Parameter", district short names...
+ *   Row 1 (rows[0]): "District Full Name", full names...
+ *   Row 2 (rows[1]): "", "Min", "Max", ...
+ *   Row 3+ (rows[2+]): section headers (ALL-CAPS) and data rows
+ *
+ * @param {string[]} headers
+ * @param {string[][]} rows
+ * @returns {Array<{ name: string, code: string, districtParameters: Object }>}
+ */
+export function parseTransposedCSV(headers, rows) {
+  if (!headers || headers.length < 2 || !rows || rows.length < 3) return []
+
+  // Build district column groups from headers
+  // headers[1+] are district short names, possibly repeated for min/max
+  const districts = []
+  const districtColMap = [] // index in headers → { districtIdx, isMin }
+
+  // Determine min/max sub-headers from rows[1]
+  const subHeaders = rows[1] || []
+
+  for (let col = 1; col < headers.length; col++) {
+    const shortName = (headers[col] || '').trim()
+    if (!shortName) continue
+    const sub = (subHeaders[col] || '').trim().toLowerCase()
+    const isMin = sub === 'min' || sub === '' // default to min if no sub-header
+    const isMax = sub === 'max'
+
+    // Find or create district entry
+    let districtIdx = districts.findIndex(d => d.code === shortName)
+    if (districtIdx === -1) {
+      const fullName = (rows[0]?.[col] || '').trim() || shortName
+      districts.push({ code: shortName, name: fullName, minCol: null, maxCol: null })
+      districtIdx = districts.length - 1
+    }
+
+    if (isMax) {
+      districts[districtIdx].maxCol = col
+    } else {
+      // First non-max col is min
+      if (districts[districtIdx].minCol === null) {
+        districts[districtIdx].minCol = col
+      }
+    }
+  }
+
+  // Initialize result objects
+  const results = districts.map(d => ({
+    name: d.name,
+    code: d.code,
+    districtParameters: {},
+  }))
+
+  // Walk data rows (starting from index 2, which is rows[2])
+  let currentSection = null
+
+  for (let r = 2; r < rows.length; r++) {
+    const row = rows[r]
+    if (!row) continue
+    const firstCell = (row[0] || '').trim()
+    if (!firstCell) continue // blank row
+
+    // Check if ALL-CAPS section header
+    if (firstCell === firstCell.toUpperCase() && /[A-Z]/.test(firstCell)) {
+      const restEmpty = row.slice(1).every(c => (c || '').trim() === '')
+      if (restEmpty) {
+        // Normalize section: replace various dashes with em-dash for matching
+        currentSection = firstCell.replace(/\s*[-–—]\s*/g, ' — ')
+        continue
+      }
+    }
+
+    if (!currentSection) continue
+    const sectionMap = TRANSPOSED_ROW_MAP[currentSection]
+    if (!sectionMap) continue
+
+    const fieldDef = sectionMap[firstCell]
+    if (!fieldDef) continue
+
+    // Resolve field config
+    const isString = typeof fieldDef === 'string'
+    const basePath = isString ? fieldDef : fieldDef.path
+    const fieldType = isString ? 'minMax' : fieldDef.type
+
+    // Apply value to each district
+    for (let di = 0; di < districts.length; di++) {
+      const d = districts[di]
+      const params = results[di].districtParameters
+      const minVal = d.minCol !== null ? parseTransposedValue(row[d.minCol]) : null
+      const maxVal = d.maxCol !== null ? parseTransposedValue(row[d.maxCol]) : null
+
+      switch (fieldType) {
+        case 'minMax':
+          if (minVal != null) params[`${basePath}.min`] = minVal
+          if (maxVal != null) params[`${basePath}.max`] = maxVal
+          break
+        case 'single':
+          if (minVal != null) params[basePath] = minVal
+          else if (maxVal != null) params[basePath] = maxVal
+          break
+        case 'boolean':
+          if (minVal != null) params[basePath] = minVal === true
+          break
+        case 'accessMinMax':
+          if (minVal != null) params[`${basePath}.min`] = minVal
+          if (maxVal != null) params[`${basePath}.max`] = maxVal
+          if (minVal != null || maxVal != null) params[`${basePath}.permitted`] = true
+          break
+      }
+    }
+  }
+
+  // Filter out districts with no params
+  return results.filter(r => Object.keys(r.districtParameters).length > 0)
 }

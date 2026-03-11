@@ -150,6 +150,7 @@ export const createDefaultLot = (overrides = {}) => ({
         },
         accessory: {
             front: null, rear: null, sideInterior: null, sideStreet: null,
+            btzFront: null, btzSideStreet: null,
         },
     },
     lotGeometry: { mode: 'rectangle', editing: false, vertices: null },
@@ -267,6 +268,60 @@ export const createDefaultRoadModule = (direction = 'front', type = 'S1', overri
     };
 };
 
+export const createDefaultDistrictParameters = () => ({
+    lotArea: { min: null, max: null },
+    lotCoverage: { min: null, max: null },
+    lotWidth: { min: null, max: null },
+    lotWidthAtSetback: { min: null, max: null },
+    lotDepth: { min: null, max: null },
+    widthToDepthRatio: { min: null, max: null },
+    maxImperviousSurface: { min: null, max: null },
+    setbacksPrincipal: {
+        front: { min: null, max: null },
+        btzFront: null,
+        rear: { min: null, max: null },
+        sideInterior: { min: null, max: null },
+        sideStreet: { min: null, max: null },
+        btzSideStreet: null,
+        distanceBetweenBuildings: { min: null, max: null },
+    },
+    setbacksAccessory: {
+        front: { min: null, max: null },
+        rear: { min: null, max: null },
+        sideInterior: { min: null, max: null },
+        sideStreet: { min: null, max: null },
+        btzFront: null,
+        btzSideStreet: null,
+        distanceBetweenBuildings: { min: null, max: null },
+    },
+    structures: {
+        principal: {
+            height: { min: null, max: null },
+            stories: { min: null, max: null },
+            firstStoryHeight: { min: null, max: null },
+            upperStoryHeight: { min: null, max: null },
+        },
+        accessory: {
+            height: { min: null, max: null },
+            stories: { min: null, max: null },
+            firstStoryHeight: { min: null, max: null },
+            upperStoryHeight: { min: null, max: null },
+        },
+    },
+    lotAccess: {
+        primaryStreet: { min: null, max: null, permitted: false },
+        secondaryStreet: { min: null, max: null, permitted: false },
+        rearAlley: { min: null, max: null, permitted: false },
+        sharedDrive: { min: null, max: null, permitted: false },
+    },
+    parkingLocations: {
+        front: { min: null, max: null, permitted: false },
+        sideInterior: { min: null, max: null, permitted: false },
+        sideStreet: { min: null, max: null, permitted: false },
+        rear: { min: null, max: null, permitted: false },
+    },
+});
+
 export const createDefaultLotVisibility = () => ({
     lotLines: true,
     setbacks: true,
@@ -302,6 +357,8 @@ const DISTRICT_TO_LOT_MAP = {
     'setbacksAccessory.rear.min': (lot, v) => { lot.setbacks.accessory.rear = v },
     'setbacksAccessory.sideInterior.min': (lot, v) => { lot.setbacks.accessory.sideInterior = v },
     'setbacksAccessory.sideStreet.min': (lot, v) => { lot.setbacks.accessory.sideStreet = v },
+    'setbacksAccessory.btzFront': (lot, v) => { lot.setbacks.accessory.btzFront = v },
+    'setbacksAccessory.btzSideStreet': (lot, v) => { lot.setbacks.accessory.btzSideStreet = v },
     'structures.principal.height.max': (lot, v) => { lot.buildings.principal.maxHeight = v },
     'structures.principal.stories.max': (lot, v) => { lot.buildings.principal.stories = v },
     'structures.principal.firstStoryHeight.min': (lot, v) => { lot.buildings.principal.firstFloorHeight = v },
@@ -500,6 +557,8 @@ export const useStore = create(
                     basePoint: null, // [x, y]
                     originalPosition: null, // [x, y]
                 },
+                // Scene bounds — transient, computed from DistrictSceneContent (excluded from persist/Zundo)
+                sceneBounds: null, // { minX, maxX, minY, maxY, maxZ }
                 entityStyles: {},     // { [lotId]: styleData }
                 lotVisibility: {},    // { [lotId]: per-parameter visibility }
                 modelSetup: {
@@ -559,56 +618,7 @@ export const useStore = create(
                 selectedDrawingIds: [],      // currently selected drawing object IDs
                 textEditState: null,         // { worldPosition, screenPosition, tool, targetPoint?, objectId } | null
 
-                districtParameters: {
-                    // Informational/reference fields — not visualized in 3D
-                    lotArea: { min: null, max: null },
-                    lotCoverage: { min: null, max: null },
-                    lotWidth: { min: null, max: null },
-                    lotWidthAtSetback: { min: null, max: null },
-                    lotDepth: { min: null, max: null },
-                    setbacksPrincipal: {
-                        front: { min: null, max: null },
-                        btzFront: null,
-                        rear: { min: null, max: null },
-                        sideInterior: { min: null, max: null },
-                        sideStreet: { min: null, max: null },
-                        btzSideStreet: null,
-                        distanceBetweenBuildings: { min: null, max: null },
-                    },
-                    setbacksAccessory: {
-                        front: { min: null, max: null },
-                        rear: { min: null, max: null },
-                        sideInterior: { min: null, max: null },
-                        sideStreet: { min: null, max: null },
-                        distanceBetweenBuildings: { min: null, max: null },
-                    },
-                    structures: {
-                        principal: {
-                            height: { min: null, max: null },
-                            stories: { min: null, max: null },
-                            firstStoryHeight: { min: null, max: null },
-                            upperStoryHeight: { min: null, max: null },
-                        },
-                        accessory: {
-                            height: { min: null, max: null },
-                            stories: { min: null, max: null },
-                            firstStoryHeight: { min: null, max: null },
-                            upperStoryHeight: { min: null, max: null },
-                        },
-                    },
-                    lotAccess: {
-                        primaryStreet: { min: null, max: null, permitted: false },
-                        secondaryStreet: { min: null, max: null, permitted: false },
-                        rearAlley: { min: null, max: null, permitted: false },
-                        sharedDrive: { min: null, max: null, permitted: false },
-                    },
-                    parkingLocations: {
-                        front: { min: null, max: null, permitted: false },
-                        sideInterior: { min: null, max: null, permitted: false },
-                        sideStreet: { min: null, max: null, permitted: false },
-                        rear: { min: null, max: null, permitted: false },
-                    },
-                },
+                districtParameters: createDefaultDistrictParameters(),
 
                 // Sun Settings (simple azimuth/altitude controls)
                 sunSettings: {
@@ -2032,6 +2042,33 @@ export const useStore = create(
                 // Entity selection
                 selectEntity: (lotId) => set({ activeEntityId: lotId }),
                 deselectEntity: () => set({ activeEntityId: null, selectedBuildingType: null }),
+
+                // Reset all data fields while preserving styles, annotations, drawings, etc.
+                resetDistrictAndModelParameters: () => set((state) => {
+                    const newLotId = generateEntityId('lot');
+                    const newLot = createDefaultLot();
+                    const newRoadId = generateEntityId('road');
+                    const newRoad = createDefaultRoadModule('front', 'S1');
+                    return {
+                        districtParameters: createDefaultDistrictParameters(),
+                        modelSetup: {
+                            numLots: 1,
+                            streetEdges: { front: true, left: false, right: false, rear: false },
+                            streetTypes: { front: 'S1', left: 'S1', right: 'S2', rear: 'S3' },
+                        },
+                        entities: {
+                            lots: { [newLotId]: newLot },
+                            roadModules: { [newRoadId]: newRoad },
+                        },
+                        entityOrder: [newLotId],
+                        entityStyles: { [newLotId]: createDefaultLotStyle() },
+                        lotVisibility: { [newLotId]: createDefaultLotVisibility() },
+                        stashedRoadModules: {},
+                        activeEntityId: null,
+                        selectedBuildingType: null,
+                    };
+                }),
+
                 selectEntityBuilding: (lotId, buildingType) => set((state) => {
                     // Deselect any previously selected building
                     const lots = { ...state.entities.lots };
@@ -2104,6 +2141,9 @@ export const useStore = create(
                 setMoveBasePoint: (point, originalPosition) => set((state) => ({
                     moveMode: { ...state.moveMode, phase: 'moving', basePoint: point, originalPosition }
                 })),
+
+                // Scene bounds (transient, computed by DistrictSceneContent)
+                setSceneBounds: (bounds) => set({ sceneBounds: bounds }),
 
                 // Entity building position
                 setEntityBuildingPosition: (lotId, buildingType, newX, newY) => set((state) => {
@@ -3560,7 +3600,7 @@ export const useStore = create(
             }),
             {
                 name: 'zoning-app-storage',
-                version: 30, // v30: imported IFC models
+                version: 31, // v31: accessory BTZ, W:D ratio, impervious surface
                 migrate: (persistedState, version) => {
                     // Split dimensionsLot into dimensionsLotWidth and dimensionsLotDepth
                     if (persistedState.viewSettings && persistedState.viewSettings.layers && persistedState.viewSettings.layers.dimensionsLot !== undefined) {
@@ -4364,9 +4404,32 @@ export const useStore = create(
                         if (layers30 && layers30.importedModels === undefined) layers30.importedModels = true
                     }
 
+                    if (version < 31) {
+                        // v31: accessory BTZ, W:D ratio, impervious surface
+                        const dp31 = persistedState.districtParameters
+                        if (dp31) {
+                            if (dp31.widthToDepthRatio === undefined) dp31.widthToDepthRatio = { min: null, max: null }
+                            if (dp31.maxImperviousSurface === undefined) dp31.maxImperviousSurface = { min: null, max: null }
+                            if (dp31.setbacksAccessory) {
+                                if (dp31.setbacksAccessory.btzFront === undefined) dp31.setbacksAccessory.btzFront = null
+                                if (dp31.setbacksAccessory.btzSideStreet === undefined) dp31.setbacksAccessory.btzSideStreet = null
+                            }
+                        }
+                        const lots31 = persistedState.entities?.lots
+                        if (lots31) {
+                            for (const lotId of Object.keys(lots31)) {
+                                const acc = lots31[lotId].setbacks?.accessory
+                                if (acc) {
+                                    if (acc.btzFront === undefined) acc.btzFront = null
+                                    if (acc.btzSideStreet === undefined) acc.btzSideStreet = null
+                                }
+                            }
+                        }
+                    }
+
                     return {
                         ...persistedState,
-                        version: 30
+                        version: 31
                     };
                 },
                 partialize: (state) => ({
@@ -4427,6 +4490,15 @@ export const useStore = create(
                             }
                         }
                     }
+                    // Patch missing district parameter keys (v31)
+                    if (merged.districtParameters) {
+                        if (merged.districtParameters.widthToDepthRatio === undefined) merged.districtParameters.widthToDepthRatio = { min: null, max: null };
+                        if (merged.districtParameters.maxImperviousSurface === undefined) merged.districtParameters.maxImperviousSurface = { min: null, max: null };
+                        if (merged.districtParameters.setbacksAccessory) {
+                            if (merged.districtParameters.setbacksAccessory.btzFront === undefined) merged.districtParameters.setbacksAccessory.btzFront = null;
+                            if (merged.districtParameters.setbacksAccessory.btzSideStreet === undefined) merged.districtParameters.setbacksAccessory.btzSideStreet = null;
+                        }
+                    }
                     // Patch missing lot data keys (parkingSetbacks, importedModel) + reconcile with district params
                     if (merged.entities?.lots) {
                         const dp = merged.districtParameters;
@@ -4438,6 +4510,11 @@ export const useStore = create(
                             // Patch missing sharedDriveLocation
                             if (lot.lotAccess && lot.lotAccess.sharedDriveLocation === undefined) {
                                 lot.lotAccess.sharedDriveLocation = 'front';
+                            }
+                            // Patch missing accessory BTZ fields (v31)
+                            if (lot.setbacks?.accessory) {
+                                if (lot.setbacks.accessory.btzFront === undefined) lot.setbacks.accessory.btzFront = null;
+                                if (lot.setbacks.accessory.btzSideStreet === undefined) lot.setbacks.accessory.btzSideStreet = null;
                             }
                             if (!lot.parkingSetbacks) {
                                 lot.parkingSetbacks = { front: null, sideInterior: null, sideStreet: null, rear: null };

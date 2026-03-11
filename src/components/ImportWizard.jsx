@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { Upload, FileText, ArrowRight, ArrowLeft, Check, X, AlertCircle } from 'lucide-react'
 import { useStore } from '../store/useStore'
-import { parseCSV, APP_FIELDS, DISTRICT_FIELDS, autoMatchHeaders, applyMapping, parseAllDistrictRows } from '../utils/importParser'
+import { parseCSV, APP_FIELDS, DISTRICT_FIELDS, autoMatchHeaders, applyMapping, parseAllDistrictRows, detectTransposedFormat, parseTransposedCSV } from '../utils/importParser'
 import * as api from '../services/api'
 
 /**
@@ -18,6 +18,7 @@ const ImportWizard = ({ isOpen, onClose }) => {
   const setDistrictParameter = useStore(state => state.setDistrictParameter)
   const currentProject = useStore(state => state.currentProject)
   const setScenarios = useStore(state => state.setScenarios)
+  const setActiveScenario = useStore(state => state.setActiveScenario)
   const getSnapshotData = useStore(state => state.getSnapshotData)
 
   // Wizard state
@@ -33,6 +34,10 @@ const ImportWizard = ({ isOpen, onClose }) => {
 
   // Field mapping: column index -> app field key (or null for skip)
   const [mapping, setMapping] = useState({})
+
+  // Transposed format
+  const [isTransposed, setIsTransposed] = useState(false)
+  const [transposedData, setTransposedData] = useState([])
 
   // Import result
   const [importCount, setImportCount] = useState(0)
@@ -82,6 +87,16 @@ const ImportWizard = ({ isOpen, onClose }) => {
 
         setHeaders(parsed.headers)
         setRows(parsed.rows)
+
+        // Check for transposed format first
+        if (detectTransposedFormat(parsed.headers, parsed.rows)) {
+          setIsTransposed(true)
+          const tData = parseTransposedCSV(parsed.headers, parsed.rows)
+          setTransposedData(tData)
+          setImportType('district')
+          setStep(3) // Skip mapping step
+          return
+        }
 
         // Auto-detect import type by comparing match counts
         const lotHeaderMapping = autoMatchHeaders(parsed.headers, APP_FIELDS)
@@ -161,12 +176,13 @@ const ImportWizard = ({ isOpen, onClose }) => {
 
   // Get mapped data preview — lots array or district scenarios array
   const getMappedData = useCallback(() => {
+    if (isTransposed) return transposedData
     if (importType === 'district') {
       if (rows.length === 0) return []
       return parseAllDistrictRows(rows, mapping)
     }
     return applyMapping(rows, mapping)
-  }, [rows, mapping, importType])
+  }, [rows, mapping, importType, isTransposed, transposedData])
 
   // ============================================
   // Import Handler
@@ -186,24 +202,32 @@ const ImportWizard = ({ isOpen, onClose }) => {
         try {
           const baseState = getSnapshotData()
           for (const district of data) {
+            // Build properly nested districtParameters for this district
+            const nestedParams = JSON.parse(JSON.stringify(baseState.districtParameters))
+            for (const [dotPath, value] of Object.entries(district.districtParameters)) {
+              const keys = dotPath.split('.')
+              let obj = nestedParams
+              for (let i = 0; i < keys.length - 1; i++) {
+                if (!obj[keys[i]]) obj[keys[i]] = {}
+                obj = obj[keys[i]]
+              }
+              obj[keys[keys.length - 1]] = value
+            }
             await api.saveScenario(currentProject.id, district.name, {
               code: district.code,
-              // Merge the imported districtParameters over the current base state
               ...baseState,
-              districtParameters: {
-                ...baseState.districtParameters,
-                ...Object.fromEntries(
-                  Object.entries(district.districtParameters).reduce((acc, [dotPath, value]) => {
-                    acc.push([dotPath, value])
-                    return acc
-                  }, [])
-                ),
-              },
+              districtParameters: nestedParams,
             })
           }
           // Refresh scenario list in store
           const updatedList = await api.listScenarios(currentProject.id)
           setScenarios(updatedList)
+          // Apply first district's params to live store and activate it
+          const first = data[0]
+          for (const [path, value] of Object.entries(first.districtParameters)) {
+            setDistrictParameter(path, value)
+          }
+          setActiveScenario(first.name)
           setImportCount(data.length)
         } catch (err) {
           setError(`Failed to save scenarios: ${err.message}`)
@@ -245,13 +269,26 @@ const ImportWizard = ({ isOpen, onClose }) => {
     setImportCount(0)
     setImported(false)
     setImportType('lot')
+    setIsTransposed(false)
+    setTransposedData([])
     onClose()
   }, [onClose])
 
   const handleBack = useCallback(() => {
     setError('')
     if (step === 3) {
-      setStep(2)
+      if (isTransposed) {
+        // Transposed skips step 2, go back to step 1
+        setStep(1)
+        setFileName('')
+        setHeaders([])
+        setRows([])
+        setIsTransposed(false)
+        setTransposedData([])
+        setImportType('lot')
+      } else {
+        setStep(2)
+      }
     } else if (step === 2) {
       setStep(1)
       setFileName('')
@@ -260,7 +297,7 @@ const ImportWizard = ({ isOpen, onClose }) => {
       setMapping({})
       setImportType('lot')
     }
-  }, [step])
+  }, [step, isTransposed])
 
   // ============================================
   // Render Helpers

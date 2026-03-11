@@ -1,10 +1,10 @@
-import { useMemo, useCallback } from 'react'
+import { useMemo, useCallback, useEffect } from 'react'
 import * as THREE from 'three'
 import { useThree } from '@react-three/fiber'
 import { useStore } from '../store/useStore'
 import { useLotIds, useRoadModules, getLotData } from '../hooks/useEntityStore'
 import { useShallow } from 'zustand/react/shallow'
-import LotEntity from './LotEntity'
+import LotEntity, { computeTotalHeight } from './LotEntity'
 import RoadModule from './RoadModule'
 import RoadAnnotations from './RoadAnnotations'
 import RoadIntersectionFillet from './RoadIntersectionFillet'
@@ -641,6 +641,42 @@ const DistrictSceneContent = () => {
             }
         })
     }, [lotPositions, activeRoadDirs])
+
+    // Publish scene bounds for dynamic camera fitting
+    const setSceneBounds = useStore((s) => s.setSceneBounds)
+    useEffect(() => {
+        if (lotPositions.length === 0) return
+        // Get road ROWs from EntityRoadModules memo data
+        let fROW = 0, rROW = 0, lROW = 0, rROW2 = 0
+        let left = Infinity, right = -Infinity, maxD = 0
+        for (const lp of lotPositions) {
+            if (lp.leftEdge < left) left = lp.leftEdge
+            if (lp.rightEdge > right) right = lp.rightEdge
+            const lot = getLotData(lp.lotId)
+            const depth = lot?.lotDepth ?? 100
+            if (depth > maxD) maxD = depth
+        }
+        for (const road of Object.values(roadModulesState)) {
+            if (!road.enabled) continue
+            const row = road.rightOfWay || 0
+            if (road.direction === 'front') fROW = Math.max(fROW, row)
+            if (road.direction === 'rear') rROW = Math.max(rROW, row)
+            if (road.direction === 'left') lROW = Math.max(lROW, row)
+            if (road.direction === 'right') rROW2 = Math.max(rROW2, row)
+        }
+        const minX = left - lROW
+        const maxX = right + rROW2
+        const minY = -fROW
+        const maxY = maxD + rROW
+        let maxZ = 0
+        for (const lp of lotPositions) {
+            const lot = getLotData(lp.lotId)
+            if (lot?.buildings?.principal) maxZ = Math.max(maxZ, computeTotalHeight(lot.buildings.principal))
+            if (lot?.buildings?.accessory) maxZ = Math.max(maxZ, computeTotalHeight(lot.buildings.accessory))
+        }
+        maxZ = Math.max(maxZ, 20)
+        setSceneBounds({ minX, maxX, minY, maxY, maxZ })
+    }, [lotPositions, roadModulesState, setSceneBounds])
 
     // Move mode state
     const moveMode = useStore((s) => s.moveMode)

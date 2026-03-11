@@ -241,6 +241,7 @@
 | `regenerateEntityBuilding` | ~1630 | `(lotId, buildingType)` — restore defaults |
 | `selectEntity` | 1662 | `(lotId)` |
 | `deselectEntity` | 1663 | `()` |
+| `resetDistrictAndModelParameters` | ~2037 | `()` — clears data fields, preserves styles/drawings |
 
 ### District Module — Building Selection & Editing
 | Action | ~Line | Signature |

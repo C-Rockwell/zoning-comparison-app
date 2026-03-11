@@ -110,6 +110,8 @@ const DISTRICT_REF_MAP = {
     'Lot Dimensions': {
         'Lot Width (ft)': (dp) => dp?.lotWidth?.min,
         'Lot Depth (ft)': (dp) => dp?.lotDepth?.min,
+        'W:D Ratio (%)': (dp) => dp?.widthToDepthRatio?.max,
+        'Max Imperv. (%)': (dp) => dp?.maxImperviousSurface?.max,
     },
     'Setbacks Principle': {
         'Front (ft)': (dp) => dp?.setbacksPrincipal?.front?.min,
@@ -126,6 +128,8 @@ const DISTRICT_REF_MAP = {
         'Rear (ft)': (dp) => dp?.setbacksAccessory?.rear?.min,
         'Side, Interior (ft)': (dp) => dp?.setbacksAccessory?.sideInterior?.min,
         'Side, Street (ft)': (dp) => dp?.setbacksAccessory?.sideStreet?.min,
+        'BTZ - Front (%)': (dp) => dp?.setbacksAccessory?.btzFront,
+        'BTZ - Side, Street (%)': (dp) => dp?.setbacksAccessory?.btzSideStreet,
     },
     'Structures Principal': {
         'Height': (dp) => dp?.structures?.principal?.height?.max,
@@ -165,6 +169,8 @@ const ANALYTICS_REF_MAP = {
     'Coverage': (dp) => dp?.lotCoverage?.max,
     'GFA': null,
     'FAR': null,
+    'W:D Ratio': (dp) => dp?.widthToDepthRatio?.max,
+    'Imperv. Surface': (dp) => dp?.maxImperviousSurface?.max,
 }
 
 /** District parameter min/max pair input */
@@ -265,6 +271,22 @@ const ModelParametersTable = ({ collapseKey, allModelCollapsed }) => {
                     setValue: (lotId, v) => updateLotParam(lotId, 'lotDepth', v),
                     type: 'number', min: 1,
                 },
+                {
+                    label: 'W:D Ratio (%)',
+                    visKey: null,
+                    getValue: (lot) => {
+                        const w = lot.lotWidth ?? 0
+                        const d = lot.lotDepth ?? 0
+                        return d > 0 ? ((w / d) * 100) : null
+                    },
+                    type: 'computed',
+                },
+                {
+                    label: 'Max Imperv. (%)',
+                    visKey: null,
+                    getValue: () => null,
+                    type: 'computed',
+                },
             ],
         },
         {
@@ -362,6 +384,21 @@ const ModelParametersTable = ({ collapseKey, allModelCollapsed }) => {
                     getValue: (lot) => lot.setbacks?.accessory?.sideStreet,
                     setValue: (lotId, v) => updateLotSetback(lotId, 'accessory', 'sideStreet', v),
                     type: 'number', min: 0,
+                },
+                {
+                    label: 'BTZ - Front (%)',
+                    visKey: 'btzPlanes',
+                    getValue: (lot) => lot.setbacks?.accessory?.btzFront,
+                    setValue: (lotId, v) => updateLotSetback(lotId, 'accessory', 'btzFront', v),
+                    type: 'number', min: 0, max: 100,
+                },
+                {
+                    label: 'BTZ - Side, Street (%)',
+                    visKey: 'btzPlanes',
+                    cornerOnly: true,
+                    getValue: (lot) => lot.setbacks?.accessory?.btzSideStreet,
+                    setValue: (lotId, v) => updateLotSetback(lotId, 'accessory', 'btzSideStreet', v),
+                    type: 'number', min: 0, max: 100,
                 },
             ],
         },
@@ -1143,7 +1180,7 @@ const DistrictParametersSection = () => {
     const [collapsed, setCollapsed] = useState({})
     const [showImportWizard, setShowImportWizard] = useState(false)
     const toggle = (key) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))
-    const allDistrictKeys = ['lotDimensions', 'setbacksPrincipal', 'setbacksAccessory', 'structures', 'lotAccess', 'parkingLocations']
+    const allDistrictKeys = ['lotDimensions', 'setbacksPrincipal', 'setbacksAccessory', 'structures', 'lotAccess', 'parkingLocations', 'parkingSetbacks']
     const allCollapsed = allDistrictKeys.every(k => collapsed[k])
     const toggleCollapseAll = (e) => {
         e.stopPropagation()
@@ -1215,6 +1252,8 @@ const DistrictParametersSection = () => {
                         { label: 'Lot Width (ft)', path: 'lotWidth' },
                         { label: 'Lot Width at Setback (ft)', path: 'lotWidthAtSetback' },
                         { label: 'Lot Depth (ft)', path: 'lotDepth' },
+                        { label: 'Width to Depth Ratio (%)', path: 'widthToDepthRatio' },
+                        { label: 'Max Impervious Surface (%)', path: 'maxImperviousSurface' },
                     ].map(({ label, path }) => (
                         <div key={path} className="flex items-center justify-between gap-2">
                             <span className="text-xs flex-shrink-0" style={{ color: 'var(--ui-text-secondary)' }}>{label}</span>
@@ -1310,6 +1349,70 @@ const DistrictParametersSection = () => {
                                 max={dp(`${path}.max`)}
                                 onMinChange={(v) => setDistrictParameter(`${path}.min`, v)}
                                 onMaxChange={(v) => setDistrictParameter(`${path}.max`, v)}
+                            />
+                        </div>
+                    ))}
+                    {/* BTZ fields (single value, not min/max) */}
+                    {[
+                        { label: 'BTZ - Front (%)', path: 'setbacksAccessory.btzFront' },
+                        { label: 'BTZ - Side, Street (%)', path: 'setbacksAccessory.btzSideStreet' },
+                    ].map(({ label, path }) => (
+                        <div key={path} className="flex items-center justify-between gap-2">
+                            <span className="text-xs flex-shrink-0" style={{ color: 'var(--ui-text-secondary)' }}>{label}</span>
+                            <input
+                                type="number"
+                                value={dp(path) ?? ''}
+                                onChange={(e) => setDistrictParameter(path, e.target.value === '' ? null : parseFloat(e.target.value))}
+                                min={0}
+                                max={100}
+                                className="w-16 text-xs text-right rounded px-1 py-0.5
+                                           focus:outline-none focus-ring-accent-1"
+                                style={{
+                                    color: 'var(--ui-text-primary)',
+                                    backgroundColor: 'var(--ui-bg-secondary)',
+                                    borderWidth: '1px',
+                                    borderStyle: 'solid',
+                                    borderColor: 'var(--ui-border)',
+                                }}
+                            />
+                        </div>
+                    ))}
+                </div>
+                )}
+            </div>
+
+            {/* Parking Setbacks */}
+            <div className="mb-3">
+                <h4 className="text-[10px] font-bold uppercase tracking-wider cursor-pointer select-none flex items-center gap-1"
+                    style={{ color: 'var(--ui-text-secondary)', borderBottom: '1px solid var(--ui-border)', borderLeft: '2px solid var(--ui-text-muted)', paddingLeft: '6px', paddingBottom: '4px', paddingTop: '8px' }}
+                    onClick={() => toggle('parkingSetbacks')}>
+                    <ChevronDown className={`w-3 h-3 transition-transform ${collapsed.parkingSetbacks ? '-rotate-90' : ''}`} />
+                    Parking Setbacks
+                </h4>
+                {!collapsed.parkingSetbacks && (
+                <div className="space-y-1">
+                    {[
+                        { label: 'Front (ft)', path: 'parkingLocations.front.min' },
+                        { label: 'Side, Interior (ft)', path: 'parkingLocations.sideInterior.min' },
+                        { label: 'Side, Street (ft)', path: 'parkingLocations.sideStreet.min' },
+                        { label: 'Rear (ft)', path: 'parkingLocations.rear.min' },
+                    ].map(({ label, path }) => (
+                        <div key={path} className="flex items-center justify-between gap-2">
+                            <span className="text-xs flex-shrink-0" style={{ color: 'var(--ui-text-secondary)' }}>{label}</span>
+                            <input
+                                type="number"
+                                value={dp(path) ?? ''}
+                                onChange={(e) => setDistrictParameter(path, e.target.value === '' ? null : parseFloat(e.target.value))}
+                                min={0}
+                                className="w-16 text-xs text-right rounded px-1 py-0.5
+                                           focus:outline-none focus-ring-accent-1"
+                                style={{
+                                    color: 'var(--ui-text-primary)',
+                                    backgroundColor: 'var(--ui-bg-secondary)',
+                                    borderWidth: '1px',
+                                    borderStyle: 'solid',
+                                    borderColor: 'var(--ui-border)',
+                                }}
                             />
                         </div>
                     ))}
@@ -3795,12 +3898,13 @@ const AnalyticsSection = () => {
 
             const coverage = lotArea > 0 ? (totalFootprint / lotArea) * 100 : 0
             const far = lotArea > 0 ? totalGFA / lotArea : 0
+            const wdRatio = (lot.lotDepth ?? 0) > 0 ? ((lot.lotWidth ?? 0) / lot.lotDepth) * 100 : null
 
             districtLotArea += lotArea
             districtGFA += totalGFA
             districtFootprint += totalFootprint
 
-            return { lotArea, coverage, gfa: totalGFA, far, footprint: totalFootprint }
+            return { lotArea, coverage, gfa: totalGFA, far, footprint: totalFootprint, wdRatio, impervious: null }
         })
 
         const districtCoverage = districtLotArea > 0 ? (districtFootprint / districtLotArea) * 100 : 0
@@ -3819,6 +3923,8 @@ const AnalyticsSection = () => {
         { label: 'Coverage', unit: '%', key: 'coverage', decimals: 1, showBar: true },
         { label: 'GFA', unit: 'SF', key: 'gfa', decimals: 0 },
         { label: 'FAR', unit: '', key: 'far', decimals: 2 },
+        { label: 'W:D Ratio', unit: '%', key: 'wdRatio', decimals: 1 },
+        { label: 'Imperv. Surface', unit: '%', key: 'impervious', decimals: 1 },
     ]
 
     return (
@@ -3905,10 +4011,14 @@ const ScenariosSection = () => {
     const getLayerStateData = useStore((s) => s.getLayerStateData)
     const showToast = useStore((s) => s.showToast)
 
+    const resetDistrictAndModelParameters = useStore((s) => s.resetDistrictAndModelParameters)
+
     const [loading, setLoading] = useState(false)
     const [newName, setNewName] = useState('')
     const [showNewInput, setShowNewInput] = useState(false)
     const [showImportWizard, setShowImportWizard] = useState(false)
+    const [showClearDialog, setShowClearDialog] = useState(false)
+    const [pendingNewName, setPendingNewName] = useState('')
     const newInputRef = useRef(null)
 
     // Load scenarios when project changes
@@ -3956,11 +4066,23 @@ const ScenariosSection = () => {
         }
     }
 
-    const handleSaveNew = async () => {
+    const handleSaveNew = () => {
         const name = newName.trim()
+        if (!name || !currentProject) return
+        setPendingNewName(name)
+        setShowClearDialog(true)
+    }
+
+    const handleConfirmNewScenario = async (clearParams) => {
+        const name = pendingNewName
+        setShowClearDialog(false)
+        setPendingNewName('')
         if (!name || !currentProject) return
         setLoading(true)
         try {
+            if (clearParams) {
+                resetDistrictAndModelParameters()
+            }
             const state = getSnapshotData()
             await api.saveScenario(currentProject.id, name, state)
             const list = await api.listScenarios(currentProject.id)
@@ -4054,6 +4176,41 @@ const ScenariosSection = () => {
         >
             {showImportWizard && (
                 <ImportWizard isOpen={showImportWizard} onClose={() => setShowImportWizard(false)} />
+            )}
+            {showClearDialog && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}>
+                    <div className="rounded-lg p-5 max-w-sm w-full mx-4 shadow-xl" style={{ backgroundColor: 'var(--ui-bg-primary)', borderWidth: '1px', borderStyle: 'solid', borderColor: 'var(--ui-border)' }}>
+                        <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--ui-text-primary)' }}>
+                            New Scenario: "{pendingNewName}"
+                        </h3>
+                        <p className="text-xs mb-4" style={{ color: 'var(--ui-text-secondary)' }}>
+                            Start with a clean slate or keep your current district and model parameters?
+                        </p>
+                        <div className="flex items-center gap-2 justify-end">
+                            <button
+                                onClick={() => { setShowClearDialog(false); setPendingNewName('') }}
+                                className="px-3 py-1.5 rounded text-xs transition-opacity hover:opacity-80"
+                                style={{ backgroundColor: 'var(--ui-bg-tertiary)', color: 'var(--ui-text-secondary)', borderWidth: '1px', borderStyle: 'solid', borderColor: 'var(--ui-border)' }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => handleConfirmNewScenario(false)}
+                                className="px-3 py-1.5 rounded text-xs transition-opacity hover:opacity-80"
+                                style={{ backgroundColor: 'var(--ui-bg-tertiary)', color: 'var(--ui-text-primary)', borderWidth: '1px', borderStyle: 'solid', borderColor: 'var(--ui-border)' }}
+                            >
+                                Keep Parameters
+                            </button>
+                            <button
+                                onClick={() => handleConfirmNewScenario(true)}
+                                className="px-3 py-1.5 rounded text-xs transition-opacity hover:opacity-80"
+                                style={{ backgroundColor: 'var(--ui-accent)', color: '#fff' }}
+                            >
+                                Clear Parameters
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
             <div className="space-y-2">
                 {/* District dropdown */}

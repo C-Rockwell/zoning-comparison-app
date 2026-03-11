@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Line } from '@react-three/drei'
 import * as THREE from 'three'
 import { useStore } from '../store/useStore'
@@ -12,7 +13,7 @@ import MoveHandle from './BuildingEditor/MoveHandle'
 import { formatDimension } from '../utils/formatUnits'
 
 // Helper: compute total building height from story data
-const computeTotalHeight = (building) => {
+export const computeTotalHeight = (building) => {
     if (!building) return 0
     const stories = building.stories ?? 1
     const firstFloor = building.firstFloorHeight ?? 12
@@ -64,9 +65,64 @@ const SingleLine = ({ start, end, style, side, lineScale = 1 }) => {
 }
 
 // ============================================
+// computeSetbackInner — inner rectangle bounds from setbacks
+// ============================================
+const computeSetbackInner = (lotWidth, lotDepth, setbacks, streetSides) => {
+    if (!setbacks) return null
+    const { front, rear, sideInterior, minSideStreet } = setbacks
+    const leftValue = streetSides?.left ? (minSideStreet ?? 0) : (sideInterior ?? 0)
+    const rightValue = streetSides?.right ? (minSideStreet ?? 0) : (sideInterior ?? 0)
+    const frontValue = front ?? 0
+    const rearValue = rear ?? 0
+    const w2 = lotWidth / 2, d2 = lotDepth / 2
+    const x1 = -w2 + leftValue
+    const y1 = -d2 + frontValue
+    const x2 = w2 - rightValue
+    const y2 = d2 - rearValue
+    if (x2 <= x1 || y2 <= y1) return null
+    return { x1, y1, x2, y2 }
+}
+
+// ============================================
+// LotFillFrame — lot fill with inner hole cut out
+// ============================================
+const LotFillFrame = ({ width, depth, innerX1, innerY1, innerX2, innerY2, style, z = 0.02 }) => {
+    const geometry = useMemo(() => {
+        const w2 = width / 2, d2 = depth / 2
+        const outer = new THREE.Shape()
+        outer.moveTo(-w2, -d2)
+        outer.lineTo(w2, -d2)
+        outer.lineTo(w2, d2)
+        outer.lineTo(-w2, d2)
+        outer.closePath()
+        const hole = new THREE.Path()
+        hole.moveTo(innerX1, innerY1)
+        hole.lineTo(innerX2, innerY1)
+        hole.lineTo(innerX2, innerY2)
+        hole.lineTo(innerX1, innerY2)
+        hole.closePath()
+        outer.holes.push(hole)
+        return new THREE.ShapeGeometry(outer)
+    }, [width, depth, innerX1, innerY1, innerX2, innerY2])
+
+    return (
+        <mesh position={[0, 0, z]} geometry={geometry} receiveShadow>
+            <meshStandardMaterial
+                color={style.color}
+                opacity={style.opacity}
+                transparent={style.opacity < 1}
+                side={THREE.FrontSide}
+                depthWrite={style.opacity >= 0.95}
+                roughness={1} metalness={0}
+            />
+        </mesh>
+    )
+}
+
+// ============================================
 // RectLot — rectangular lot lines + fill + dimensions
 // ============================================
-const RectLot = ({ width, depth, style, fillStyle, showWidthDimensions = false, showDepthDimensions = false, dimensionSettings = {}, lineScale = 1 }) => {
+const RectLot = ({ width, depth, style, fillStyle, setbackFillActive = false, setbackInner = null, setbackFillStyle = null, showWidthDimensions = false, showDepthDimensions = false, dimensionSettings = {}, lineScale = 1 }) => {
     const w2 = width / 2
     const d2 = depth / 2
 
@@ -77,7 +133,27 @@ const RectLot = ({ width, depth, style, fillStyle, showWidthDimensions = false, 
 
     return (
         <group>
-            {fillStyle.visible && (
+            {fillStyle.visible && setbackFillActive && setbackInner && setbackFillStyle ? (
+                <>
+                    <LotFillFrame
+                        width={width} depth={depth}
+                        innerX1={setbackInner.x1} innerY1={setbackInner.y1}
+                        innerX2={setbackInner.x2} innerY2={setbackInner.y2}
+                        style={fillStyle}
+                    />
+                    <mesh position={[(setbackInner.x1 + setbackInner.x2) / 2, (setbackInner.y1 + setbackInner.y2) / 2, 0.02]} receiveShadow>
+                        <planeGeometry args={[setbackInner.x2 - setbackInner.x1, setbackInner.y2 - setbackInner.y1]} />
+                        <meshStandardMaterial
+                            color={setbackFillStyle.color ?? '#90EE90'}
+                            opacity={setbackFillStyle.opacity ?? 0.3}
+                            transparent={(setbackFillStyle.opacity ?? 0.3) < 1}
+                            side={THREE.FrontSide}
+                            depthWrite={(setbackFillStyle.opacity ?? 0.3) >= 0.95}
+                            roughness={1} metalness={0}
+                        />
+                    </mesh>
+                </>
+            ) : fillStyle.visible ? (
                 <mesh position={[0, 0, 0.02]} receiveShadow>
                     <planeGeometry args={[width, depth]} />
                     <meshStandardMaterial
@@ -90,7 +166,7 @@ const RectLot = ({ width, depth, style, fillStyle, showWidthDimensions = false, 
                         metalness={0}
                     />
                 </mesh>
-            )}
+            ) : null}
 
             <SingleLine start={p1} end={p2} style={style} side="front" lineScale={lineScale} />
             <SingleLine start={p2} end={p3} style={style} side="right" lineScale={lineScale} />
@@ -148,9 +224,9 @@ const RectLot = ({ width, depth, style, fillStyle, showWidthDimensions = false, 
 }
 
 // ============================================
-// SetbackFillPolygon — buildable area fill inside principal setbacks
+// SetbackFillOutline — outline lines for buildable area (fill handled by RectLot)
 // ============================================
-const SetbackFillPolygon = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, lineScale = 1 }) => {
+const SetbackFillOutline = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, lineScale = 1 }) => {
     const { front, rear, sideInterior, minSideStreet } = setbacks
     const leftValue = streetSides.left ? (minSideStreet ?? 0) : (sideInterior ?? 0)
     const rightValue = streetSides.right ? (minSideStreet ?? 0) : (sideInterior ?? 0)
@@ -161,17 +237,13 @@ const SetbackFillPolygon = ({ lotWidth, lotDepth, setbacks, style, streetSides =
     const fillDepth = lotDepth - frontValue - rearValue
     if (fillWidth <= 0 || fillDepth <= 0) return null
 
-    const cx = (leftValue - rightValue) / 2
-    const cy = (frontValue - rearValue) / 2
-    const z = 0.06  // 0.5" above lot fill (0.02)
-
-    // Four corners for outline (slightly above fill to avoid z-fight)
     const x1 = -lotWidth / 2 + leftValue, x2 = lotWidth / 2 - rightValue
     const y1 = -lotDepth / 2 + frontValue, y2 = lotDepth / 2 - rearValue
-    const p1 = [x1, y1, z + 0.01]
-    const p2 = [x2, y1, z + 0.01]
-    const p3 = [x2, y2, z + 0.01]
-    const p4 = [x1, y2, z + 0.01]
+    const z = 0.07
+    const p1 = [x1, y1, z]
+    const p2 = [x2, y1, z]
+    const p3 = [x2, y2, z]
+    const p4 = [x1, y2, z]
 
     const lineStyle = {
         color: style.lineColor ?? '#228B22',
@@ -182,18 +254,6 @@ const SetbackFillPolygon = ({ lotWidth, lotDepth, setbacks, style, streetSides =
 
     return (
         <group>
-            <mesh position={[cx, cy, z]} receiveShadow>
-                <planeGeometry args={[fillWidth, fillDepth]} />
-                <meshStandardMaterial
-                    color={style.color ?? '#90EE90'}
-                    opacity={style.opacity ?? 0.3}
-                    transparent={(style.opacity ?? 0.3) < 1}
-                    side={THREE.FrontSide}
-                    depthWrite={(style.opacity ?? 0.3) >= 0.95}
-                    roughness={1}
-                    metalness={0}
-                />
-            </mesh>
             <SingleLine start={p1} end={p2} style={lineStyle} side="front" lineScale={lineScale} />
             <SingleLine start={p2} end={p3} style={lineStyle} side="right" lineScale={lineScale} />
             <SingleLine start={p3} end={p4} style={lineStyle} side="rear" lineScale={lineScale} />
@@ -724,6 +784,9 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                         depth={lotDepth}
                         style={style.lotLines}
                         fillStyle={style.lotFill}
+                        setbackFillActive={!!(layers.setbackFill && visibility.setbackFill && setbacks?.principal)}
+                        setbackInner={computeSetbackInner(lotWidth, lotDepth, setbacks?.principal, streetSides)}
+                        setbackFillStyle={style?.setbackFill}
                         showWidthDimensions={showWidthDim}
                         showDepthDimensions={showDepthDim}
                         dimensionSettings={dimensionSettings}
@@ -736,7 +799,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
             {/* Setback Fill (buildable area inside principal setbacks) */}
             {/* ============================================ */}
             {layers.setbackFill && visibility.setbackFill && setbacks?.principal && style?.setbackFill && (
-                <SetbackFillPolygon
+                <SetbackFillOutline
                     lotWidth={lotWidth}
                     lotDepth={lotDepth}
                     setbacks={setbacks.principal}
@@ -813,6 +876,15 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                 <BTZPlanes
                     principal={principal}
                     setbacks={setbacks.principal}
+                    streetSides={streetSides}
+                    style={style.btzPlanes}
+                />
+            )}
+            {layers.btzPlanes && visibility.btzPlanes && accessory && setbacks?.accessory && style?.btzPlanes &&
+             (setbacks.accessory.btzFront != null || setbacks.accessory.btzSideStreet != null) && (
+                <BTZPlanes
+                    principal={accessory}
+                    setbacks={setbacks.accessory}
                     streetSides={streetSides}
                     style={style.btzPlanes}
                 />
