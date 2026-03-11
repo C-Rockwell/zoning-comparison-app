@@ -9,7 +9,7 @@ const METERS_TO_FEET = 3.28084
 
 const ImportedModelMesh = ({ lotId, filename, x = 0, y = 0, rotation = 0, scale = 1, units = 'auto', style }) => {
   const [meshData, setMeshData] = useState(null)
-  const [detectedUnits, setDetectedUnits] = useState('feet')
+  const [detectedUnits, setDetectedUnits] = useState('meters')
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
   const groupRef = useRef()
@@ -98,17 +98,18 @@ const ImportedModelMesh = ({ lotId, filename, x = 0, y = 0, rotation = 0, scale 
     const size = new THREE.Vector3()
     bbox.getSize(size)
 
-    // Auto-detect meters: if units='auto', no scaling was applied, and max dimension < 15
-    // (a building under 15ft is implausible), assume the file is in meters and scale up
+    // Auto-detect feet: if units='auto', scaling was applied (meters→feet), and max dimension > 500ft
+    // (a building over 500ft means the file was likely already in feet), undo the scaling
     const maxDim = Math.max(size.x, size.y, size.z)
-    if (units === 'auto' && !needsScaling && maxDim < 15 && maxDim > 0.5) {
-      console.log('[IFC Mesh] Auto-detected meters (maxDim:', maxDim.toFixed(2), '< 15ft). Scaling to feet.')
-      const scaleMat = new THREE.Matrix4().makeScale(METERS_TO_FEET, METERS_TO_FEET, METERS_TO_FEET)
+    if (units === 'auto' && needsScaling && maxDim > 500) {
+      console.log('[IFC Mesh] Auto-detected feet (maxDim:', maxDim.toFixed(2), '> 500ft). Undoing meters→feet scaling.')
+      const invScale = 1 / METERS_TO_FEET
+      const scaleMat = new THREE.Matrix4().makeScale(invScale, invScale, invScale)
       for (const g of geos) {
         g.geometry.applyMatrix4(scaleMat)
         g.geometry.computeBoundingBox()
       }
-      // Recompute bbox after scaling
+      // Recompute bbox after unscaling
       bbox.makeEmpty()
       for (const g of geos) {
         bbox.union(g.geometry.boundingBox)

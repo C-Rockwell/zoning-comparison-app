@@ -40,6 +40,7 @@ const MoveHandle = ({ position, zPosition = 1.0, displayOffset = [0, 0], offsetG
     const handlePointerUp = (e) => {
         e.stopPropagation()
         setDragging(false)
+        setHovered(false)
         useStore.temporal.getState().resume()
         if (controls) controls.enabled = true
         e.target.releasePointerCapture(e.pointerId)
@@ -59,9 +60,11 @@ const MoveHandle = ({ position, zPosition = 1.0, displayOffset = [0, 0], offsetG
     }
 
     const color = dragging ? '#ffff00' : (hovered ? '#ffaa00' : '#ff8800')
+    const visible = hovered || dragging
     const sphereSize = dragging ? 1.6 : (hovered ? 1.4 : 1.2)
     const arrowLength = 3.0
     const arrowRadius = 0.5
+    const meshOpacity = visible ? 0.9 : 0
 
     return (
         <group>
@@ -70,7 +73,7 @@ const MoveHandle = ({ position, zPosition = 1.0, displayOffset = [0, 0], offsetG
                 {/* Center sphere */}
                 <mesh
                     renderOrder={8}
-                    onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
+                    onPointerOver={(e) => { e.stopPropagation(); if (!dragging) setHovered(true) }}
                     onPointerOut={() => setHovered(false)}
                     onPointerDown={handlePointerDown}
                     onPointerUp={handlePointerUp}
@@ -80,7 +83,7 @@ const MoveHandle = ({ position, zPosition = 1.0, displayOffset = [0, 0], offsetG
                     <meshBasicMaterial
                         color={color}
                         transparent
-                        opacity={0.9}
+                        opacity={meshOpacity}
                         depthTest={false}
                     />
                 </mesh>
@@ -89,14 +92,14 @@ const MoveHandle = ({ position, zPosition = 1.0, displayOffset = [0, 0], offsetG
                 <group position={[arrowLength + sphereSize, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
                     <mesh
                         renderOrder={8}
-                        onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
+                        onPointerOver={(e) => { e.stopPropagation(); if (!dragging) setHovered(true) }}
                         onPointerOut={() => setHovered(false)}
                         onPointerDown={handlePointerDown}
                         onPointerUp={handlePointerUp}
                         onPointerMove={handlePointerMove}
                     >
                         <coneGeometry args={[arrowRadius, arrowLength, 8]} />
-                        <meshBasicMaterial color={color} transparent opacity={0.9} depthTest={false} />
+                        <meshBasicMaterial color={color} transparent opacity={meshOpacity} depthTest={false} />
                     </mesh>
                 </group>
 
@@ -104,14 +107,14 @@ const MoveHandle = ({ position, zPosition = 1.0, displayOffset = [0, 0], offsetG
                 <group position={[-(arrowLength + sphereSize), 0, 0]} rotation={[0, 0, Math.PI / 2]}>
                     <mesh
                         renderOrder={8}
-                        onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
+                        onPointerOver={(e) => { e.stopPropagation(); if (!dragging) setHovered(true) }}
                         onPointerOut={() => setHovered(false)}
                         onPointerDown={handlePointerDown}
                         onPointerUp={handlePointerUp}
                         onPointerMove={handlePointerMove}
                     >
                         <coneGeometry args={[arrowRadius, arrowLength, 8]} />
-                        <meshBasicMaterial color={color} transparent opacity={0.9} depthTest={false} />
+                        <meshBasicMaterial color={color} transparent opacity={meshOpacity} depthTest={false} />
                     </mesh>
                 </group>
 
@@ -119,14 +122,14 @@ const MoveHandle = ({ position, zPosition = 1.0, displayOffset = [0, 0], offsetG
                 <group position={[0, arrowLength + sphereSize, 0]} rotation={[0, 0, Math.PI]}>
                     <mesh
                         renderOrder={8}
-                        onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
+                        onPointerOver={(e) => { e.stopPropagation(); if (!dragging) setHovered(true) }}
                         onPointerOut={() => setHovered(false)}
                         onPointerDown={handlePointerDown}
                         onPointerUp={handlePointerUp}
                         onPointerMove={handlePointerMove}
                     >
                         <coneGeometry args={[arrowRadius, arrowLength, 8]} />
-                        <meshBasicMaterial color={color} transparent opacity={0.9} depthTest={false} />
+                        <meshBasicMaterial color={color} transparent opacity={meshOpacity} depthTest={false} />
                     </mesh>
                 </group>
 
@@ -134,14 +137,14 @@ const MoveHandle = ({ position, zPosition = 1.0, displayOffset = [0, 0], offsetG
                 <group position={[0, -(arrowLength + sphereSize), 0]}>
                     <mesh
                         renderOrder={8}
-                        onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
+                        onPointerOver={(e) => { e.stopPropagation(); if (!dragging) setHovered(true) }}
                         onPointerOut={() => setHovered(false)}
                         onPointerDown={handlePointerDown}
                         onPointerUp={handlePointerUp}
                         onPointerMove={handlePointerMove}
                     >
                         <coneGeometry args={[arrowRadius, arrowLength, 8]} />
-                        <meshBasicMaterial color={color} transparent opacity={0.9} depthTest={false} />
+                        <meshBasicMaterial color={color} transparent opacity={meshOpacity} depthTest={false} />
                     </mesh>
                 </group>
             </group>

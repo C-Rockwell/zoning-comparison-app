@@ -26,6 +26,7 @@ const LayerStyleControls = ({ layerId }) => {
     const drawingDefaults = useStore(useShallow(state => state.drawingDefaults))
     const setDrawingLayerDefault = useStore(state => state.setDrawingLayerDefault)
     const resetDrawingLayerDefaults = useStore(state => state.resetDrawingLayerDefaults)
+    const applyDrawingLayerDefaultsToObjects = useStore(state => state.applyDrawingLayerDefaultsToObjects)
 
     const layer = drawingLayers[layerId]
     if (!layer) return null
@@ -43,16 +44,28 @@ const LayerStyleControls = ({ layerId }) => {
             title={layer.name}
             icon={<Paintbrush size={14} />}
             defaultOpen={false}
-            headerRight={hasOverrides ? (
-                <button
-                    onClick={(e) => { e.stopPropagation(); resetDrawingLayerDefaults(layerId) }}
-                    className="text-[9px] px-1.5 py-0.5 rounded hover:opacity-80"
-                    style={{ color: 'var(--ui-text-muted)', border: '1px solid var(--ui-border)' }}
-                    title="Reset to global defaults"
-                >
-                    <RotateCcw size={10} />
-                </button>
-            ) : null}
+            headerRight={(
+                <span className="flex items-center gap-1">
+                    <button
+                        onClick={(e) => { e.stopPropagation(); applyDrawingLayerDefaultsToObjects(layerId) }}
+                        className="text-[9px] px-1.5 py-0.5 rounded hover:opacity-80"
+                        style={{ color: 'var(--ui-accent)', border: '1px solid var(--ui-border)' }}
+                        title="Apply defaults to all objects on this layer"
+                    >
+                        Apply
+                    </button>
+                    {hasOverrides && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); resetDrawingLayerDefaults(layerId) }}
+                            className="text-[9px] px-1.5 py-0.5 rounded hover:opacity-80"
+                            style={{ color: 'var(--ui-text-muted)', border: '1px solid var(--ui-border)' }}
+                            title="Reset to global defaults"
+                        >
+                            <RotateCcw size={10} />
+                        </button>
+                    )}
+                </span>
+            )}
         >
             {/* Stroke */}
             <SubSectionLabel>Stroke</SubSectionLabel>

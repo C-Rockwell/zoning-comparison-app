@@ -2799,6 +2799,38 @@ export const useStore = create(
                     }
                 })),
 
+                // Drawing Layer Preset helpers
+                getDrawingLayerPresetData: (layerId) => {
+                    const state = get()
+                    const layer = state.drawingLayers[layerId]
+                    if (!layer) return null
+                    return {
+                        layerName: layer.name,
+                        defaults: { ...layer.defaults },
+                        renderMode: layer.renderMode,
+                        zHeight: layer.zHeight,
+                    }
+                },
+                applyDrawingLayerPreset: (presetData) => set((state) => {
+                    const id = `drawing-layer-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+                    return {
+                        drawingLayers: {
+                            ...state.drawingLayers,
+                            [id]: {
+                                name: presetData.layerName || presetData.name || `Layer ${state.drawingLayerOrder.length + 1}`,
+                                visible: true,
+                                locked: false,
+                                zHeight: presetData.zHeight ?? 0.20,
+                                renderMode: presetData.renderMode || '3d',
+                                order: state.drawingLayerOrder.length,
+                                defaults: { ...(presetData.defaults || {}) },
+                            },
+                        },
+                        drawingLayerOrder: [...state.drawingLayerOrder, id],
+                        activeDrawingLayerId: id,
+                    }
+                }),
+
                 // Drawing Editor actions
                 createDrawingLayer: (name) => set((state) => {
                     const id = `drawing-layer-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
@@ -2885,6 +2917,32 @@ export const useStore = create(
                         },
                     },
                 })),
+                applyDrawingLayerDefaultsToObjects: (layerId) => set((state) => {
+                    const effective = getEffectiveDrawingDefaults(state, layerId)
+                    const newObjects = { ...state.drawingObjects }
+                    let changed = false
+                    for (const [id, obj] of Object.entries(newObjects)) {
+                        if (obj.layerId !== layerId) continue
+                        const updates = {}
+                        if (obj.strokeColor !== undefined) updates.strokeColor = effective.strokeColor
+                        if (obj.strokeWidth !== undefined) updates.strokeWidth = effective.strokeWidth
+                        if (obj.lineType !== undefined) updates.lineType = effective.lineType
+                        if (obj.fillColor !== undefined) updates.fillColor = effective.fillColor
+                        if (obj.fillOpacity !== undefined) updates.fillOpacity = effective.fillOpacity
+                        if (obj.textColor !== undefined) updates.textColor = effective.textColor
+                        if (obj.fontSize !== undefined) updates.fontSize = effective.fontSize
+                        if (obj.fontFamily !== undefined) updates.fontFamily = effective.fontFamily
+                        if (obj.outlineWidth !== undefined) updates.outlineWidth = effective.outlineWidth
+                        if (obj.outlineColor !== undefined) updates.outlineColor = effective.outlineColor
+                        if (obj.cornerRadius !== undefined) updates.cornerRadius = effective.cornerRadius
+                        if (obj.arrowHead !== undefined) updates.arrowHead = effective.arrowHead
+                        if (Object.keys(updates).length > 0) {
+                            newObjects[id] = { ...obj, ...updates }
+                            changed = true
+                        }
+                    }
+                    return changed ? { drawingObjects: newObjects } : {}
+                }),
                 addDrawingObject: (obj) => set((state) => {
                     const id = `drawing-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
                     return {

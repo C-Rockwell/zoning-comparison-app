@@ -4,8 +4,9 @@ import { useShallow } from 'zustand/react/shallow'
 import {
     Pencil, Minus, ArrowRight, Pentagon, Square, RectangleHorizontal,
     Circle, Star, Octagon, Type, MessageSquare, Eraser, MousePointer2,
-    Play, X, Plus, ChevronDown
+    Play, X, Plus, ChevronDown, FolderOpen
 } from 'lucide-react'
+import DrawingLibraryModal from './DrawingLibraryModal'
 
 const DRAWING_TOOLS = [
     { id: 'select', icon: MousePointer2, label: 'Select (V)', shortcut: 'V' },
@@ -27,6 +28,7 @@ const DRAWING_TOOLS = [
 const LayerDropdown = ({ onClose }) => {
     const [newLayerName, setNewLayerName] = useState('')
     const [showNewInput, setShowNewInput] = useState(false)
+    const [showLibrary, setShowLibrary] = useState(false)
     const inputRef = useRef(null)
 
     const { drawingLayers, drawingLayerOrder, activeDrawingLayerId } = useStore(useShallow(state => ({
@@ -36,6 +38,7 @@ const LayerDropdown = ({ onClose }) => {
     })))
     const createDrawingLayer = useStore(state => state.createDrawingLayer)
     const setActiveDrawingLayer = useStore(state => state.setActiveDrawingLayer)
+    const applyDrawingLayerPreset = useStore(state => state.applyDrawingLayerPreset)
 
     useEffect(() => {
         if (showNewInput && inputRef.current) inputRef.current.focus()
@@ -79,6 +82,13 @@ const LayerDropdown = ({ onClose }) => {
                 )
             })}
             <div className="border-t my-1" style={{ borderColor: 'var(--ui-border)' }} />
+            <button
+                className="w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 hover-bg-secondary"
+                style={{ color: 'var(--ui-text-secondary)' }}
+                onClick={() => setShowLibrary(true)}
+            >
+                <FolderOpen size={14} /> From Library
+            </button>
             {showNewInput ? (
                 <div className="px-3 py-1.5 flex gap-1">
                     <input
@@ -103,6 +113,12 @@ const LayerDropdown = ({ onClose }) => {
                 >
                     <Plus size={14} /> New Layer
                 </button>
+            )}
+            {showLibrary && (
+                <DrawingLibraryModal
+                    onClose={() => setShowLibrary(false)}
+                    onLoadPreset={(data) => { applyDrawingLayerPreset(data); onClose() }}
+                />
             )}
         </div>
     )

@@ -224,7 +224,7 @@ Lot Lines, Setback Fill, Setbacks, Accessory Setbacks, Max Setbacks, Parking Set
 
 Config at `~/.zoning-app-config.json`. Projects at `{projectsDir}/{id}/` with `project.json`, `images/`, `models/`, `snapshots/`, `layer-states/`, `scenarios/`.
 
-Endpoints: `/api/health`, `/api/config` (GET/PUT), `/api/projects/:id` (CRUD), `/api/projects/:id/exports/:filename`, `/api/projects/:id/snapshots/:name`, `/api/projects/:id/layer-states/:name`, `/api/projects/:id/scenarios/:name`, `/api/style-presets` (list/save/load/delete — stored in `{projectsDir}/style-presets/`)
+Endpoints: `/api/health`, `/api/config` (GET/PUT), `/api/projects/:id` (CRUD), `/api/projects/:id/exports/:filename`, `/api/projects/:id/snapshots/:name`, `/api/projects/:id/layer-states/:name`, `/api/projects/:id/scenarios/:name`, `/api/style-presets` (list/save/load/delete — stored in `{projectsDir}/_style-presets/`), `/api/drawing-presets` (list/save/load/delete — stored in `{projectsDir}/_drawing-layer-presets/`)
 
 ## Untested Features
 
@@ -354,11 +354,13 @@ The `lotPositions` useMemo in `DistrictSceneContent.jsx` previously depended onl
 
 **Bug 2 — No visible building/model shadows**: FIXED. Two issues: (1) SetbackFillPolygon mesh lacked `receiveShadow` — added it in `LotEntity.jsx`. (2) Ambient light too high (0.3 ambient + 0.5 hemisphere = 0.8) vs directional 1.5 — shadows barely perceptible. Reduced to 0.15 ambient + 0.3 hemisphere = 0.45 total in both `SharedCanvas.jsx` and `Viewer3D.jsx` StudioLighting.
 
-**Bug 3 — IFC feet-based models appear tiny**: PARTIALLY FIXED. Added auto-detection heuristic in `ImportedModelMesh.jsx`: when `units='auto'` and max bbox dimension < 15ft, auto-scales by METERS_TO_FEET. Also added "Tiny? Try Meters" helper text in `DistrictParameterPanel.jsx` units dropdown. **Auto-detect works correctly. Manual "Feet" selection does NOT** — choosing "Feet" in the units dropdown causes models to display at wrong (tiny) scale. The issue is likely that `ifcLoader.js` defaults `detectedUnits='feet'`, so when user picks "Feet", `effectiveUnits='feet'`, `needsScaling=false`, and no scaling is applied — but web-ifc may be outputting coordinates in meters internally regardless of the file's declared units. Next session should investigate: when "Feet" is selected, are the raw coordinates from web-ifc actually in feet or meters? If web-ifc always outputs meters, then the "Feet" option should skip scaling (current behavior is correct and the label is misleading), or the scaling logic needs inversion for that case.
+**Bug 3 — IFC feet-based models appear tiny**: Low priority — do not fix unless Oliver asks. Previous attempt changed defaults in `ifcLoader.js` and `ImportedModelMesh.jsx` but needs runtime verification.
 
-## Imported Model Move Gizmo Fix (Mar 2026)
+## Imported Model Move Gizmo (Mar 2026)
 
 Previously the imported model MoveHandle was gated by `principal?.selected` — required selecting a principal building first with the building layer on. Changed to always render the MoveHandle when the imported model is visible (`layers.importedModels && visibility.importedModel && lot.importedModel`). File: `LotEntity.jsx` line ~917.
+
+**RESOLVED — MoveHandle always-visible gizmos**: MoveHandle (imported model + building) was always rendered at opacity 0.9, cluttering the scene. Fix: gizmos now start invisible (`opacity: 0`) and only appear on hover/drag (`opacity: 0.9`). Meshes at opacity 0 still receive pointer events for raycasting. Also gated `onPointerOver` with `!dragging` to prevent hover-stuck during drag across multiple meshes, and added `setHovered(false)` to `handlePointerUp`.
 
 ## Road Elements Layer, Text Rotation Fix, Shared Drive Arrow (Mar 2026)
 
@@ -372,3 +374,25 @@ Previously the imported model MoveHandle was gated by `principal?.selected` — 
 - **UI**: `sharedDriveArrow` in `styleCategories` + `isMeshCategory`. Scale slider (shared condition with `lotAccessArrows`), outline color picker, outline width slider (0–5), dashed outline checkbox.
 - **Front/rear placement**: `lotAccess.sharedDriveLocation: 'front'` in `createDefaultLot()`. Persist merge patches missing key. "SD Location" dropdown (Front/Rear/Both) in Model Parameters Lot Access section via new `type: 'select'` rendering branch in `SectionGroup`.
 - **Rendering**: `LotEntity.jsx` renders front/rear arrows independently based on `sharedDriveLocation`. Rear arrow uses `rearMode={true}` prop + separate annotation position key (`lot-${lotId}-access-shareddrive-rear`). `LotAccessArrow.jsx` accepts `rearMode` prop — rotation `Math.PI` for rear (stem points from rear edge into lot).
+
+## Drawing Layers Section Refactor (Mar 2026)
+
+`DrawingLayersPanel.jsx` now uses the standard `<Section>` component (`ui/Section.jsx`) instead of a custom collapsible header. Matches all other sidebar sections (uppercase title, accent left border, chevron). `defaultOpen={false}`.
+
+## Drawing Layer Style Library (Mar 2026, PARTIALLY WORKING)
+
+**Architecture**: Mirrors style presets pattern. Backend stores presets in `_drawing-layer-presets/` (shared across projects). Each preset saves `{ layerName, defaults, renderMode, zHeight }`.
+
+**Files**:
+- `server/routes/drawing-presets.js` — CRUD routes (registered at `/api/drawing-presets` in `server/index.js`)
+- `src/services/api.js` — `listDrawingPresets`, `saveDrawingPreset`, `loadDrawingPreset`, `deleteDrawingPreset`
+- `src/store/useStore.js` — `getDrawingLayerPresetData(layerId)` (extracts layer config), `applyDrawingLayerPreset(presetData)` (creates new layer from preset)
+- `src/components/DrawingEditor/DrawingLibraryModal.jsx` — Shared modal component (search + load + delete presets), used by both sidebar and toolbar
+- `src/components/DrawingEditor/DrawingLayersPanel.jsx` — Save button (active layer → preset), From Library button (opens modal)
+- `src/components/DrawingEditor/DrawingToolbar.jsx` — `LayerDropdown` includes "From Library" option (FolderOpen icon) that opens the same modal
+
+**Save feedback**: `handleSavePreset` shows alert on success/failure (previously only console-logged).
+
+**RESOLVED BUGS**:
+1. **Drawing Layer Properties → "Apply to Layer"** — Layer style defaults only affected new objects (properties eagerly copied at creation). Fixed by adding `applyDrawingLayerDefaultsToObjects(layerId)` store action + "Apply" button in `DrawingLayerStylesPanel.jsx` that batch-updates all existing objects on the layer with current effective defaults.
+2. **Per-layer save to preset library** — DONE. Save button (floppy icon) added to each layer row in `DrawingLayersPanel.jsx`. Refactored `handleSavePreset` → `handleSavePresetForLayer(layerId)` to accept any layer, not just the active one.

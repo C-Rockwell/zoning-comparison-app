@@ -166,6 +166,29 @@ export async function deleteStylePreset(name) {
   })
 }
 
+// ============ Drawing Layer Presets ============
+
+export async function listDrawingPresets() {
+  return fetchJSON('/drawing-presets')
+}
+
+export async function saveDrawingPreset(name, presetData) {
+  return fetchJSON('/drawing-presets', {
+    method: 'POST',
+    body: JSON.stringify({ name, ...presetData })
+  })
+}
+
+export async function loadDrawingPreset(name) {
+  return fetchJSON(`/drawing-presets/${encodeURIComponent(name)}`)
+}
+
+export async function deleteDrawingPreset(name) {
+  return fetchJSON(`/drawing-presets/${encodeURIComponent(name)}`, {
+    method: 'DELETE'
+  })
+}
+
 // ============ Scenarios ============
 
 export async function listScenarios(projectId) {
