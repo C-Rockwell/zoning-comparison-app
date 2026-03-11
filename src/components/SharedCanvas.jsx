@@ -1,6 +1,6 @@
 import { useRef, useState, forwardRef, useImperativeHandle } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { GizmoHelper, GizmoViewport, CameraControls, Grid, PerspectiveCamera, OrthographicCamera, ContactShadows } from '@react-three/drei'
+import { GizmoHelper, GizmoViewport, CameraControls, Grid, PerspectiveCamera, OrthographicCamera } from '@react-three/drei'
 import { EffectComposer, N8AO, ToneMapping, SMAA, Outline, Selection } from '@react-three/postprocessing'
 import { ToneMappingMode } from 'postprocessing'
 import * as THREE from 'three'
@@ -64,13 +64,13 @@ export const StudioLighting = () => {
             />
 
             {/* Ambient fill */}
-            <ambientLight intensity={0.3} />
+            <ambientLight intensity={0.15} />
 
             {/* Hemisphere for natural sky/ground bounce */}
             <hemisphereLight
                 skyColor="#ffffff"
                 groundColor="#d4d4d4"
-                intensity={0.5}
+                intensity={0.3}
             />
         </>
     )
@@ -255,19 +255,6 @@ const SharedCanvas = forwardRef(({ children, onPointerMissed }, ref) => {
 
             {/* Lighting: sun simulation or studio */}
             {sunEnabled ? <SunLighting /> : <StudioLighting />}
-
-            {/* Contact shadows for ground-level detail */}
-            {renderSettings.contactShadows && (
-                <ContactShadows
-                    position={[0, 50, -0.15]}
-                    opacity={0.4}
-                    scale={200}
-                    blur={2}
-                    far={100}
-                    resolution={512}
-                    color="#000000"
-                />
-            )}
 
             {/* Cameras */}
             <PerspectiveCamera

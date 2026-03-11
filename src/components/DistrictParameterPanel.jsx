@@ -542,6 +542,14 @@ const ModelParametersTable = ({ collapseKey, allModelCollapsed }) => {
                     type: 'checkbox',
                 },
                 {
+                    label: 'SD Location',
+                    visKey: null,
+                    getValue: (lot) => lot.lotAccess?.sharedDriveLocation ?? 'front',
+                    setValue: (lotId, v) => updateLotParam(lotId, 'lotAccess', { ...lots[lotId]?.lotAccess, sharedDriveLocation: v }),
+                    type: 'select',
+                    options: [{ value: 'front', label: 'Front' }, { value: 'rear', label: 'Rear' }, { value: 'both', label: 'Both' }],
+                },
+                {
                     label: 'Side, Street',
                     visKey: 'lotAccessArrows',
                     getValue: (lot) => lot.lotAccess?.sideStreet,
@@ -831,6 +839,28 @@ const SectionGroup = ({ section, lotIds, lots, firstLotVis, setLotVisibilityActi
                         )
                     }
 
+                    if (row.type === 'select') {
+                        return (
+                            <td key={lotId} className="py-1 px-1">
+                                <select
+                                    value={value ?? row.options[0]?.value}
+                                    onChange={(e) => row.setValue(lotId, e.target.value)}
+                                    className="w-full text-xs rounded px-1 py-0.5"
+                                    style={{
+                                        backgroundColor: 'var(--ui-bg-secondary)',
+                                        color: 'var(--ui-text-primary)',
+                                        borderColor: 'var(--ui-border)',
+                                        borderWidth: '1px',
+                                    }}
+                                >
+                                    {row.options.map(opt => (
+                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                    ))}
+                                </select>
+                            </td>
+                        )
+                    }
+
                     // Default: number input
                     return (
                         <td key={lotId} className="py-1 px-1">
@@ -1017,7 +1047,6 @@ const LAYER_GROUPS = [
         items: [
             { key: 'roadModule', label: 'Road Module' },
             { key: 'roadIntersections', label: 'Road Intersections' },
-            { key: 'labelRoadZones', label: 'Road Zones' },
         ],
     },
     {
@@ -1029,6 +1058,7 @@ const LAYER_GROUPS = [
             { key: 'labelSetbacks', label: 'Setback Labels', indent: true },
             { key: 'labelMaxSetbacks', label: 'Max Setback Labels', indent: true },
             { key: 'labelRoadNames', label: 'Road Names', indent: true },
+            { key: 'labelRoadZones', label: 'Road Elements', indent: true },
             { key: 'labelPrincipalBuildings', label: 'Principal Labels', indent: true },
             { key: 'labelAccessoryBuildings', label: 'Accessory Labels', indent: true },
             { key: 'dimensionsLotWidth', label: 'Dim: Lot Width' },
@@ -1556,6 +1586,7 @@ const ModelImportSection = () => {
                                     <option value="meters">Meters</option>
                                     <option value="feet">Feet</option>
                                 </select>
+                                <span style={{ color: 'var(--ui-text-muted)', fontSize: '10px' }}>Tiny? Try Meters</span>
                             </div>
                         </div>
                     )
@@ -2119,6 +2150,32 @@ const RoadModuleStylesSection = () => {
                 </div>
             )}
 
+            {/* Left Side Elements */}
+            {renderSideZoneGroup(
+                [
+                    { key: 'leftParking', label: 'Parking', defaultFill: '#888888' },
+                    { key: 'leftVerge', label: 'Verge', defaultFill: '#c4a77d' },
+                    { key: 'leftSidewalk', label: 'Sidewalk', defaultFill: '#90EE90' },
+                    { key: 'leftTransitionZone', label: 'Transition Zone', defaultFill: '#98D8AA' },
+                ],
+                'Left Side',
+                'var(--ui-accent)',
+                'leftSide'
+            )}
+
+            {/* Right Side Elements */}
+            {renderSideZoneGroup(
+                [
+                    { key: 'rightParking', label: 'Parking', defaultFill: '#888888' },
+                    { key: 'rightVerge', label: 'Verge', defaultFill: '#c4a77d' },
+                    { key: 'rightSidewalk', label: 'Sidewalk', defaultFill: '#90EE90' },
+                    { key: 'rightTransitionZone', label: 'Transition Zone', defaultFill: '#98D8AA' },
+                ],
+                'Right Side',
+                'var(--ui-success, var(--ui-accent))',
+                'rightSide'
+            )}
+
             {/* Intersection Fill */}
             {renderZoneHeader('intersectionFill', 'Intersection Fill')}
             {!collapsedZones.intersectionFill && (
@@ -2179,32 +2236,6 @@ const RoadModuleStylesSection = () => {
                 {renderAlleyZoneControls('alleySidewalk', 'leftSidewalk', 'Sidewalk', '#90EE90')}
                 {renderAlleyZoneControls('alleyTransitionZone', 'leftTransitionZone', 'Transition Zone', '#98D8AA')}
             </div>
-
-            {/* Left Side Elements */}
-            {renderSideZoneGroup(
-                [
-                    { key: 'leftParking', label: 'Parking', defaultFill: '#888888' },
-                    { key: 'leftVerge', label: 'Verge', defaultFill: '#c4a77d' },
-                    { key: 'leftSidewalk', label: 'Sidewalk', defaultFill: '#90EE90' },
-                    { key: 'leftTransitionZone', label: 'Transition Zone', defaultFill: '#98D8AA' },
-                ],
-                'Left Side',
-                'var(--ui-accent)',
-                'leftSide'
-            )}
-
-            {/* Right Side Elements */}
-            {renderSideZoneGroup(
-                [
-                    { key: 'rightParking', label: 'Parking', defaultFill: '#888888' },
-                    { key: 'rightVerge', label: 'Verge', defaultFill: '#c4a77d' },
-                    { key: 'rightSidewalk', label: 'Sidewalk', defaultFill: '#90EE90' },
-                    { key: 'rightTransitionZone', label: 'Transition Zone', defaultFill: '#98D8AA' },
-                ],
-                'Right Side',
-                'var(--ui-success, var(--ui-accent))',
-                'rightSide'
-            )}
         </Section>
     )
 }
@@ -2734,7 +2765,7 @@ const InlineStyleControls = ({ lotId, category, style }) => {
     }
 
     // Mesh-only categories: only color + opacity (no line width/dashed)
-    const isMeshCategory = ['lotFill', 'btzPlanes', 'lotAccessArrows', 'principalBuildingFaces', 'accessoryBuildingFaces', 'buildingFaces', 'roofFaces', 'importedModelFaces'].includes(category)
+    const isMeshCategory = ['lotFill', 'btzPlanes', 'lotAccessArrows', 'sharedDriveArrow', 'principalBuildingFaces', 'accessoryBuildingFaces', 'buildingFaces', 'roofFaces', 'importedModelFaces'].includes(category)
     // Hybrid categories: mesh controls (fill color/opacity) + line controls (lineColor/lineWidth/lineDashed)
     const isHybridCategory = ['maxHeightPlane', 'setbackFill'].includes(category)
 
@@ -2803,7 +2834,7 @@ const InlineStyleControls = ({ lotId, category, style }) => {
                         max={1}
                         step={0.05}
                     />
-                    {category === 'lotAccessArrows' && (
+                    {(category === 'lotAccessArrows' || category === 'sharedDriveArrow') && (
                         <SliderInput
                             label="Scale"
                             value={style.scale ?? 1}
@@ -2812,6 +2843,34 @@ const InlineStyleControls = ({ lotId, category, style }) => {
                             max={5}
                             step={0.1}
                         />
+                    )}
+                    {category === 'sharedDriveArrow' && (
+                        <>
+                            <ColorPicker
+                                label="Outline Color"
+                                value={style.outlineColor ?? '#000000'}
+                                onChange={(v) => handleChange('outlineColor', v)}
+                            />
+                            <SliderInput
+                                label="Outline Width"
+                                value={style.outlineWidth ?? 1}
+                                onChange={(v) => handleChange('outlineWidth', v)}
+                                min={0}
+                                max={5}
+                                step={0.5}
+                            />
+                            <div style={{ paddingTop: '4px' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer', color: 'var(--ui-text-muted)' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={(style.outlineType ?? 'solid') === 'dashed'}
+                                        onChange={(e) => handleChange('outlineType', e.target.checked ? 'dashed' : 'solid')}
+                                        style={{ borderColor: 'var(--ui-border)' }}
+                                    />
+                                    Dashed Outline
+                                </label>
+                            </div>
+                        </>
                     )}
                 </div>
             ) : (
@@ -2967,6 +3026,7 @@ const StylesSection = () => {
         { key: 'parkingSetbacks', label: 'Parking Setbacks' },
         { key: 'btzPlanes', label: 'BTZ Planes' },
         { key: 'lotAccessArrows', label: 'Lot Access Arrows' },
+        { key: 'sharedDriveArrow', label: 'Shared Drive Arrow' },
         { key: 'principalBuildingEdges', label: 'Principal Building Edges' },
         { key: 'principalBuildingFaces', label: 'Principal Building Faces' },
         { key: 'accessoryBuildingEdges', label: 'Accessory Building Edges' },

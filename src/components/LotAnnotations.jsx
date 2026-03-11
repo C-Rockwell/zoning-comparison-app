@@ -120,6 +120,7 @@ const LotAnnotations = ({
             id: `lot-${lotId}-setback-right`,
             text: 'Right Setback',
             defaultPosition: [lotWidth - sbRight / 2, lotDepth / 2, 0.15],
+            fixedRotation: [0, 0, Math.PI / 2],
         })
     }
 
@@ -223,6 +224,7 @@ const LotAnnotations = ({
                     anchorPoint={label.defaultPosition}
                     customPosition={annotationPositions[label.id] || null}
                     onPositionChange={(pos) => setAnnotationPosition(label.id, pos)}
+                    {...(label.fixedRotation ? { fixedRotation: label.fixedRotation } : {})}
                 />
             ))}
 

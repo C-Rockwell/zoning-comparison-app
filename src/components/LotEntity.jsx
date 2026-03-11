@@ -84,7 +84,7 @@ const RectLot = ({ width, depth, style, fillStyle, showWidthDimensions = false, 
                         color={fillStyle.color}
                         opacity={fillStyle.opacity}
                         transparent={fillStyle.opacity < 1}
-                        side={THREE.DoubleSide}
+                        side={THREE.FrontSide}
                         depthWrite={fillStyle.opacity >= 0.95}
                         roughness={1}
                         metalness={0}
@@ -182,13 +182,13 @@ const SetbackFillPolygon = ({ lotWidth, lotDepth, setbacks, style, streetSides =
 
     return (
         <group>
-            <mesh position={[cx, cy, z]}>
+            <mesh position={[cx, cy, z]} receiveShadow>
                 <planeGeometry args={[fillWidth, fillDepth]} />
                 <meshStandardMaterial
                     color={style.color ?? '#90EE90'}
                     opacity={style.opacity ?? 0.3}
                     transparent={(style.opacity ?? 0.3) < 1}
-                    side={THREE.DoubleSide}
+                    side={THREE.FrontSide}
                     depthWrite={(style.opacity ?? 0.3) >= 0.95}
                     roughness={1}
                     metalness={0}
@@ -712,6 +712,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                         showDimensions={showWidthDim || showDepthDim}
                         dimensionSettings={dimensionSettings}
                         offsetGroupX={offset + lotWidth / 2}
+                        offsetGroupY={lotDepth / 2}
                         updateVertex={updateEntityVertex}
                         splitEdge={splitEntityEdge}
                         extrudeEdge={extrudeEntityEdge}
@@ -913,18 +914,16 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                             edges: style.importedModelEdges,
                         }}
                     />
-                    {principal?.selected && (
-                        <MoveHandle
-                            position={[lot.importedModel.x ?? 0, lot.importedModel.y ?? 0]}
-                            zPosition={0}
-                            displayOffset={[0, -13]}
-                            offsetGroupX={offset + lotWidth / 2}
-                            offsetGroupY={lotDepth / 2}
-                            onDrag={(newX, newY) => {
-                                useStore.getState().setImportedModelPosition(lotId, newX, newY)
-                            }}
-                        />
-                    )}
+                    <MoveHandle
+                        position={[lot.importedModel.x ?? 0, lot.importedModel.y ?? 0]}
+                        zPosition={0}
+                        displayOffset={[0, -13]}
+                        offsetGroupX={offset + lotWidth / 2}
+                        offsetGroupY={lotDepth / 2}
+                        onDrag={(newX, newY) => {
+                            useStore.getState().setImportedModelPosition(lotId, newX, newY)
+                        }}
+                    />
                 </>
             )}
 
@@ -1021,22 +1020,49 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                             onPositionChange={(pos) => setAnnotationPosition(`lot-${lotId}-access-sidestreet`, pos)}
                         />
                     )}
-                    {lot.lotAccess.sideInterior && (
-                        <LotAccessArrow
-                            direction="sharedDrive"
-                            lotId={lotId}
-                            lotWidth={lotWidth}
-                            lotDepth={lotDepth}
-                            streetSides={streetSides}
-                            style={style?.lotAccessArrows}
-                            bidirectional={true}
-                            position={validPos(`lot-${lotId}-access-shareddrive`, [
-                                streetSides.right ? -lotWidth / 2 : lotWidth / 2,
-                                -lotDepth / 2, 0
-                            ])}
-                            onPositionChange={(pos) => setAnnotationPosition(`lot-${lotId}-access-shareddrive`, pos)}
-                        />
-                    )}
+                    {lot.lotAccess.sideInterior && (() => {
+                        const sdLoc = lot.lotAccess.sharedDriveLocation ?? 'front'
+                        const showFront = sdLoc === 'front' || sdLoc === 'both'
+                        const showRear = sdLoc === 'rear' || sdLoc === 'both'
+                        const sdStyle = style?.sharedDriveArrow ?? style?.lotAccessArrows
+                        return (
+                            <>
+                                {showFront && (
+                                    <LotAccessArrow
+                                        direction="sharedDrive"
+                                        lotId={lotId}
+                                        lotWidth={lotWidth}
+                                        lotDepth={lotDepth}
+                                        streetSides={streetSides}
+                                        style={sdStyle}
+                                        bidirectional={true}
+                                        position={validPos(`lot-${lotId}-access-shareddrive`, [
+                                            streetSides.right ? -lotWidth / 2 : lotWidth / 2,
+                                            -lotDepth / 2, 0
+                                        ])}
+                                        onPositionChange={(pos) => setAnnotationPosition(`lot-${lotId}-access-shareddrive`, pos)}
+                                    />
+                                )}
+                                {showRear && (
+                                    <LotAccessArrow
+                                        direction="sharedDrive"
+                                        rearMode={true}
+                                        lotId={lotId}
+                                        lotWidth={lotWidth}
+                                        lotDepth={lotDepth}
+                                        streetSides={streetSides}
+                                        style={sdStyle}
+                                        bidirectional={true}
+                                        position={validPos(`lot-${lotId}-access-shareddrive-rear`, [
+                                            streetSides.right ? -lotWidth / 2 : lotWidth / 2,
+                                            lotDepth / 2, 0
+                                        ])}
+                                        onPositionChange={(pos) => setAnnotationPosition(`lot-${lotId}-access-shareddrive-rear`, pos)}
+                                    />
+                                )}
+                            </>
+                        )
+                    })()}
                 </group>
                 )
             })()}

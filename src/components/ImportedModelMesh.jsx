@@ -50,9 +50,9 @@ const ImportedModelMesh = ({ lotId, filename, x = 0, y = 0, rotation = 0, scale 
     return () => { cancelled = true }
   }, [currentProject?.id, filename])
 
-  // Resolve effective units: web-ifc always returns meters, so auto/meters → scale, feet → no scale (manual override)
+  // Resolve effective units: default is feet (no scaling). Only scale when explicitly set to meters.
   const effectiveUnits = units === 'auto' ? detectedUnits : units
-  const needsScaling = effectiveUnits !== 'feet'
+  const needsScaling = effectiveUnits === 'meters'
 
   // Build Three.js geometries from mesh data
   const { geometries, center, zMin } = useMemo(() => {
@@ -98,13 +98,32 @@ const ImportedModelMesh = ({ lotId, filename, x = 0, y = 0, rotation = 0, scale 
     const size = new THREE.Vector3()
     bbox.getSize(size)
 
+    // Auto-detect meters: if units='auto', no scaling was applied, and max dimension < 15
+    // (a building under 15ft is implausible), assume the file is in meters and scale up
+    const maxDim = Math.max(size.x, size.y, size.z)
+    if (units === 'auto' && !needsScaling && maxDim < 15 && maxDim > 0.5) {
+      console.log('[IFC Mesh] Auto-detected meters (maxDim:', maxDim.toFixed(2), '< 15ft). Scaling to feet.')
+      const scaleMat = new THREE.Matrix4().makeScale(METERS_TO_FEET, METERS_TO_FEET, METERS_TO_FEET)
+      for (const g of geos) {
+        g.geometry.applyMatrix4(scaleMat)
+        g.geometry.computeBoundingBox()
+      }
+      // Recompute bbox after scaling
+      bbox.makeEmpty()
+      for (const g of geos) {
+        bbox.union(g.geometry.boundingBox)
+      }
+      bbox.getCenter(c)
+      bbox.getSize(size)
+    }
+
     console.log('[IFC Mesh] Built', geos.length, 'geometries')
     console.log('[IFC Mesh] Effective units:', effectiveUnits, '| Scaled:', needsScaling)
     console.log('[IFC Mesh] BBox min:', bbox.min.toArray().map(v => v.toFixed(2)), '→ max:', bbox.max.toArray().map(v => v.toFixed(2)))
     console.log('[IFC Mesh] Dimensions (ft):', size.x.toFixed(1), 'W ×', size.y.toFixed(1), 'D ×', size.z.toFixed(1), 'H')
     console.log('[IFC Mesh] Center:', [c.x.toFixed(2), c.y.toFixed(2), c.z.toFixed(2)])
     return { geometries: geos, center: [c.x, c.y, c.z], zMin: bbox.min.z }
-  }, [meshData, needsScaling, effectiveUnits])
+  }, [meshData, needsScaling, effectiveUnits, units])
 
   // Dispose geometries on unmount
   useEffect(() => {
@@ -130,14 +149,14 @@ const ImportedModelMesh = ({ lotId, filename, x = 0, y = 0, rotation = 0, scale 
   return (
     <group
       ref={groupRef}
-      position={[x, y, 0]}
+      position={[x, y, 0.102]}
       rotation={[0, 0, rotation]}
       scale={[scale, scale, scale]}
     >
       {/* Center horizontally (XY), ground vertically (floor at Z=0) */}
       <group position={[-center[0], -center[1], -zMin]}>
         {geometries.map((g, i) => (
-          <mesh key={i} geometry={g.geometry}>
+          <mesh key={i} geometry={g.geometry} castShadow receiveShadow>
             <meshStandardMaterial
               color={faceColor ? faceColor : new THREE.Color(g.color.r, g.color.g, g.color.b)}
               opacity={faceOpacity}

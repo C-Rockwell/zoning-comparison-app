@@ -14,6 +14,9 @@ import RoofMesh from './RoofMesh'
 import Dimension from '../Dimension'
 import { formatDimension } from '../../utils/formatUnits'
 
+// Z offset to raise buildings above setback fill (0.06) + 0.5 inches clearance
+const BUILDING_Z_OFFSET = 0.102
+
 // Helper function to resolve dimension label based on custom label settings
 const resolveDimensionLabel = (value, dimensionKey, dimensionSettings) => {
     const customLabels = dimensionSettings?.customLabels || {}
@@ -93,7 +96,7 @@ const BuildingEditor = ({
     // Generate floor data for rendering
     const floors = useMemo(() => {
         const floorData = []
-        let currentZ = 0
+        let currentZ = BUILDING_Z_OFFSET
         for (let i = 0; i < stories; i++) {
             const floorHeight = i === 0 ? firstFloorHeight : upperFloorHeight
             floorData.push({
@@ -224,11 +227,11 @@ const BuildingEditor = ({
     }, [model, setBuildingTotalHeight])
 
     // Dimension start/end for height (use polygon-aware bounds)
-    const dimStart = [bounds.cx + bounds.w / 2, bounds.cy + bounds.d / 2, 0]
-    const dimEnd = [bounds.cx + bounds.w / 2, bounds.cy + bounds.d / 2, totalBuildingHeight]
+    const dimStart = [bounds.cx + bounds.w / 2, bounds.cy + bounds.d / 2, BUILDING_Z_OFFSET]
+    const dimEnd = [bounds.cx + bounds.w / 2, bounds.cy + bounds.d / 2, totalBuildingHeight + BUILDING_Z_OFFSET]
 
     // Center position for height handle (use polygon-aware bounds)
-    const heightHandlePos = [bounds.cx, bounds.cy, totalBuildingHeight + 1.5]
+    const heightHandlePos = [bounds.cx, bounds.cy, totalBuildingHeight + BUILDING_Z_OFFSET + 1.5]
 
     // Vertices to use for roof (generate from rect if needed)
     const roofVertices = useMemo(() => {
@@ -313,7 +316,7 @@ const BuildingEditor = ({
                 <RoofMesh
                     vertices={roofVertices}
                     roofSettings={roof}
-                    baseZ={totalBuildingHeight}
+                    baseZ={totalBuildingHeight + BUILDING_Z_OFFSET}
                     maxHeight={maxHeight}
                     styles={roofStyles}
                     lineScale={lineScale}

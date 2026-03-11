@@ -23,9 +23,9 @@ export async function loadIFCMeshes(url) {
   const buffer = await response.arrayBuffer()
   console.log('[IFC] File loaded:', buffer.byteLength, 'bytes')
 
-  // web-ifc normalizes ALL geometry to meters internally, regardless of file units
-  const detectedUnits = 'meters'
-  console.log('[IFC] Units: meters (web-ifc always normalizes to meters)')
+  // Default to feet — app is imperial throughout. Users with metric IFC files can switch via dropdown.
+  const detectedUnits = 'feet'
+  console.log('[IFC] Units: feet (default — use Meters dropdown for metric files)')
 
   const modelID = api.OpenModel(new Uint8Array(buffer))
   if (modelID < 0) throw new Error('web-ifc failed to open IFC model')

@@ -14,6 +14,7 @@ const LotEditor = ({
     showDimensions = false,
     dimensionSettings = {},
     offsetGroupX = 0,
+    offsetGroupY = 0,
     lineScale = 1,   // Line scale for export WYSIWYG
     // Store actions
     updateVertex,
@@ -72,6 +73,7 @@ const LotEditor = ({
                             onDrag={handleVertexDrag}
                             onDragEnd={handleVertexDragEnd}
                             offsetGroupX={offsetGroupX}
+                            offsetGroupY={offsetGroupY}
                         />
                     ))}
 
@@ -100,6 +102,7 @@ const LotEditor = ({
                                 edgeIndex={index}
                                 onExtrude={handleExtrude}
                                 offsetGroupX={offsetGroupX}
+                                offsetGroupY={offsetGroupY}
                             />
                         )
                     })}

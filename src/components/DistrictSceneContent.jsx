@@ -42,7 +42,7 @@ const GroundPlane = ({ style }) => {
                 color={style.color}
                 opacity={style.opacity}
                 transparent={style.opacity < 1}
-                side={THREE.DoubleSide}
+                side={THREE.FrontSide}
                 depthWrite={style.opacity >= 0.95}
                 roughness={1}
                 metalness={0}
@@ -390,13 +390,13 @@ const EntityRoadModules = ({ lotPositions }) => {
                         const intColor = roadModuleStyles.intersectionFill?.fillColor ?? roadModuleStyles.roadWidth?.fillColor ?? '#666666'
                         const intOpacity = roadModuleStyles.intersectionFill?.fillOpacity ?? roadModuleStyles.roadWidth?.fillOpacity ?? 1.0
                         return (
-                            <mesh key={rect.key} position={[rect.cx, rect.cy, 0.04]} receiveShadow renderOrder={1}>
+                            <mesh key={rect.key} position={[rect.cx, rect.cy, 0.04]} renderOrder={1}>
                                 <shapeGeometry args={[rect.shape]} />
                                 <meshStandardMaterial
                                     color={intColor}
                                     opacity={intOpacity}
                                     transparent={intOpacity < 1}
-                                    side={THREE.DoubleSide}
+                                    side={THREE.FrontSide}
                                     depthWrite={intOpacity >= 0.95}
                                     roughness={1}
                                     metalness={0}
@@ -409,13 +409,13 @@ const EntityRoadModules = ({ lotPositions }) => {
                         const intColor = roadModuleStyles.alleyIntersectionFill?.fillColor ?? roadModuleStyles.intersectionFill?.fillColor ?? '#666666'
                         const intOpacity = roadModuleStyles.alleyIntersectionFill?.fillOpacity ?? roadModuleStyles.intersectionFill?.fillOpacity ?? 1.0
                         return (
-                            <mesh key={rect.key} position={[rect.cx, rect.cy, 0.077]} receiveShadow renderOrder={1}>
+                            <mesh key={rect.key} position={[rect.cx, rect.cy, 0.077]} renderOrder={1}>
                                 <planeGeometry args={[rect.w, rect.h]} />
                                 <meshStandardMaterial
                                     color={intColor}
                                     opacity={intOpacity}
                                     transparent={intOpacity < 1}
-                                    side={THREE.DoubleSide}
+                                    side={THREE.FrontSide}
                                     depthWrite={intOpacity >= 0.95}
                                     roughness={1}
                                     metalness={0}

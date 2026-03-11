@@ -1,13 +1,14 @@
 import { useState, useMemo, useRef } from 'react'
-import { useThree } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useStore } from '../../store/useStore'
 
 // Push/pull handle on edges - drag perpendicular to extrude
-const EdgeHandle = ({ v1, v2, edgeIndex, onExtrude, offsetGroupX = 0 }) => {
+const EdgeHandle = ({ v1, v2, edgeIndex, onExtrude, offsetGroupX = 0, offsetGroupY = 0 }) => {
     const [hovered, setHovered] = useState(false)
     const [dragging, setDragging] = useState(false)
-    const { controls } = useThree()
+    const { controls, camera } = useThree()
+    const groupRef = useRef()
 
     // Store the start position when drag begins
     const dragStartRef = useRef(null)
@@ -38,8 +39,17 @@ const EdgeHandle = ({ v1, v2, edgeIndex, onExtrude, offsetGroupX = 0 }) => {
         Math.pow(v2.x - v1.x, 2) + Math.pow(v2.y - v1.y, 2)
     )
 
+    // Camera-distance scaling — handles stay ~same screen size regardless of zoom
+    useFrame(() => {
+        if (!groupRef.current) return
+        const worldPos = new THREE.Vector3(midpoint.x, midpoint.y, 0)
+        const dist = camera.position.distanceTo(worldPos)
+        const newScale = Math.max(0.3, Math.min(2.0, dist / 100))
+        groupRef.current.scale.setScalar(newScale)
+    })
+
     // Hide if edge is too short
-    if (edgeLength < 10) return null
+    if (edgeLength < 3) return null
 
     // Arrow position (offset from edge center along perpendicular)
     const arrowOffset = 5
@@ -62,7 +72,7 @@ const EdgeHandle = ({ v1, v2, edgeIndex, onExtrude, offsetGroupX = 0 }) => {
         if (e.ray.intersectPlane(plane, planeIntersectPoint.current)) {
             dragStartRef.current = {
                 x: planeIntersectPoint.current.x - offsetGroupX,
-                y: planeIntersectPoint.current.y,
+                y: planeIntersectPoint.current.y - offsetGroupY,
             }
             initialDistanceRef.current = 0
         }
@@ -84,7 +94,7 @@ const EdgeHandle = ({ v1, v2, edgeIndex, onExtrude, offsetGroupX = 0 }) => {
         if (!e.ray.intersectPlane(plane, planeIntersectPoint.current)) return
 
         const currentX = planeIntersectPoint.current.x - offsetGroupX
-        const currentY = planeIntersectPoint.current.y
+        const currentY = planeIntersectPoint.current.y - offsetGroupY
 
         // Calculate movement from drag start
         const dx = currentX - dragStartRef.current.x
@@ -104,15 +114,11 @@ const EdgeHandle = ({ v1, v2, edgeIndex, onExtrude, offsetGroupX = 0 }) => {
     }
 
     const size = dragging ? 2.0 : (hovered ? 1.75 : 1.4)
-    const color = dragging ? '#ffff00' : (hovered ? '#00aaff' : '#4488ff')
+    const color = dragging ? '#ffff00' : (hovered ? '#CC0000' : '#8B0000')
 
     return (
         <group>
-            {/* Arrow indicator */}
-            <group
-                position={[arrowPosition.x, arrowPosition.y, 0.7]}
-                rotation={[0, 0, arrowRotation]}
-            >
+            <group ref={groupRef} position={[arrowPosition.x, arrowPosition.y, 0.7]} rotation={[0, 0, arrowRotation]}>
                 <mesh
                     onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
                     onPointerOut={() => setHovered(false)}
@@ -130,7 +136,7 @@ const EdgeHandle = ({ v1, v2, edgeIndex, onExtrude, offsetGroupX = 0 }) => {
                 </mesh>
             </group>
 
-            {/* Large invisible capture plane during drag */}
+            {/* Large invisible capture plane during drag — outside scaling group */}
             {dragging && (
                 <mesh
                     visible={false}

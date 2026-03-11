@@ -106,14 +106,29 @@ const applyPerpendicularConstraint = (vertices, movedIndex, newX, newY) => {
     return newVertices;
 };
 
+// Check if a point lies on the line segment between lineV1 and lineV2 (within tolerance)
+const isPointOnSegment = (point, lineV1, lineV2, tolerance = 0.5) => {
+    const dx = lineV2.x - lineV1.x;
+    const dy = lineV2.y - lineV1.y;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq === 0) return Math.sqrt((point.x - lineV1.x) ** 2 + (point.y - lineV1.y) ** 2) <= tolerance;
+    const len = Math.sqrt(lenSq);
+    // Distance from point to infinite line
+    const dist = Math.abs(dx * (lineV1.y - point.y) - dy * (lineV1.x - point.x)) / len;
+    if (dist > tolerance) return false;
+    // Check projection falls within segment (with tolerance on endpoints)
+    const t = ((point.x - lineV1.x) * dx + (point.y - lineV1.y) * dy) / lenSq;
+    return t >= -tolerance / len && t <= 1 + tolerance / len;
+};
+
 // Calculate perpendicular direction for an edge (outward normal)
 const getEdgePerpendicular = (v1, v2) => {
     const dx = v2.x - v1.x;
     const dy = v2.y - v1.y;
     const len = Math.sqrt(dx * dx + dy * dy);
     if (len === 0) return { x: 0, y: 1 };
-    // Rotate 90 degrees counter-clockwise for outward normal
-    return { x: -dy / len, y: dx / len };
+    // Rotate 90 degrees clockwise for outward normal (matches EdgeHandle visual direction)
+    return { x: dy / len, y: -dx / len };
 };
 
 // ============================================
@@ -157,7 +172,7 @@ export const createDefaultLot = (overrides = {}) => ({
         },
     },
     // Lot access (Model Parameters)
-    lotAccess: { front: false, sideInterior: false, sideStreet: false, rear: false },
+    lotAccess: { front: false, sideInterior: false, sideStreet: false, rear: false, sharedDriveLocation: 'front' },
     // Parking locations (Model Parameters)
     parking: { front: false, sideInterior: false, sideStreet: false, rear: false },
     // Parking setbacks (Model Parameters)
@@ -225,6 +240,7 @@ export const createDefaultLotStyle = (overrides = {}) => ({
         }
     },
     lotAccessArrows: { color: '#FF00FF', opacity: 1.0, scale: 1 },
+    sharedDriveArrow: { color: '#FF00FF', opacity: 1.0, scale: 1, outlineColor: '#000000', outlineWidth: 1, outlineType: 'solid' },
     importedModelFaces: { color: '#D5D5D5', opacity: 1.0, transparent: true },
     importedModelEdges: { color: '#000000', width: 1.5, visible: true, opacity: 1.0 },
     ...overrides,
@@ -601,7 +617,7 @@ export const useStore = create(
                     antialiasing: true,
                     environmentIntensity: 0.8,
                     shadowQuality: 'high', // 'low' | 'medium' | 'high'
-                    contactShadows: true,
+                    contactShadows: false, // deprecated — ContactShadows removed
                     // Material settings
                     materialRoughness: 0.7,
                     materialMetalness: 0.1,
@@ -955,33 +971,19 @@ export const useStore = create(
                 // ============================================
 
                 // Enable polygon editing mode - converts rectangle to vertices
-                // Preserves the anchor point: existing lot anchors at (0,0) = bottom-right
-                // Proposed lot anchors at (0,0) = bottom-left
+                // Vertices centered around (0,0) to match group coordinate system
                 enablePolygonMode: (model) => set((state) => {
                     const params = state[model];
                     const w = params.lotWidth;
                     const d = params.lotDepth;
 
-                    let vertices;
-                    if (model === 'existing') {
-                        // Existing: anchor at bottom-right (0,0)
-                        // Lot extends to negative X
-                        vertices = [
-                            { id: generateVertexId(), x: -w, y: 0 },  // Bottom-left
-                            { id: generateVertexId(), x: 0, y: 0 },   // Bottom-right (anchor)
-                            { id: generateVertexId(), x: 0, y: d },   // Top-right
-                            { id: generateVertexId(), x: -w, y: d },  // Top-left
-                        ];
-                    } else {
-                        // Proposed: anchor at bottom-left (0,0)
-                        // Lot extends to positive X
-                        vertices = [
-                            { id: generateVertexId(), x: 0, y: 0 },   // Bottom-left (anchor)
-                            { id: generateVertexId(), x: w, y: 0 },   // Bottom-right
-                            { id: generateVertexId(), x: w, y: d },   // Top-right
-                            { id: generateVertexId(), x: 0, y: d },   // Top-left
-                        ];
-                    }
+                    // Both existing and proposed: centered around (0,0)
+                    const vertices = [
+                        { id: generateVertexId(), x: -w / 2, y: -d / 2 },  // Bottom-left
+                        { id: generateVertexId(), x: w / 2, y: -d / 2 },   // Bottom-right
+                        { id: generateVertexId(), x: w / 2, y: d / 2 },    // Top-right
+                        { id: generateVertexId(), x: -w / 2, y: d / 2 },   // Top-left
+                    ];
 
                     return {
                         [model]: {
@@ -1056,13 +1058,10 @@ export const useStore = create(
                     const snappedX = snapToGrid(newX);
                     const snappedY = snapToGrid(newY);
 
-                    // Apply perpendicular constraint
-                    const newVertices = applyPerpendicularConstraint(
-                        geometry.vertices,
-                        vertexIndex,
-                        snappedX,
-                        snappedY
-                    );
+                    // Apply perpendicular constraint only for 4-vertex rectangles; free drag for 5+ vertices
+                    const newVertices = geometry.vertices.length <= 4
+                        ? applyPerpendicularConstraint(geometry.vertices, vertexIndex, snappedX, snappedY)
+                        : geometry.vertices.map((v, i) => i === vertexIndex ? { ...v, x: snappedX, y: snappedY } : v);
 
                     // Update bounding dimensions for slider sync
                     const bounds = verticesToBoundingRect(newVertices);
@@ -1138,9 +1137,9 @@ export const useStore = create(
                     const snappedDistance = snapToGrid(distance);
                     if (Math.abs(snappedDistance) < 0.5) return state;
 
-                    // Move both vertices of the edge
+                    // Move all vertices collinear with the edge (handles midpoint splits)
                     const newVertices = vertices.map((v, i) => {
-                        if (i === v1Index || i === v2Index) {
+                        if (i === v1Index || i === v2Index || isPointOnSegment(v, v1, v2)) {
                             return {
                                 ...v,
                                 x: snapToGrid(v.x + perp.x * snappedDistance),
@@ -1231,7 +1230,9 @@ export const useStore = create(
                     if (!geometry || !geometry.vertices) return state;
                     const snappedX = snapToGrid(newX);
                     const snappedY = snapToGrid(newY);
-                    const newVertices = applyPerpendicularConstraint(geometry.vertices, vertexIndex, snappedX, snappedY);
+                    const newVertices = geometry.vertices.length <= 4
+                        ? applyPerpendicularConstraint(geometry.vertices, vertexIndex, snappedX, snappedY)
+                        : geometry.vertices.map((v, i) => i === vertexIndex ? { ...v, x: snappedX, y: snappedY } : v);
                     const bounds = verticesToBoundingRect(newVertices);
                     return {
                         [model]: {
@@ -1285,7 +1286,7 @@ export const useStore = create(
                     const snappedDistance = snapToGrid(distance);
                     if (Math.abs(snappedDistance) < 0.5) return state;
                     const newVertices = vertices.map((v, i) => {
-                        if (i === v1Index || i === v2Index) {
+                        if (i === v1Index || i === v2Index || isPointOnSegment(v, vertices[v1Index], vertices[v2Index])) {
                             return {
                                 ...v,
                                 x: snapToGrid(v.x + perp.x * snappedDistance),
@@ -1440,7 +1441,9 @@ export const useStore = create(
                     if (!geometry || !geometry.vertices) return state;
                     const snappedX = snapToGrid(newX);
                     const snappedY = snapToGrid(newY);
-                    const newVertices = applyPerpendicularConstraint(geometry.vertices, vertexIndex, snappedX, snappedY);
+                    const newVertices = geometry.vertices.length <= 4
+                        ? applyPerpendicularConstraint(geometry.vertices, vertexIndex, snappedX, snappedY)
+                        : geometry.vertices.map((v, i) => i === vertexIndex ? { ...v, x: snappedX, y: snappedY } : v);
                     const bounds = verticesToBoundingRect(newVertices);
                     return {
                         [model]: {
@@ -1494,7 +1497,7 @@ export const useStore = create(
                     const snappedDistance = snapToGrid(distance);
                     if (Math.abs(snappedDistance) < 0.5) return state;
                     const newVertices = vertices.map((v, i) => {
-                        if (i === v1Index || i === v2Index) {
+                        if (i === v1Index || i === v2Index || isPointOnSegment(v, vertices[v1Index], vertices[v2Index])) {
                             return {
                                 ...v,
                                 x: snapToGrid(v.x + perp.x * snappedDistance),
@@ -2128,12 +2131,12 @@ export const useStore = create(
                     if (!lot) return state;
                     const w = lot.lotWidth;
                     const d = lot.lotDepth;
-                    // District lots anchor at bottom-left (0,0), extend to positive X
+                    // District lots: centered around (0,0) to match group position at (offset + w/2, d/2)
                     const vertices = [
-                        { id: generateVertexId(), x: 0, y: 0 },
-                        { id: generateVertexId(), x: w, y: 0 },
-                        { id: generateVertexId(), x: w, y: d },
-                        { id: generateVertexId(), x: 0, y: d },
+                        { id: generateVertexId(), x: -w / 2, y: -d / 2 },
+                        { id: generateVertexId(), x: w / 2, y: -d / 2 },
+                        { id: generateVertexId(), x: w / 2, y: d / 2 },
+                        { id: generateVertexId(), x: -w / 2, y: d / 2 },
                     ];
                     return {
                         entities: {
@@ -2171,7 +2174,10 @@ export const useStore = create(
                     if (!lot || !lot.lotGeometry?.vertices) return state;
                     const snappedX = snapToGrid(newX);
                     const snappedY = snapToGrid(newY);
-                    const newVertices = applyPerpendicularConstraint(lot.lotGeometry.vertices, vertexIndex, snappedX, snappedY);
+                    // Apply perpendicular constraint only for 4-vertex rectangles; free drag for 5+ vertices
+                    const newVertices = lot.lotGeometry.vertices.length <= 4
+                        ? applyPerpendicularConstraint(lot.lotGeometry.vertices, vertexIndex, snappedX, snappedY)
+                        : lot.lotGeometry.vertices.map((v, i) => i === vertexIndex ? { ...v, x: snappedX, y: snappedY } : v);
                     const bounds = verticesToBoundingRect(newVertices);
                     return {
                         entities: {
@@ -2220,7 +2226,7 @@ export const useStore = create(
                     const snappedDistance = snapToGrid(distance);
                     if (Math.abs(snappedDistance) < 0.5) return state;
                     const newVertices = vertices.map((v, i) => {
-                        if (i === v1Index || i === v2Index) {
+                        if (i === v1Index || i === v2Index || isPointOnSegment(v, vertices[v1Index], vertices[v2Index])) {
                             return { ...v, x: snapToGrid(v.x + perp.x * snappedDistance), y: snapToGrid(v.y + perp.y * snappedDistance) };
                         }
                         return v;
@@ -2323,7 +2329,9 @@ export const useStore = create(
                     if (!building || !building.geometry?.vertices) return state;
                     const snappedX = snapToGrid(newX);
                     const snappedY = snapToGrid(newY);
-                    const newVertices = applyPerpendicularConstraint(building.geometry.vertices, vertexIndex, snappedX, snappedY);
+                    const newVertices = building.geometry.vertices.length <= 4
+                        ? applyPerpendicularConstraint(building.geometry.vertices, vertexIndex, snappedX, snappedY)
+                        : building.geometry.vertices.map((v, i) => i === vertexIndex ? { ...v, x: snappedX, y: snappedY } : v);
                     const bounds = verticesToBoundingRect(newVertices);
                     return {
                         entities: {
@@ -2388,7 +2396,7 @@ export const useStore = create(
                     const snappedDistance = snapToGrid(distance);
                     if (Math.abs(snappedDistance) < 0.5) return state;
                     const newVertices = vertices.map((v, i) => {
-                        if (i === v1Index || i === v2Index) {
+                        if (i === v1Index || i === v2Index || isPointOnSegment(v, vertices[v1Index], vertices[v2Index])) {
                             return { ...v, x: snapToGrid(v.x + perp.x * snappedDistance), y: snapToGrid(v.y + perp.y * snappedDistance) };
                         }
                         return v;
@@ -4338,6 +4346,10 @@ export const useStore = create(
                             if (lot.importedModel === undefined) {
                                 lot.importedModel = null;
                             }
+                            // Patch missing sharedDriveLocation
+                            if (lot.lotAccess && lot.lotAccess.sharedDriveLocation === undefined) {
+                                lot.lotAccess.sharedDriveLocation = 'front';
+                            }
                             if (!lot.parkingSetbacks) {
                                 lot.parkingSetbacks = { front: null, sideInterior: null, sideStreet: null, rear: null };
                             }
@@ -4369,6 +4381,24 @@ export const useStore = create(
                         for (const key of alleyKeys) {
                             if (merged.roadModuleStyles[key] === undefined) {
                                 merged.roadModuleStyles[key] = null;
+                            }
+                        }
+                    }
+                    // Patch missing left/right zone style keys
+                    if (merged.roadModuleStyles) {
+                        const zoneStyleDefaults = {
+                            leftParking: { lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1.0, fillColor: '#888888', fillOpacity: 1.0 },
+                            leftVerge: { lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1.0, fillColor: '#c4a77d', fillOpacity: 1.0 },
+                            leftSidewalk: { lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1.0, fillColor: '#90EE90', fillOpacity: 1.0 },
+                            leftTransitionZone: { lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1.0, fillColor: '#98D8AA', fillOpacity: 1.0 },
+                            rightParking: { lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1.0, fillColor: '#888888', fillOpacity: 1.0 },
+                            rightVerge: { lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1.0, fillColor: '#c4a77d', fillOpacity: 1.0 },
+                            rightSidewalk: { lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1.0, fillColor: '#90EE90', fillOpacity: 1.0 },
+                            rightTransitionZone: { lineColor: '#000000', lineWidth: 1, lineDashed: false, lineOpacity: 1.0, fillColor: '#98D8AA', fillOpacity: 1.0 },
+                        };
+                        for (const [key, defaultVal] of Object.entries(zoneStyleDefaults)) {
+                            if (merged.roadModuleStyles[key] === undefined) {
+                                merged.roadModuleStyles[key] = defaultVal;
                             }
                         }
                     }

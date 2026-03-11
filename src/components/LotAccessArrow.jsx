@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
+import { Line } from '@react-three/drei'
 import * as THREE from 'three'
 import { useStore } from '../store/useStore'
 
@@ -98,6 +99,7 @@ const createSharedDriveShape = (
  */
 const LotAccessArrow = ({
     direction = 'front',
+    rearMode = false,
     lotId,
     // eslint-disable-next-line no-unused-vars
     lotWidth, lotDepth, // accepted for API consistency — parent uses for default positions
@@ -156,6 +158,24 @@ const LotAccessArrow = ({
     const isSharedDrive = direction === 'sharedDrive'
     const activeGeometry = isSharedDrive ? sharedDriveGeometry : arrowGeometry
 
+    // Outline points for shared drive shape
+    const outlinePoints = useMemo(() => {
+        if (!isSharedDrive || (styleProp?.outlineWidth ?? 0) <= 0) return null
+        const stemLen = (lotDepth || 100) / 2
+        const s = scale
+        const shape = createSharedDriveShape(stemLen, 2 * s, 14 * s, 4 * s, 2.5, 1.5 * s)
+        const pts = shape.getPoints(64)
+        // Center X (same as sharedDriveGeometry)
+        const geo = new THREE.ShapeGeometry(shape)
+        geo.computeBoundingBox()
+        const cx = (geo.boundingBox.min.x + geo.boundingBox.max.x) / 2
+        geo.dispose()
+        // Convert to 3D, close loop
+        const pts3d = pts.map(p => [p.x - cx, p.y, 0])
+        if (pts3d.length > 0) pts3d.push([...pts3d[0]])
+        return pts3d
+    }, [isSharedDrive, styleProp?.outlineWidth, lotDepth, scale])
+
     // Compute rotation based on direction
     const rotation = useMemo(() => {
         switch (direction) {
@@ -166,13 +186,13 @@ const LotAccessArrow = ({
             case 'sideStreet':
                 return streetSides.left ? -Math.PI / 2 : Math.PI / 2
             case 'sharedDrive':
-                // T-junction: stem points from front street into lot (+Y = toward rear)
-                // Rotation 0 means stem goes in +Y direction (front toward rear)
-                return 0
+                // T-junction: stem points from street into lot
+                // rearMode flips 180° so stem points from rear edge
+                return rearMode ? Math.PI : 0
             default:
                 return 0
         }
-    }, [direction, streetSides])
+    }, [direction, streetSides, rearMode])
 
     // Drag handlers (following DraggableLabel pattern)
     const handlePointerDown = (e) => {
@@ -284,6 +304,20 @@ const LotAccessArrow = ({
                     depthWrite={isMoveModeTarget ? false : !isTransparent}
                 />
             </mesh>
+
+            {/* Shared drive outline */}
+            {isSharedDrive && outlinePoints && outlinePoints.length > 2 && (
+                <group rotation={[0, 0, rotation]}>
+                    <Line
+                        points={outlinePoints}
+                        color={styleProp?.outlineColor ?? '#000000'}
+                        lineWidth={styleProp?.outlineWidth ?? 1}
+                        dashed={styleProp?.outlineType === 'dashed'}
+                        dashSize={1}
+                        gapSize={0.5}
+                    />
+                </group>
+            )}
 
             {/* Second arrow for bidirectional (only for non-sharedDrive directions) */}
             {bidirectional && !isSharedDrive && (

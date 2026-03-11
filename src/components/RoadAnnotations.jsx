@@ -174,6 +174,9 @@ const RoadAnnotations = ({
     // Master toggle — hide everything if annotation labels are off
     if (!layers?.annotationLabels) return null
 
+    // Flip text 180° for left/right/rear roads so labels aren't upside-down in 'fixed' text mode
+    const needsFlip = direction === 'left' || direction === 'rear'
+
     // Shared style props
     const sharedProps = {
         color: annotationSettings.textColor,
@@ -192,6 +195,7 @@ const RoadAnnotations = ({
             width: annotationSettings.leaderLineWidth,
             dashed: annotationSettings.leaderLineDashed,
         },
+        fixedRotation: needsFlip ? [0, 0, Math.PI] : [0, 0, 0],
         lineScale,
     }
 

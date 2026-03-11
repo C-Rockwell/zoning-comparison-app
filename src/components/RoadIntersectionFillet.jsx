@@ -74,13 +74,13 @@ const RoadIntersectionFillet = ({
                 return (
                     <group key={`${zone.zoneType}-${index}`}>
                         {/* Filled arc shape */}
-                        <mesh position={[0, 0, zone.zOffset]} receiveShadow renderOrder={2}>
+                        <mesh position={[0, 0, zone.zOffset]} renderOrder={2}>
                             <shapeGeometry args={[zone.shape]} />
                             <meshStandardMaterial
                                 color={zone.fill.color}
                                 opacity={zone.fill.opacity}
                                 transparent={zone.fill.opacity < 1}
-                                side={THREE.DoubleSide}
+                                side={THREE.FrontSide}
                                 depthWrite={zone.fill.opacity >= 0.95}
                                 roughness={1}
                                 metalness={0}

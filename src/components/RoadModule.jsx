@@ -41,13 +41,13 @@ const RoadPolygon = ({ xMin, xMax, yMin, yMax, style, zOffset = 0.01, suppressLe
     return (
         <group>
             {/* Fill */}
-            <mesh position={[centerX, centerY, zOffset]} receiveShadow>
+            <mesh position={[centerX, centerY, zOffset]}>
                 <planeGeometry args={[width, depth]} />
                 <meshStandardMaterial
                     color={style.fillColor}
                     opacity={style.fillOpacity}
                     transparent={style.fillOpacity < 1}
-                    side={THREE.DoubleSide}
+                    side={THREE.FrontSide}
                     depthWrite={style.fillOpacity >= 0.95}
                     roughness={1}
                     metalness={0}

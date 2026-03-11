@@ -40,7 +40,7 @@ React 19 + Vite 7 + Three.js 0.182 via @react-three/fiber 9.4 | Zustand 5 + Zund
 **Entity System** (District):
 - `entities.lots[lotId]` — lot data with buildings, setbacks (principal + accessory)
 - `entityOrder` — lot IDs in display order
-- `entityStyles[lotId]` — per-lot styles (12 categories)
+- `entityStyles[lotId]` — per-lot styles (17 categories)
 - `lotVisibility[lotId]` — per-lot visibility toggles
 - `modelSetup` — numLots, streetEdges, streetTypes (S1/S2/S3)
 - `districtParameters` — informational zoning data (auto-populates lots via `DISTRICT_TO_LOT_MAP`)
@@ -49,7 +49,7 @@ React 19 + Vite 7 + Three.js 0.182 via @react-three/fiber 9.4 | Zustand 5 + Zund
 
 **Other key state**: `viewSettings` (camera, export, batch queue), `layerVisibility` (26+ layers), `dimensionSettings`, `annotationSettings`, `annotationCustomLabels`, `annotationPositions`, `styleSettings`, `roadModule`, `roadModuleStyles` (17 categories: 11 base + 6 alley-specific), `sunSettings`, `moveMode` (transient, excluded from persist/Zundo), `roadModuleStylesSnapshot` (transient — global style toggle revert)
 
-**Store version 29**: Migrations v1–v28 + v29 drawing editor foundation. Persist `merge` function patches missing `entityStyles`, `lotVisibility`, `viewSettings.layers`, `roadModuleStyles`, `dimensionSettings`, `annotationSettings`, `entities.lots[].parkingSetbacks`, and `drawingLayers/drawingObjects/drawingDefaults` keys on every hydration. Merge also reconciles lot `parkingSetbacks` with `districtParameters.parkingLocations` values.
+**Store version 29**: Migrations v1–v28 + v29 drawing editor foundation. Persist `merge` function patches missing `entityStyles`, `lotVisibility`, `viewSettings.layers`, `roadModuleStyles`, `dimensionSettings`, `annotationSettings`, `entities.lots[].parkingSetbacks`, `entities.lots[].lotAccess.sharedDriveLocation`, and `drawingLayers/drawingObjects/drawingDefaults` keys on every hydration. Merge also reconciles lot `parkingSetbacks` with `districtParameters.parkingLocations` values.
 
 **Drawing Editor** (All 8 phases DONE, runtime-tested Feb 2025 — 158/158 Playwright tests PASS):
 - `drawingLayers` — `{ [layerId]: { name, visible, locked, zHeight, renderMode, order } }`
@@ -216,8 +216,8 @@ AutoCAD-style 3-phase: selectObject → selectBase (pause undo, disable camera) 
 - **NEVER define components inside render functions** — causes React to unmount/remount on every render, triggering render loops and locking the app. Always define at module level. Use `DimSubSection`/`DimDivider` in `DistrictParameterPanel.jsx` as the correct pattern.
 - **NEVER put `return null` before hooks** — all `useState`, `useRef`, `useMemo`, `useCallback`, `useThree`, `useStore` etc. must come BEFORE any early return. Putting `if (!visible) return null` above hooks causes "Rendered more hooks than during the previous render" crash (white screen). Fixed in: `DraggableLabel.jsx`, `AnnotationText.jsx`, `RoadAnnotations.jsx`, `RoadModule.jsx`.
 
-## Style Categories (16)
-Lot Lines, Setback Fill, Setbacks, Accessory Setbacks, Max Setbacks, Parking Setbacks, BTZ Planes, Lot Access Arrows, Principal Building Edges/Faces, Accessory Building Edges/Faces, Roof, Max Height Plane, Imported Model Faces/Edges
+## Style Categories (17)
+Lot Lines, Setback Fill, Setbacks, Accessory Setbacks, Max Setbacks, Parking Setbacks, BTZ Planes, Lot Access Arrows, **Shared Drive Arrow**, Principal Building Edges/Faces, Accessory Building Edges/Faces, Roof, Max Height Plane, Imported Model Faces/Edges
 
 ## Backend API
 
@@ -244,7 +244,7 @@ Endpoints: `/api/health`, `/api/config` (GET/PUT), `/api/projects/:id` (CRUD), `
 - **Google Fonts URLs**: `DIMENSION_FONT_OPTIONS` in `useStore.js` uses direct gstatic.com URLs. **Troika-three-text does NOT support woff2** — always use `.woff` or `.ttf` format. Current URLs: Inter v12 (woff), Roboto v51 (ttf), Lato v24 (woff), Montserrat v31 (ttf), Oswald v57 (ttf), Source Sans 3 v19 (ttf). If fonts go blank, re-fetch TTF URLs via Google Fonts v1 API: `https://fonts.googleapis.com/css?family=FontName:400` (returns older non-woff2 format) and update the array.
 - **Height dimensions**: `BuildingEditor/index.jsx` renders height dims with `plane="XZ"` and `textMode="billboard"` — required for pure-Z direction vectors. Default `plane="XY"` produces a zero perpendicular for Z-only dims, making ticks/extension lines invisible. Billboard text always faces camera at mid-height.
 - **Max height source of truth**: `principalMaxHeight` / `accessoryMaxHeight` in `LotEntity.jsx` come from `districtParameters.structures.{principal|accessory}.height.max` (not per-lot `building.maxHeight`). Defaults to `0` when unset, hiding the max height plane and dimension — set District Parameters → Structures to visualize. Max height dim (`offset=-20`) alongside building height dim (`offset=-10`) in `BuildingEditor/index.jsx` — negative so dims extend OUTSIDE the building (XZ plane perpendicular for Z-direction is `-X`, so negative offset → outward). Layer keys: `dimensionsHeightPrincipal` / `dimensionsHeightAccessory` (each ?? `dimensionsHeight` fallback). Custom labels: `principalMaxHeight`, `accessoryMaxHeight` in `dimensionSettings.customLabels`.
-- **Layers panel**: 5 collapsible subsections in `LayersSection` (`DistrictParameterPanel.jsx`), all default collapsed. Groups defined at module scope as `LAYER_GROUPS`. Order: VISUAL AIDS (grid/origin/ground/axes/gimbal) → LOTS & SETBACKS (lotLines/**setbackFill**/setbacks/accessorySetbacks/maxSetbacks/lotAccessArrows/**parkingSetbacks**/labelLotEdges) → STRUCTURES (btzPlanes/**principalBuildings/accessoryBuildings**/roof/maxHeightPlane) → ROADS (roadModule/roadIntersections/labelRoadZones) → ANNOTATION (annotationLabels + **labelPrincipalBuildings/labelAccessoryBuildings** + dim keys: **dimensionsHeightPrincipal/dimensionsHeightAccessory/dimensionsParkingSetbacks** + other sub-labels).
+- **Layers panel**: 5 collapsible subsections in `LayersSection` (`DistrictParameterPanel.jsx`), all default collapsed. Groups defined at module scope as `LAYER_GROUPS`. Order: VISUAL AIDS (grid/origin/ground/axes/gimbal) → LOTS & SETBACKS (lotLines/**setbackFill**/setbacks/accessorySetbacks/maxSetbacks/lotAccessArrows/**parkingSetbacks**/labelLotEdges) → STRUCTURES (btzPlanes/**principalBuildings/accessoryBuildings**/roof/maxHeightPlane) → ROADS (roadModule/roadIntersections) → ANNOTATION (annotationLabels + **labelRoadNames/labelRoadZones("Road Elements")** + **labelPrincipalBuildings/labelAccessoryBuildings** + dim keys: **dimensionsHeightPrincipal/dimensionsHeightAccessory/dimensionsParkingSetbacks** + other sub-labels).
 - **Empty viewport after localStorage clear**: `entityOrder = []` on fresh state — no lots exist. Go to Model Setup → set Number of Lots ≥ 1.
 - **Annotation system**: `annotationSettings` has `fontFamily` (label from `DIMENSION_FONT_OPTIONS`, null = browser default), `outlineColor`, `outlineWidth`, plus original text/background/leader fields. `annotationCustomLabels` stores per-road-direction and per-lot custom labels (`{ mode: 'default'|'custom', text: '' }`). Road labels keyed as `roadFront`/`roadRight`/`roadRear`/`roadLeft`; lot labels as `lot-{lotId}-name`. Font label resolved to URL via `DIMENSION_FONT_OPTIONS.find()` in `LotAnnotations.jsx` / `RoadAnnotations.jsx`. `RoadAnnotations` accepts `direction` prop for custom label lookup. UI: `AnnotationSettingsSection` in `DistrictParameterPanel.jsx`. Actions: `setAnnotationSetting`, `setAnnotationCustomLabel`. **Leader visibility**: `DraggableLabel` shows leader when label is >0.5 units from `anchorPoint` (distance check, not custom-vs-default). Lot edge labels (anchor on edge, label 3ft outside lot) always show leaders; lot name / road name / setback labels (anchor ≈ default) only show after dragging.
 - **Gimbal/PostProcessing order**: `<PostProcessing />` must render BEFORE the conditional gimbal `<GizmoHelper>` in `SharedCanvas.jsx` and `Viewer3D.jsx`. If PostProcessing comes after, toggling gimbal causes AO/tone mapping to shift (perceived lighting change).
@@ -331,4 +331,43 @@ The `lotPositions` useMemo in `DistrictSceneContent.jsx` previously depended onl
 1. **All sidebar sections default collapsed** — every `<Section>` in `DistrictParameterPanel.jsx` + `DrawingPropertiesPanel.jsx` now has `defaultOpen={false}`
 2. **Lot Access Arrow width scale** — `scale: 1` default in `createDefaultLotStyle()`, slider (0.5–5) in Styles UI, applied to head/shaft widths in `LotAccessArrow.jsx`
 3. **Lot Fill in Styles section** — `lotFill` added to `styleCategories` (first entry) + `isMeshCategory` array
-4. **Imported Model move gizmo** — `MoveHandle` rendered next to `ImportedModelMesh` in `LotEntity.jsx`, wired to `setImportedModelPosition`. Gated by `principal?.selected` — only visible when the lot's principal building is selected (matches principal building MoveHandle pattern)
+4. **Imported Model move gizmo** — `MoveHandle` rendered next to `ImportedModelMesh` in `LotEntity.jsx`, wired to `setImportedModelPosition`. Always visible when imported model layer is on (no longer gated by principal building selection)
+
+## Lot Geometry Manipulation (Giraffe-Style) — FIXED (Mar 2026)
+
+**Goal**: Mimic giraffe.build's polygon editing UX for lot footprints — vertex drag, edge extrude, midpoint splitting.
+
+**Status**: Core editing now works. Four bugs fixed:
+1. **Centered vertices** — `enablePolygonMode` / `enableEntityPolygonMode` now create vertices centered at `(-w/2,-d/2)` → `(w/2,d/2)`, matching the group's local coordinate system
+2. **Y offset in raycasting** — `VertexHandle` and `EdgeHandle` accept `offsetGroupY` prop, subtracted from Y during raycast (eliminates vertex jump on first drag)
+3. **Free drag for 5+ vertices** — `applyPerpendicularConstraint` skipped when vertex count > 4 (after midpoint splits); 4-vertex rectangles still constrained
+4. **Collinear vertex extrusion** — All `extrude*Edge` functions use `isPointOnSegment()` to move ALL collinear vertices on an edge, not just endpoints (handles midpoint-split edges)
+
+**Key files**: `src/components/LotEditor/VertexHandle.jsx`, `EdgeHandle.jsx`, `MidpointHandle.jsx`, `LotEditor/index.jsx`, `LotEntity.jsx`, `useStore.js` (`isPointOnSegment` helper, all vertex update + extrude actions)
+
+**Research docs** (for future reference): `docs/Leaflet.Editable Implementation Analysis.md`, `docs/Research Report_ Implementing Giraffe-Style Geometry Manipulation.md`
+
+## RESOLVED BUGS: Visual Issues (Mar 2026)
+
+**Bug 1 — Setback fill stripe glitches**: FIXED. Root cause was ContactShadows rendering an invisible shadow plane at z=0.08, only 0.02 above setback fills at z=0.06, causing z-fighting. Fix: removed ContactShadows entirely from `SharedCanvas.jsx` and `Viewer3D.jsx`. ContactShadows is fundamentally Y-up and unreliable in Z-up scenes.
+
+**Bug 2 — No visible building/model shadows**: FIXED. Two issues: (1) SetbackFillPolygon mesh lacked `receiveShadow` — added it in `LotEntity.jsx`. (2) Ambient light too high (0.3 ambient + 0.5 hemisphere = 0.8) vs directional 1.5 — shadows barely perceptible. Reduced to 0.15 ambient + 0.3 hemisphere = 0.45 total in both `SharedCanvas.jsx` and `Viewer3D.jsx` StudioLighting.
+
+**Bug 3 — IFC feet-based models appear tiny**: PARTIALLY FIXED. Added auto-detection heuristic in `ImportedModelMesh.jsx`: when `units='auto'` and max bbox dimension < 15ft, auto-scales by METERS_TO_FEET. Also added "Tiny? Try Meters" helper text in `DistrictParameterPanel.jsx` units dropdown. **Auto-detect works correctly. Manual "Feet" selection does NOT** — choosing "Feet" in the units dropdown causes models to display at wrong (tiny) scale. The issue is likely that `ifcLoader.js` defaults `detectedUnits='feet'`, so when user picks "Feet", `effectiveUnits='feet'`, `needsScaling=false`, and no scaling is applied — but web-ifc may be outputting coordinates in meters internally regardless of the file's declared units. Next session should investigate: when "Feet" is selected, are the raw coordinates from web-ifc actually in feet or meters? If web-ifc always outputs meters, then the "Feet" option should skip scaling (current behavior is correct and the label is misleading), or the scaling logic needs inversion for that case.
+
+## Imported Model Move Gizmo Fix (Mar 2026)
+
+Previously the imported model MoveHandle was gated by `principal?.selected` — required selecting a principal building first with the building layer on. Changed to always render the MoveHandle when the imported model is visible (`layers.importedModels && visibility.importedModel && lot.importedModel`). File: `LotEntity.jsx` line ~917.
+
+## Road Elements Layer, Text Rotation Fix, Shared Drive Arrow (Mar 2026)
+
+**Feature 1 — Road Elements layer toggle**: `labelRoadZones` moved from ROADS group to ANNOTATION group in `LAYER_GROUPS`, renamed to "Road Elements" with `indent: true`. Same layer key = zero migration needed.
+
+**Feature 2 — Text rotation fix for non-front roads**: Road annotations on left/rear roads were upside-down in 'fixed' text mode because they inherited the parent group's `DIRECTION_ROTATION`. Fix: `RoadAnnotations.jsx` now passes `fixedRotation: [0, 0, Math.PI]` for `direction === 'left' || 'rear'` only. Right roads do NOT need the flip (parent π/2 rotation is already correct). `DraggableLabel` already supports `fixedRotation` prop. Only affects 'fixed' text mode — billboard mode ignores it. Right setback label in `LotAnnotations.jsx` uses `fixedRotation: [0, 0, Math.PI/2]` (90° CCW) for correct orientation.
+
+**Feature 3 — Shared Drive Arrow independent styles + front/rear placement**:
+- **Style**: `sharedDriveArrow` added to `createDefaultLotStyle()` with `{ color, opacity, scale, outlineColor, outlineWidth, outlineType }`. Persist merge auto-patches from `createDefaultLotStyle()`. `LotEntity.jsx` passes `style?.sharedDriveArrow ?? style?.lotAccessArrows` (fallback to lot access arrows).
+- **Outline**: `LotAccessArrow.jsx` imports `Line` from drei. `outlinePoints` useMemo extracts shape points, renders `<Line>` outline when `outlineWidth > 0`. Supports dashed via `outlineType: 'dashed'`.
+- **UI**: `sharedDriveArrow` in `styleCategories` + `isMeshCategory`. Scale slider (shared condition with `lotAccessArrows`), outline color picker, outline width slider (0–5), dashed outline checkbox.
+- **Front/rear placement**: `lotAccess.sharedDriveLocation: 'front'` in `createDefaultLot()`. Persist merge patches missing key. "SD Location" dropdown (Front/Rear/Both) in Model Parameters Lot Access section via new `type: 'select'` rendering branch in `SectionGroup`.
+- **Rendering**: `LotEntity.jsx` renders front/rear arrows independently based on `sharedDriveLocation`. Rear arrow uses `rearMode={true}` prop + separate annotation position key (`lot-${lotId}-access-shareddrive-rear`). `LotAccessArrow.jsx` accepts `rearMode` prop — rotation `Math.PI` for rear (stem points from rear edge into lot).
