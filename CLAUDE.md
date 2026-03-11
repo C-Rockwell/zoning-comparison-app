@@ -362,6 +362,8 @@ Previously the imported model MoveHandle was gated by `principal?.selected` — 
 
 **RESOLVED — MoveHandle always-visible gizmos**: MoveHandle (imported model + building) was always rendered at opacity 0.9, cluttering the scene. Fix: gizmos now start invisible (`opacity: 0`) and only appear on hover/drag (`opacity: 0.9`). Meshes at opacity 0 still receive pointer events for raycasting. Also gated `onPointerOver` with `!dragging` to prevent hover-stuck during drag across multiple meshes, and added `setHovered(false)` to `handlePointerUp`.
 
+**RESOLVED — Building MoveHandle not discoverable**: Building MoveHandle was inside the `selected && activeVertices` conditional block in `BuildingEditor/index.jsx`, so it only rendered after selection — impossible to discover via hover. Fix: moved MoveHandle outside the selection block, guarded by `bounds && bounds.d > 0` (always true for valid buildings). Now renders independently of selection state, matching imported model MoveHandle behavior.
+
 ## Road Elements Layer, Text Rotation Fix, Shared Drive Arrow (Mar 2026)
 
 **Feature 1 — Road Elements layer toggle**: `labelRoadZones` moved from ROADS group to ANNOTATION group in `LAYER_GROUPS`, renamed to "Road Elements" with `indent: true`. Same layer key = zero migration needed.

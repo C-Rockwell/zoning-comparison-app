@@ -445,17 +445,6 @@ const BuildingEditor = ({
                         offsetGroupX={offsetGroupX}
                     />
 
-                    {/* Move handle at ground level, 13ft in front of building */}
-                    <MoveHandle
-                        position={[bounds.cx, bounds.cy - bounds.d / 2]}
-                        zPosition={0}
-                        displayOffset={[0, -13]}
-                        offsetGroupX={offsetGroupX}
-                        offsetGroupY={offsetGroupY}
-                        onDrag={(newX, newY) => { if (onBuildingMove) onBuildingMove(newX, newY) }}
-                        onDragEnd={() => {}}
-                    />
-
                     {/* Footprint edge dimensions */}
                     {footprintEdges.map((edge) => (
                         <Dimension
@@ -471,6 +460,19 @@ const BuildingEditor = ({
                         />
                     ))}
                 </>
+            )}
+
+            {/* Move handle at ground level, 13ft in front of building — outside selected block so it's always hoverable */}
+            {bounds && bounds.d > 0 && (
+                <MoveHandle
+                    position={[bounds.cx, bounds.cy - bounds.d / 2]}
+                    zPosition={0}
+                    displayOffset={[0, -13]}
+                    offsetGroupX={offsetGroupX}
+                    offsetGroupY={offsetGroupY}
+                    onDrag={(newX, newY) => { if (onBuildingMove) onBuildingMove(newX, newY) }}
+                    onDragEnd={() => {}}
+                />
             )}
 
         </group>
