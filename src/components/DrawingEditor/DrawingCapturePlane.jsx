@@ -2,7 +2,7 @@ import { useRef, useState, useMemo, useCallback, useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
 import { Line } from '@react-three/drei'
 import * as THREE from 'three'
-import { useStore } from '../../store/useStore'
+import { useStore, getEffectiveDrawingDefaults } from '../../store/useStore'
 import {
     generateCirclePoints,
     generateEllipsePoints,
@@ -219,8 +219,11 @@ const DrawingCapturePlane = () => {
     const { camera, raycaster, controls, gl } = useThree()
     const drawingMode = useStore(state => state.drawingMode)
     const activeDrawingLayerId = useStore(state => state.activeDrawingLayerId)
-    const drawingDefaults = useStore(state => state.drawingDefaults)
+    const globalDrawingDefaults = useStore(state => state.drawingDefaults)
     const drawingLayers = useStore(state => state.drawingLayers)
+    const drawingDefaults = useMemo(() => {
+        return getEffectiveDrawingDefaults({ drawingDefaults: globalDrawingDefaults, drawingLayers }, activeDrawingLayerId)
+    }, [globalDrawingDefaults, drawingLayers, activeDrawingLayerId])
     const addDrawingObject = useStore(state => state.addDrawingObject)
     const setSelectedDrawingIds = useStore(state => state.setSelectedDrawingIds)
     const updateDrawingObject = useStore(state => state.updateDrawingObject)
@@ -308,8 +311,9 @@ const DrawingCapturePlane = () => {
     // Helper: commit polygon and clean up
     const commitPolygon = useCallback(() => {
         const { points } = drawingState.current
-        const defaults = useStore.getState().drawingDefaults
-        const layerId = useStore.getState().activeDrawingLayerId
+        const state = useStore.getState()
+        const layerId = state.activeDrawingLayerId
+        const defaults = getEffectiveDrawingDefaults(state, layerId)
 
         if (points.length >= 3) {
             addDrawingObject({
@@ -637,8 +641,9 @@ const DrawingCapturePlane = () => {
         if (!drawingState.current.isDrawing) return
 
         const { startPoint, currentPoint, points } = drawingState.current
-        const defaults = useStore.getState().drawingDefaults
-        const layerId = useStore.getState().activeDrawingLayerId
+        const state = useStore.getState()
+        const layerId = state.activeDrawingLayerId
+        const defaults = getEffectiveDrawingDefaults(state, layerId)
 
         // Create drawing object based on tool
         if (tool === 'freehand' && points.length >= 2) {

@@ -17,6 +17,7 @@ import {
 import ImportWizard from './ImportWizard'
 import DrawingLayersPanel from './DrawingEditor/DrawingLayersPanel'
 import DrawingPropertiesPanel from './DrawingEditor/DrawingPropertiesPanel'
+import DrawingLayerStylesPanel from './DrawingEditor/DrawingLayerStylesPanel'
 import * as api from '../services/api'
 
 // ============================================
@@ -4203,6 +4204,7 @@ const DistrictParameterPanel = () => {
                 <AnnotationSettingsSection />
                 <DrawingLayersPanel />
                 <DrawingPropertiesPanel />
+                <DrawingLayerStylesPanel />
                 <DistrictParametersSection />
                 <ModelParametersSection />
                 <StylesSection />

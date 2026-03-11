@@ -349,6 +349,18 @@ const applyDistrictDefaultsToLot = (lot, dp) => {
     }
 };
 
+// Helper: merge per-layer defaults over global defaults (per-layer wins via ??)
+export const getEffectiveDrawingDefaults = (state, layerId) => {
+    const global = state.drawingDefaults
+    const layerDefaults = state.drawingLayers?.[layerId]?.defaults
+    if (!layerDefaults || Object.keys(layerDefaults).length === 0) return global
+    const merged = { ...global }
+    for (const [key, value] of Object.entries(layerDefaults)) {
+        if (value != null) merged[key] = value
+    }
+    return merged
+}
+
 export const useStore = create(
     temporal(
         persist(
@@ -2800,6 +2812,7 @@ export const useStore = create(
                                 zHeight: 0.20,
                                 renderMode: '3d',
                                 order: state.drawingLayerOrder.length,
+                                defaults: {},
                             },
                         },
                         drawingLayerOrder: [...state.drawingLayerOrder, id],
@@ -2853,6 +2866,24 @@ export const useStore = create(
                 setDrawingMode: (mode) => set({ drawingMode: mode }),
                 setDrawingDefault: (key, value) => set((state) => ({
                     drawingDefaults: { ...state.drawingDefaults, [key]: value },
+                })),
+                setDrawingLayerDefault: (layerId, key, value) => set((state) => ({
+                    drawingLayers: {
+                        ...state.drawingLayers,
+                        [layerId]: {
+                            ...state.drawingLayers[layerId],
+                            defaults: { ...state.drawingLayers[layerId]?.defaults, [key]: value },
+                        },
+                    },
+                })),
+                resetDrawingLayerDefaults: (layerId) => set((state) => ({
+                    drawingLayers: {
+                        ...state.drawingLayers,
+                        [layerId]: {
+                            ...state.drawingLayers[layerId],
+                            defaults: {},
+                        },
+                    },
                 })),
                 addDrawingObject: (obj) => set((state) => {
                     const id = `drawing-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
@@ -4462,6 +4493,12 @@ export const useStore = create(
                     }
                     // Patch missing drawing editor state
                     if (!merged.drawingLayers) merged.drawingLayers = {}
+                    // Patch missing defaults on existing drawing layers
+                    for (const layerId of Object.keys(merged.drawingLayers)) {
+                        if (!merged.drawingLayers[layerId].defaults) {
+                            merged.drawingLayers[layerId] = { ...merged.drawingLayers[layerId], defaults: {} }
+                        }
+                    }
                     if (!merged.drawingLayerOrder) merged.drawingLayerOrder = []
                     if (!merged.drawingObjects) merged.drawingObjects = {}
                     if (merged.activeDrawingLayerId === undefined) merged.activeDrawingLayerId = null

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { useStore } from '../../store/useStore'
+import { useStore, getEffectiveDrawingDefaults } from '../../store/useStore'
 
 /**
  * HTML overlay for text input when using the Text or Leader drawing tools.
@@ -32,8 +32,9 @@ const DrawingTextInput = () => {
             return
         }
 
-        const defaults = useStore.getState().drawingDefaults
-        const layerId = useStore.getState().activeDrawingLayerId
+        const state = useStore.getState()
+        const layerId = state.activeDrawingLayerId
+        const defaults = getEffectiveDrawingDefaults(state, layerId)
 
         if (tool === 'text') {
             addDrawingObject({

@@ -33,7 +33,7 @@ React 19 + Vite 7 + Three.js 0.182 via @react-three/fiber 9.4 | Zustand 5 + Zund
 - State: `entities.lots[lotId]` — each lot has `buildings: { principal, accessory }` + expanded setbacks
 - Lot layout: Lot 1 in +X from origin (0,0 = front-left corner), Lots 2+ in -X
 - Visibility: `layers.X && lotVisibility[lotId].X` (global layers override per-lot)
-- Sidebar order: **Scenarios** → Model Setup → Layers → Annotations → **Drawing Layers** → **Drawing Properties** → District Parameters → Model Parameters → Styles → **Dimensions** → Analytics → Building/Roof → Road Modules → Road Module Styles → Views → Batch Export
+- Sidebar order: **Scenarios** → Model Setup → Layers → Annotations → **Drawing Layers** → **Drawing Properties** → **Drawing Layer Styles** → District Parameters → Model Parameters → Styles → **Dimensions** → Analytics → Building/Roof → Road Modules → Road Module Styles → Views → Batch Export
 
 ## State Structure (useStore.js ~4,000 lines, v29)
 
@@ -52,17 +52,18 @@ React 19 + Vite 7 + Three.js 0.182 via @react-three/fiber 9.4 | Zustand 5 + Zund
 **Store version 29**: Migrations v1–v28 + v29 drawing editor foundation. Persist `merge` function patches missing `entityStyles`, `lotVisibility`, `viewSettings.layers`, `roadModuleStyles`, `dimensionSettings`, `annotationSettings`, `entities.lots[].parkingSetbacks`, `entities.lots[].lotAccess.sharedDriveLocation`, and `drawingLayers/drawingObjects/drawingDefaults` keys on every hydration. Merge also reconciles lot `parkingSetbacks` with `districtParameters.parkingLocations` values.
 
 **Drawing Editor** (All 8 phases DONE, runtime-tested Feb 2025 — 158/158 Playwright tests PASS):
-- `drawingLayers` — `{ [layerId]: { name, visible, locked, zHeight, renderMode, order } }`
+- `drawingLayers` — `{ [layerId]: { name, visible, locked, zHeight, renderMode, order, defaults } }` — `defaults: {}` holds per-layer style overrides (fallback to global `drawingDefaults` via `??`)
 - `drawingLayerOrder` — layerId[] in display order
 - `activeDrawingLayerId` — currently active layer for new drawings
 - `drawingObjects` — `{ [objectId]: DrawingObject }` with 12 types: freehand, line, arrow, rectangle, polygon, circle, ellipse, star, octagon, roundedRect, text, leader
-- `drawingDefaults` — current tool style defaults (strokeColor, strokeWidth, fillColor, fillOpacity, lineType, fontSize, fontFamily, textColor, arrowHead, cornerRadius, starPoints, outlineWidth, outlineColor)
+- `drawingDefaults` — global tool style defaults (strokeColor, strokeWidth, fillColor, fillOpacity, lineType, fontSize, fontFamily, textColor, arrowHead, cornerRadius, starPoints, outlineWidth, outlineColor). Per-layer overrides in `drawingLayers[id].defaults` — resolved via `getEffectiveDrawingDefaults(state, layerId)` exported from `useStore.js`
 - `drawingMode` — transient `{ tool, phase }` or null (excluded from persist/Zundo)
 - `textEditState` — transient `{ worldPosition, screenPosition, tool, targetPoint?, objectId }` or null (excluded from persist/Zundo)
 - `selectedDrawingIds` — transient array (excluded from persist/Zundo)
 - Camera: orbit remapped globally to middle-click, left-click freed for drawing tools
 - Toolbar: vertical on far-left of canvas (`DrawingEditor/DrawingToolbar.jsx`) — 14 tools (select, freehand, line, arrow, polygon, rectangle, roundedRect, circle, ellipse, octagon, star, text, leader, eraser)
 - Layers panel: `DrawingEditor/DrawingLayersPanel.jsx` in sidebar after Annotations
+- Layer styles panel: `DrawingEditor/DrawingLayerStylesPanel.jsx` in sidebar after Drawing Properties — per-layer style defaults (stroke/fill/text/shape) with reset button
 - Scene: `DrawingEditor/index.jsx` + `DrawingCapturePlane.jsx` in DistrictSceneContent
 - Renderer: `DrawingEditor/DrawingObjectRenderer.jsx` renders all 12 types with selection highlights (ArrowRenderer uses cone geometry, TextRenderer uses AnnotationText, LeaderRenderer uses LeaderCallout)
 - Text input: `DrawingEditor/DrawingTextInput.jsx` — HTML overlay outside Canvas for text/leader text entry (positioned at screen coords from `textEditState`)
