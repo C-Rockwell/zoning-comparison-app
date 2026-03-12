@@ -34,7 +34,11 @@ React + Vite + Three.js via @react-three/fiber | Zustand + Zundo (undo/redo, 50-
 
 **Scenarios** (`ScenariosSection` in `DistrictParameterPanel.jsx`): Auto-saves active scenario before switching. Re-clicking active scenario triggers save. Duplicate button creates a copy under a new name. Active scenario shown with accent dot indicator. "Save as New" button shown when no scenario is active.
 
-**Saved Views**: Store camera position/target/zoom + projection + layers. `_cameraControlsRef` (transient) set by `DistrictViewer` for sidebar `ViewsSection` access to camera controls.
+**Saved Views**: Comprehensive state snapshots — camera position/target/zoom, projection, layers, plus `entityStyles`, `roadModuleStyles`, `lotVisibility`, `dimensionSettings`, `sunSettings`, `annotationSettings`. Custom names per slot (editable inline). Old views without new fields load fine (`if (saved.X)` guards). `_cameraControlsRef` (transient) set by `DistrictViewer` for sidebar `ViewsSection` access to camera controls. Both sidebar and canvas overlay REC save the full snapshot.
+
+**Lot Access Arrows**: `LotAccessArrow.jsx` renders flat 2D arrows + shared drive T-junctions. Style props: `scale` (width), `heightScale` (length/height axis), `positionOffsetX`/`positionOffsetY` (additive offsets applied in `LotEntity.jsx` after drag position). Scale range 0.5–15. Shared drive uses separate `sharedDriveArrow` style key with outline controls.
+
+**Lot Access Visibility**: Per-direction layer + lotVisibility keys: `lotAccessFront`, `lotAccessRear`, `lotAccessSideStreet`, `lotAccessSharedDrive`. Style key remains singular `lotAccessArrows` (shared across all directions). Old `lotAccessArrows` visibility key kept in layer defaults for backward compat.
 
 **Imported Models** (v33): Multi-model per lot. `lot.importedModels` (object map by modelId) + `lot.importedModelOrder` (array). Actions take `(lotId, modelId, ...)`. Selection state: `selectedImportedModel: { lotId, modelId }` (transient). Style editing via `ImportedModelStylePopup.jsx` floating panel in `DistrictViewer`. Sidebar (`ModelImportSection`) shows compact model lists — click name to select, style in popup.
 
@@ -54,7 +58,7 @@ React + Vite + Three.js via @react-three/fiber | Zustand + Zundo (undo/redo, 50-
 ### Zustand Patterns
 - **`useShallow`** when selecting objects from store — prevents infinite re-renders
 - **Undo batching**: `pause()` on pointer down, `resume()` on pointer up for all drags
-- **4-place update** for new style/visibility/layer keys: `createDefaultLotStyle()`, `createDefaultLotVisibility()`, `viewSettings.layers`, persist `merge` function
+- **4-place update** for new style/visibility/layer keys: `createDefaultLotStyle()`, `createDefaultLotVisibility()`, `viewSettings.layers`, persist `merge` function. For custom labels: also add to initial `customLabels` object + `customLabelDefaults` in merge
 - **`=== undefined`** for existence checks in merge patching (not `!value` which catches `0`, `false`, `''`)
 
 ### React + Three.js Rules
@@ -69,7 +73,7 @@ React + Vite + Three.js via @react-three/fiber | Zustand + Zundo (undo/redo, 50-
 - **Dimension verticalMode text rotation**: Uses quaternion composition (`alignToLine * standUp`) not raw Euler angles — handles both X-axis and Y-axis dimension lines correctly.
 
 ### Street-Aware Setbacks
-`streetSides` prop determines which lot sides face streets. Street-facing sides use `minSideStreet`/`maxSideStreet`; interior sides use `sideInterior`. Critical for corner lots. Dimension custom labels use semantic keys `setbackSideStreet`/`setbackSideInterior` (not positional left/right) — each lot resolves per-side based on `streetSides`.
+`streetSides` prop determines which lot sides face streets. Street-facing sides use `minSideStreet`/`maxSideStreet`; interior sides use `sideInterior`. Critical for corner lots. Dimension custom labels use semantic keys `setbackSideStreet`/`setbackSideInterior` (not positional left/right) — each lot resolves per-side based on `streetSides`. Parking setback dims use independent `parkingSetback*` label keys; max setback dims use `setbackMaxFront`/`setbackMaxSideStreet`.
 
 ### Road System
 Roads stop at lot boundaries. Intersection fills use notched geometry with quarter-circle cutouts (`intersectionGeometry.js`). S3 (Alley) T-junctions: fillets/fills suppressed when meeting non-S3. Road types: S1 (Primary, ROW 50'), S2 (Secondary, ROW 40'), S3 (Alley, ROW 20'). Alley-specific style keys default `null` (fall back to regular style).

@@ -114,6 +114,7 @@ const LotAccessArrow = ({
     const color = styleProp?.color ?? colorProp ?? '#FF00FF'
     const opacity = styleProp?.opacity ?? 1.0
     const scale = styleProp?.scale ?? 1
+    const heightScale = styleProp?.heightScale ?? 1
     const isTransparent = opacity < 1
     const [dragging, setDragging] = useState(false)
     const { controls } = useThree()
@@ -132,7 +133,7 @@ const LotAccessArrow = ({
 
     // Create the arrow shape geometry (memoized, scaled width)
     const arrowGeometry = useMemo(() => {
-        const shape = createArrowShape(8, 4 * scale, 3, 1.5 * scale)
+        const shape = createArrowShape(8 * heightScale, 4 * scale, 3 * heightScale, 1.5 * scale)
         const geo = new THREE.ShapeGeometry(shape)
         // Center the geometry on its own center for easier rotation
         geo.computeBoundingBox()
@@ -140,12 +141,12 @@ const LotAccessArrow = ({
         geo.boundingBox.getCenter(center)
         geo.translate(-center.x, -center.y, 0)
         return geo
-    }, [scale])
+    }, [scale, heightScale])
 
     // Create the shared drive T-junction geometry (dynamic stem length based on lotDepth, scaled width)
     const sharedDriveGeometry = useMemo(() => {
-        const stemLen = (lotDepth || 100) / 2
-        const shape = createSharedDriveShape(stemLen, 2 * scale, 14 * scale, 4 * scale, 2.5, 1.5 * scale)
+        const stemLen = ((lotDepth || 100) / 2) * heightScale
+        const shape = createSharedDriveShape(stemLen, 2 * scale, 14 * scale, 4 * scale, 3.5 * heightScale, 1.5 * scale)
         const geo = new THREE.ShapeGeometry(shape)
         geo.computeBoundingBox()
         const center = new THREE.Vector3()
@@ -153,7 +154,7 @@ const LotAccessArrow = ({
         // Only center X — keep Y origin at bottom of stem so position Y = front edge
         geo.translate(-center.x, 0, 0)
         return geo
-    }, [lotDepth, scale])
+    }, [lotDepth, scale, heightScale])
 
     const isSharedDrive = direction === 'sharedDrive'
     const activeGeometry = isSharedDrive ? sharedDriveGeometry : arrowGeometry
@@ -161,9 +162,9 @@ const LotAccessArrow = ({
     // Outline points for shared drive shape
     const outlinePoints = useMemo(() => {
         if (!isSharedDrive || (styleProp?.outlineWidth ?? 0) <= 0) return null
-        const stemLen = (lotDepth || 100) / 2
+        const stemLen = ((lotDepth || 100) / 2) * heightScale
         const s = scale
-        const shape = createSharedDriveShape(stemLen, 2 * s, 14 * s, 4 * s, 2.5, 1.5 * s)
+        const shape = createSharedDriveShape(stemLen, 2 * s, 14 * s, 4 * s, 2.5 * heightScale, 1.5 * s)
         const pts = shape.getPoints(64)
         // Center X (same as sharedDriveGeometry)
         const geo = new THREE.ShapeGeometry(shape)
@@ -174,7 +175,7 @@ const LotAccessArrow = ({
         const pts3d = pts.map(p => [p.x - cx, p.y, 0])
         if (pts3d.length > 0) pts3d.push([...pts3d[0]])
         return pts3d
-    }, [isSharedDrive, styleProp?.outlineWidth, lotDepth, scale])
+    }, [isSharedDrive, styleProp?.outlineWidth, lotDepth, scale, heightScale])
 
     // Compute rotation based on direction
     const rotation = useMemo(() => {

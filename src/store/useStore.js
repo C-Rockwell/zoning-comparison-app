@@ -241,8 +241,8 @@ export const createDefaultLotStyle = (overrides = {}) => ({
             right: { enabled: false, color: '#FF9800', width: 1, dashed: true, dashSize: 2.5, gapSize: 1.5, dashScale: 1 },
         }
     },
-    lotAccessArrows: { color: '#FF00FF', opacity: 1.0, scale: 1 },
-    sharedDriveArrow: { color: '#FF00FF', opacity: 1.0, scale: 1, outlineColor: '#000000', outlineWidth: 1, outlineType: 'solid' },
+    lotAccessArrows: { color: '#FF00FF', opacity: 1.0, scale: 1, heightScale: 1, positionOffsetX: 0, positionOffsetY: 0 },
+    sharedDriveArrow: { color: '#FF00FF', opacity: 1.0, scale: 1, heightScale: 1, positionOffsetX: 0, positionOffsetY: 0, outlineColor: '#000000', outlineWidth: 1, outlineType: 'solid' },
     importedModelFaces: { color: '#D5D5D5', opacity: 1.0, transparent: true },
     importedModelEdges: { color: '#000000', width: 1.5, visible: true, opacity: 1.0 },
     ...overrides,
@@ -338,7 +338,10 @@ export const createDefaultLotVisibility = () => ({
     setbackFill: true,
     btzPlanes: true,
     accessorySetbacks: true,
-    lotAccessArrows: true,
+    lotAccessFront: true,
+    lotAccessRear: true,
+    lotAccessSideStreet: true,
+    lotAccessSharedDrive: true,
     importedModel: true,
     depthDimVisible: true,
 });
@@ -695,7 +698,10 @@ export const useStore = create(
                         maxSetbacks: true,       // Max setback lines
                         btzPlanes: true,         // BTZ front + side street planes
                         accessorySetbacks: true, // Accessory setback lines
-                        lotAccessArrows: true,   // Lot access directional arrows
+                        lotAccessFront: true,    // Lot access front arrow
+                        lotAccessRear: true,     // Lot access rear arrow
+                        lotAccessSideStreet: true, // Lot access side street arrow
+                        lotAccessSharedDrive: true, // Lot access shared drive arrow
                         roadIntersections: true, // Road intersection fillet geometry
                         importedModels: true, // Imported IFC models
                     },
@@ -971,6 +977,12 @@ export const useStore = create(
                                 principalMaxHeight: { mode: 'value', text: '' },
                                 accessoryMaxHeight: { mode: 'value', text: '' },
                                 firstFloorHeight: { mode: 'value', text: '' },
+                                parkingSetbackFront: { mode: 'value', text: '' },
+                                parkingSetbackRear: { mode: 'value', text: '' },
+                                parkingSetbackSideInterior: { mode: 'value', text: '' },
+                                parkingSetbackSideStreet: { mode: 'value', text: '' },
+                                setbackMaxFront: { mode: 'value', text: '' },
+                                setbackMaxSideStreet: { mode: 'value', text: '' },
                             }
                         }
                     },
@@ -4696,6 +4708,16 @@ export const useStore = create(
                                     merged.entityStyles[lotId][key] = JSON.parse(JSON.stringify(val));
                                 }
                             }
+                            // Patch missing sub-keys on lotAccessArrows/sharedDriveArrow (heightScale, positionOffsetX/Y)
+                            const arrowCats = ['lotAccessArrows', 'sharedDriveArrow'];
+                            for (const ac of arrowCats) {
+                                const a = merged.entityStyles[lotId][ac];
+                                if (a) {
+                                    if (a.heightScale === undefined) a.heightScale = 1;
+                                    if (a.positionOffsetX === undefined) a.positionOffsetX = 0;
+                                    if (a.positionOffsetY === undefined) a.positionOffsetY = 0;
+                                }
+                            }
                             // Patch missing sub-keys on maxHeightPlane (lineDashSize/lineGapSize)
                             if (merged.entityStyles[lotId].maxHeightPlane) {
                                 const mhp = merged.entityStyles[lotId].maxHeightPlane;
@@ -4916,6 +4938,12 @@ export const useStore = create(
                             setbackSideInterior: { mode: 'value', text: '' },
                             setbackSideStreet: { mode: 'value', text: '' },
                             firstFloorHeight: { mode: 'value', text: '' },
+                            parkingSetbackFront: { mode: 'value', text: '' },
+                            parkingSetbackRear: { mode: 'value', text: '' },
+                            parkingSetbackSideInterior: { mode: 'value', text: '' },
+                            parkingSetbackSideStreet: { mode: 'value', text: '' },
+                            setbackMaxFront: { mode: 'value', text: '' },
+                            setbackMaxSideStreet: { mode: 'value', text: '' },
                         };
                         for (const [key, val] of Object.entries(customLabelDefaults)) {
                             if (ds.customLabels[key] === undefined) {
@@ -4925,7 +4953,7 @@ export const useStore = create(
                     }
                     // Patch missing viewSettings.layers keys
                     if (merged.viewSettings?.layers) {
-                        const layerDefaults = { maxSetbacks: true, btzPlanes: true, accessorySetbacks: true, lotAccessArrows: true, maxHeightPlanePrincipal: true, maxHeightPlaneAccessory: true, parkingSetbacks: true, dimensionsParkingSetbacks: true, setbackFill: true, drawingEditor: true, dimensionsFirstFloorHeight: true };
+                        const layerDefaults = { maxSetbacks: true, btzPlanes: true, accessorySetbacks: true, lotAccessArrows: true, lotAccessFront: true, lotAccessRear: true, lotAccessSideStreet: true, lotAccessSharedDrive: true, maxHeightPlanePrincipal: true, maxHeightPlaneAccessory: true, parkingSetbacks: true, dimensionsParkingSetbacks: true, setbackFill: true, drawingEditor: true, dimensionsFirstFloorHeight: true };
                         for (const [key, val] of Object.entries(layerDefaults)) {
                             if (merged.viewSettings.layers[key] === undefined) {
                                 merged.viewSettings.layers[key] = val;

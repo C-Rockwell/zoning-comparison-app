@@ -60,6 +60,8 @@ const DistrictViewer = () => {
                 controls.getTarget(target)
                 const zoom = controls.camera?.zoom || 1
                 const vs = useStore.getState().viewSettings
+                const store = useStore.getState()
+                const existingName = store.savedViews?.[index]?.name ?? ''
                 setSavedView(index, {
                     position: { x: position.x, y: position.y, z: position.z },
                     target: { x: target.x, y: target.y, z: target.z },
@@ -68,6 +70,13 @@ const DistrictViewer = () => {
                     projection: vs.projection,
                     layers: { ...vs.layers },
                     savedAt: new Date().toISOString(),
+                    name: existingName,
+                    entityStyles: structuredClone(store.entityStyles),
+                    roadModuleStyles: structuredClone(store.roadModuleStyles),
+                    lotVisibility: structuredClone(store.lotVisibility),
+                    dimensionSettings: structuredClone(store.viewSettings?.styleSettings?.dimensionSettings),
+                    sunSettings: structuredClone(store.sunSettings),
+                    annotationSettings: structuredClone(store.annotationSettings),
                 })
                 setIsSaving(false)
             }
@@ -137,7 +146,7 @@ const DistrictViewer = () => {
                                         ? 'bg-gray-700 border-gray-500 text-white hover:bg-gray-600 hover:border-white'
                                         : 'bg-gray-800 border-gray-700 text-gray-600'
                                     } ${isSaving ? 'ring-2 ring-red-500 cursor-copy hover:bg-red-900/50 hover:border-red-400' : ''}`}
-                                title={hasView ? `Load View ${index}` : 'Empty Slot'}
+                                title={hasView ? (savedViews[index]?.name || `View ${index}`) : 'Empty Slot'}
                             >
                                 {index}
                             </button>

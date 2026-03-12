@@ -370,7 +370,7 @@ const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, s
 // Only renders lines for sides where a max value is set.
 // Front uses maxFront; street-facing sides use maxSideStreet.
 // ============================================
-const MaxSetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, lineScale = 1 }) => {
+const MaxSetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, lineScale = 1, showDimensions, dimensionSettings }) => {
     const { maxFront, maxSideStreet, front, rear, sideInterior, minSideStreet } = setbacks
     const z = 0.12 // Above min setback lines at z=0.1
 
@@ -426,6 +426,52 @@ const MaxSetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}
             {lines.map((line, i) => (
                 <SingleLine key={i} start={line.start} end={line.end} style={style} side={line.side} lineScale={lineScale} />
             ))}
+            {/* Max front setback dimension */}
+            {showDimensions && maxFront != null && maxFront > 0 && dimensionSettings && (
+                <Dimension
+                    start={[0, -lotDepth / 2, z]}
+                    end={[0, -lotDepth / 2 + maxFront, z]}
+                    label={resolveDimensionLabel(maxFront, 'setbackMaxFront', dimensionSettings)}
+                    offset={dimensionSettings.setbackDimOffset ?? 5}
+                    color={style.color || '#FF9800'}
+                    visible={true}
+                    settings={dimensionSettings}
+                    lineScale={lineScale}
+                />
+            )}
+            {/* Max side street setback dimension (first street side found) */}
+            {showDimensions && maxSideStreet != null && maxSideStreet > 0 && dimensionSettings && (() => {
+                const sideY = -lotDepth / 2 + (dimensionSettings.sideSetbackDimYPosition ?? 0.5) * lotDepth
+                if (streetSides.left) {
+                    return (
+                        <Dimension
+                            start={[-lotWidth / 2, sideY, z]}
+                            end={[-lotWidth / 2 + maxSideStreet, sideY, z]}
+                            label={resolveDimensionLabel(maxSideStreet, 'setbackMaxSideStreet', dimensionSettings)}
+                            offset={dimensionSettings.setbackDimOffset ?? 5}
+                            color={style.color || '#FF9800'}
+                            visible={true}
+                            settings={dimensionSettings}
+                            lineScale={lineScale}
+                        />
+                    )
+                }
+                if (streetSides.right) {
+                    return (
+                        <Dimension
+                            start={[lotWidth / 2 - maxSideStreet, sideY, z]}
+                            end={[lotWidth / 2, sideY, z]}
+                            label={resolveDimensionLabel(maxSideStreet, 'setbackMaxSideStreet', dimensionSettings)}
+                            offset={dimensionSettings.setbackDimOffset ?? 5}
+                            color={style.color || '#FF9800'}
+                            visible={true}
+                            settings={dimensionSettings}
+                            lineScale={lineScale}
+                        />
+                    )
+                }
+                return null
+            })()}
         </group>
     )
 }
@@ -516,7 +562,7 @@ const ParkingSetbackLines = ({ lotWidth, lotDepth, parkingSetbacks, style, stree
                 <Dimension
                     start={[0, -lotDepth / 2, z]}
                     end={[0, y1, z]}
-                    label={resolveDimensionLabel(pFront, 'setbackFront', dimensionSettings)}
+                    label={resolveDimensionLabel(pFront, 'parkingSetbackFront', dimensionSettings)}
                     offset={dimensionSettings.setbackDimOffset ?? 5}
                     color={style.color || '#FF9800'}
                     visible={showDimensions}
@@ -529,7 +575,7 @@ const ParkingSetbackLines = ({ lotWidth, lotDepth, parkingSetbacks, style, stree
                 <Dimension
                     start={[0, y2, z]}
                     end={[0, lotDepth / 2, z]}
-                    label={resolveDimensionLabel(pRear, 'setbackRear', dimensionSettings)}
+                    label={resolveDimensionLabel(pRear, 'parkingSetbackRear', dimensionSettings)}
                     offset={dimensionSettings.setbackDimOffset ?? 5}
                     color={style.color || '#FF9800'}
                     visible={showDimensions}
@@ -544,7 +590,7 @@ const ParkingSetbackLines = ({ lotWidth, lotDepth, parkingSetbacks, style, stree
                 <Dimension
                     start={[-lotWidth / 2, sideY, z]}
                     end={[x1, sideY, z]}
-                    label={resolveDimensionLabel(pLeftValue, streetSides.left ? 'setbackSideStreet' : 'setbackSideInterior', dimensionSettings)}
+                    label={resolveDimensionLabel(pLeftValue, streetSides.left ? 'parkingSetbackSideStreet' : 'parkingSetbackSideInterior', dimensionSettings)}
                     offset={dimensionSettings.setbackDimOffset ?? 5}
                     color={style.color || '#FF9800'}
                     visible={showDimensions}
@@ -560,7 +606,7 @@ const ParkingSetbackLines = ({ lotWidth, lotDepth, parkingSetbacks, style, stree
                 <Dimension
                     start={[x2, sideY, z]}
                     end={[lotWidth / 2, sideY, z]}
-                    label={resolveDimensionLabel(pRightValue, streetSides.right ? 'setbackSideStreet' : 'setbackSideInterior', dimensionSettings)}
+                    label={resolveDimensionLabel(pRightValue, streetSides.right ? 'parkingSetbackSideStreet' : 'parkingSetbackSideInterior', dimensionSettings)}
                     offset={dimensionSettings.setbackDimOffset ?? 5}
                     color={style.color || '#FF9800'}
                     visible={showDimensions}
@@ -915,6 +961,8 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     style={style.maxSetbacks}
                     streetSides={streetSides}
                     lineScale={exportLineScale}
+                    showDimensions={showSetbackDim}
+                    dimensionSettings={dimensionSettings}
                 />
             )}
 
@@ -1170,7 +1218,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
             {/* ============================================ */}
             {/* Lot Access Arrows */}
             {/* ============================================ */}
-            {layers.lotAccessArrows && visibility.lotAccessArrows && lot.lotAccess && (() => {
+            {lot.lotAccess && (() => {
                 // Validate stored positions — ignore if outside lot bounds (stale from old dimensions)
                 const validPos = (key, fallback) => {
                     const stored = annotationPositions[key]
@@ -1179,9 +1227,16 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     if (Math.abs(stored[0]) > lotWidth / 2 + margin || Math.abs(stored[1]) > lotDepth / 2 + margin) return fallback
                     return stored
                 }
+                // Apply position offsets from style
+                const applyOffset = (pos, styleObj) => {
+                    const ox = styleObj?.positionOffsetX ?? 0
+                    const oy = styleObj?.positionOffsetY ?? 0
+                    if (ox === 0 && oy === 0) return pos
+                    return [pos[0] + ox, pos[1] + oy, pos[2] ?? 0]
+                }
                 return (
                 <group>
-                    {lot.lotAccess.front && (
+                    {layers.lotAccessFront && visibility.lotAccessFront && lot.lotAccess.front && (
                         <LotAccessArrow
                             direction="front"
                             lotId={lotId}
@@ -1189,11 +1244,11 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                             lotDepth={lotDepth}
                             streetSides={streetSides}
                             style={style?.lotAccessArrows}
-                            position={validPos(`lot-${lotId}-access-front`, [0, -lotDepth / 2 + 5, 0])}
+                            position={applyOffset(validPos(`lot-${lotId}-access-front`, [0, -lotDepth / 2 + 5, 0]), style?.lotAccessArrows)}
                             onPositionChange={(pos) => setAnnotationPosition(`lot-${lotId}-access-front`, pos)}
                         />
                     )}
-                    {lot.lotAccess.rear && (
+                    {layers.lotAccessRear && visibility.lotAccessRear && lot.lotAccess.rear && (
                         <LotAccessArrow
                             direction="rear"
                             lotId={lotId}
@@ -1201,11 +1256,11 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                             lotDepth={lotDepth}
                             streetSides={streetSides}
                             style={style?.lotAccessArrows}
-                            position={validPos(`lot-${lotId}-access-rear`, [0, lotDepth / 2 - 5, 0])}
+                            position={applyOffset(validPos(`lot-${lotId}-access-rear`, [0, lotDepth / 2 - 5, 0]), style?.lotAccessArrows)}
                             onPositionChange={(pos) => setAnnotationPosition(`lot-${lotId}-access-rear`, pos)}
                         />
                     )}
-                    {lot.lotAccess.sideStreet && (streetSides.left || streetSides.right) && (
+                    {layers.lotAccessSideStreet && visibility.lotAccessSideStreet && lot.lotAccess.sideStreet && (streetSides.left || streetSides.right) && (
                         <LotAccessArrow
                             direction="sideStreet"
                             lotId={lotId}
@@ -1213,14 +1268,14 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                             lotDepth={lotDepth}
                             streetSides={streetSides}
                             style={style?.lotAccessArrows}
-                            position={validPos(`lot-${lotId}-access-sidestreet`, [
+                            position={applyOffset(validPos(`lot-${lotId}-access-sidestreet`, [
                                 streetSides.left ? -lotWidth / 2 + 5 : lotWidth / 2 - 5,
                                 0, 0
-                            ])}
+                            ]), style?.lotAccessArrows)}
                             onPositionChange={(pos) => setAnnotationPosition(`lot-${lotId}-access-sidestreet`, pos)}
                         />
                     )}
-                    {lot.lotAccess.sideInterior && (() => {
+                    {layers.lotAccessSharedDrive && visibility.lotAccessSharedDrive && lot.lotAccess.sideInterior && (() => {
                         const sdLoc = lot.lotAccess.sharedDriveLocation ?? 'front'
                         const showFront = sdLoc === 'front' || sdLoc === 'both'
                         const showRear = sdLoc === 'rear' || sdLoc === 'both'
@@ -1236,10 +1291,10 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                                         streetSides={streetSides}
                                         style={sdStyle}
                                         bidirectional={true}
-                                        position={validPos(`lot-${lotId}-access-shareddrive`, [
+                                        position={applyOffset(validPos(`lot-${lotId}-access-shareddrive`, [
                                             streetSides.right ? -lotWidth / 2 : lotWidth / 2,
                                             -lotDepth / 2, 0
-                                        ])}
+                                        ]), sdStyle)}
                                         onPositionChange={(pos) => setAnnotationPosition(`lot-${lotId}-access-shareddrive`, pos)}
                                     />
                                 )}
@@ -1253,10 +1308,10 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                                         streetSides={streetSides}
                                         style={sdStyle}
                                         bidirectional={true}
-                                        position={validPos(`lot-${lotId}-access-shareddrive-rear`, [
+                                        position={applyOffset(validPos(`lot-${lotId}-access-shareddrive-rear`, [
                                             streetSides.right ? -lotWidth / 2 : lotWidth / 2,
                                             lotDepth / 2, 0
-                                        ])}
+                                        ]), sdStyle)}
                                         onPositionChange={(pos) => setAnnotationPosition(`lot-${lotId}-access-shareddrive-rear`, pos)}
                                     />
                                 )}

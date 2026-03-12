@@ -568,14 +568,14 @@ const ModelParametersTable = ({ collapseKey, allModelCollapsed }) => {
             rows: [
                 {
                     label: 'Front',
-                    visKey: 'lotAccessArrows',
+                    visKey: 'lotAccessFront',
                     getValue: (lot) => lot.lotAccess?.front,
                     setValue: (lotId, v) => updateLotParam(lotId, 'lotAccess', { ...lots[lotId]?.lotAccess, front: v }),
                     type: 'checkbox',
                 },
                 {
                     label: 'Shared Drive',
-                    visKey: 'lotAccessArrows',
+                    visKey: 'lotAccessSharedDrive',
                     getValue: (lot) => lot.lotAccess?.sideInterior,
                     setValue: (lotId, v) => updateLotParam(lotId, 'lotAccess', { ...lots[lotId]?.lotAccess, sideInterior: v }),
                     type: 'checkbox',
@@ -590,14 +590,14 @@ const ModelParametersTable = ({ collapseKey, allModelCollapsed }) => {
                 },
                 {
                     label: 'Side, Street',
-                    visKey: 'lotAccessArrows',
+                    visKey: 'lotAccessSideStreet',
                     getValue: (lot) => lot.lotAccess?.sideStreet,
                     setValue: (lotId, v) => updateLotParam(lotId, 'lotAccess', { ...lots[lotId]?.lotAccess, sideStreet: v }),
                     type: 'checkbox',
                 },
                 {
                     label: 'Rear',
-                    visKey: 'lotAccessArrows',
+                    visKey: 'lotAccessRear',
                     getValue: (lot) => lot.lotAccess?.rear,
                     setValue: (lotId, v) => updateLotParam(lotId, 'lotAccess', { ...lots[lotId]?.lotAccess, rear: v }),
                     type: 'checkbox',
@@ -1063,7 +1063,10 @@ const LAYER_GROUPS = [
             { key: 'setbacks', label: 'Setbacks' },
             { key: 'accessorySetbacks', label: 'Accessory Setbacks' },
             { key: 'maxSetbacks', label: 'Max Setbacks' },
-            { key: 'lotAccessArrows', label: 'Lot Access Arrows' },
+            { key: 'lotAccessFront', label: 'Lot Access Front' },
+            { key: 'lotAccessRear', label: 'Lot Access Rear' },
+            { key: 'lotAccessSideStreet', label: 'Lot Access Side Street' },
+            { key: 'lotAccessSharedDrive', label: 'Lot Access Shared Drive' },
             { key: 'parkingSetbacks', label: 'Parking Setbacks' },
             { key: 'labelLotEdges', label: 'Lot Edges' },
         ],
@@ -2626,6 +2629,8 @@ const ViewsSection = () => {
             target = { x: tgt.x, y: tgt.y, z: tgt.z }
             zoom = controls.camera?.zoom || 1
         }
+        // Preserve existing custom name if re-saving to same slot
+        const existingName = store.savedViews?.[slot]?.name ?? ''
         setSavedView(slot, {
             position,
             target,
@@ -2634,6 +2639,13 @@ const ViewsSection = () => {
             projection: viewSettings.projection,
             layers: { ...viewSettings.layers },
             savedAt: new Date().toISOString(),
+            name: existingName,
+            entityStyles: structuredClone(store.entityStyles),
+            roadModuleStyles: structuredClone(store.roadModuleStyles),
+            lotVisibility: structuredClone(store.lotVisibility),
+            dimensionSettings: structuredClone(store.viewSettings?.styleSettings?.dimensionSettings),
+            sunSettings: structuredClone(store.sunSettings),
+            annotationSettings: structuredClone(store.annotationSettings),
         })
     }, [setSavedView, viewSettings])
 
@@ -2647,6 +2659,33 @@ const ViewsSection = () => {
             Object.entries(saved.layers).forEach(([key, val]) => {
                 store.setLayer(key, val)
             })
+        }
+        // Restore comprehensive state snapshot
+        if (saved.entityStyles) {
+            useStore.setState({ entityStyles: structuredClone(saved.entityStyles) })
+        }
+        if (saved.roadModuleStyles) {
+            useStore.setState({ roadModuleStyles: structuredClone(saved.roadModuleStyles) })
+        }
+        if (saved.lotVisibility) {
+            useStore.setState({ lotVisibility: structuredClone(saved.lotVisibility) })
+        }
+        if (saved.dimensionSettings) {
+            useStore.setState((state) => ({
+                viewSettings: {
+                    ...state.viewSettings,
+                    styleSettings: {
+                        ...state.viewSettings.styleSettings,
+                        dimensionSettings: structuredClone(saved.dimensionSettings),
+                    },
+                },
+            }))
+        }
+        if (saved.sunSettings) {
+            useStore.setState({ sunSettings: structuredClone(saved.sunSettings) })
+        }
+        if (saved.annotationSettings) {
+            useStore.setState({ annotationSettings: structuredClone(saved.annotationSettings) })
         }
         // Restore camera position if available
         if (saved.position && saved.target) {
@@ -2708,9 +2747,21 @@ const ViewsSection = () => {
                             </button>
                             {saved && (
                                 <>
-                                    <span className="text-[9px] flex-1 truncate" style={{ color: 'var(--ui-text-muted)' }}>
-                                        {saved.cameraView ?? 'custom'} / {saved.projection?.slice(0, 5) ?? '—'}
-                                    </span>
+                                    <input
+                                        type="text"
+                                        value={saved.name ?? ''}
+                                        placeholder="Name..."
+                                        onChange={(e) => setSavedView(slot, { ...saved, name: e.target.value })}
+                                        className="text-[10px] flex-1 min-w-0 px-1 py-0 rounded"
+                                        style={{
+                                            backgroundColor: 'var(--ui-bg-secondary)',
+                                            borderWidth: '1px',
+                                            borderStyle: 'solid',
+                                            borderColor: 'var(--ui-border)',
+                                            color: 'var(--ui-text)',
+                                            outline: 'none',
+                                        }}
+                                    />
                                     <button
                                         onClick={() => setSavedView(slot, null)}
                                         className="p-0.5 transition-colors hover-text-error"
@@ -3075,14 +3126,40 @@ const InlineStyleControls = ({ lotId, category, style }) => {
                         step={0.05}
                     />
                     {(category === 'lotAccessArrows' || category === 'sharedDriveArrow') && (
-                        <SliderInput
-                            label="Scale"
-                            value={style.scale ?? 1}
-                            onChange={(v) => handleChange('scale', v)}
-                            min={0.5}
-                            max={5}
-                            step={0.1}
-                        />
+                        <>
+                            <SliderInput
+                                label="Scale"
+                                value={style.scale ?? 1}
+                                onChange={(v) => handleChange('scale', v)}
+                                min={0.5}
+                                max={15}
+                                step={0.1}
+                            />
+                            <SliderInput
+                                label="Height Scale"
+                                value={style.heightScale ?? 1}
+                                onChange={(v) => handleChange('heightScale', v)}
+                                min={0.5}
+                                max={15}
+                                step={0.1}
+                            />
+                            <SliderInput
+                                label="Position X"
+                                value={style.positionOffsetX ?? 0}
+                                onChange={(v) => handleChange('positionOffsetX', v)}
+                                min={-100}
+                                max={100}
+                                step={0.5}
+                            />
+                            <SliderInput
+                                label="Position Y"
+                                value={style.positionOffsetY ?? 0}
+                                onChange={(v) => handleChange('positionOffsetY', v)}
+                                min={-100}
+                                max={100}
+                                step={0.5}
+                            />
+                        </>
                     )}
                     {category === 'sharedDriveArrow' && (
                         <>
@@ -4056,6 +4133,12 @@ const DimensionStylesSection = () => {
                 <CustomLabelRowDim label="Bldg Height" dimensionKey="buildingHeight" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
                 <CustomLabelRowDim label="Principal Max Ht" dimensionKey="principalMaxHeight" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
                 <CustomLabelRowDim label="Accessory Max Ht" dimensionKey="accessoryMaxHeight" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                <CustomLabelRowDim label="Parking Front" dimensionKey="parkingSetbackFront" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                <CustomLabelRowDim label="Parking Rear" dimensionKey="parkingSetbackRear" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                <CustomLabelRowDim label="Parking Side Interior" dimensionKey="parkingSetbackSideInterior" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                <CustomLabelRowDim label="Parking Side Street" dimensionKey="parkingSetbackSideStreet" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                <CustomLabelRowDim label="Max Front Setback" dimensionKey="setbackMaxFront" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                <CustomLabelRowDim label="Max Side Street Setback" dimensionKey="setbackMaxSideStreet" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
             </DimSubSection>
 
         </Section>
