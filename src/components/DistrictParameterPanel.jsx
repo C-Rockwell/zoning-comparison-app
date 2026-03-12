@@ -12,7 +12,7 @@ import LineStyleSelector from './ui/LineStyleSelector'
 import {
     ChevronDown, ChevronUp, Eye, EyeOff, Palette, Plus, Minus, Trash2, Copy,
     Layers, Settings, Building2, Route, Upload, Download, BarChart3, Hexagon,
-    Save, FolderOpen, Search, Check, X,
+    Save, FolderOpen, Search, Check, X, Lock, Unlock,
 } from 'lucide-react'
 import ImportWizard from './ImportWizard'
 import DrawingLayersPanel from './DrawingEditor/DrawingLayersPanel'
@@ -1556,10 +1556,11 @@ const ModelImportSection = () => {
     const lotIds = useLotIds()
     const lots = useStore((s) => s.entities?.lots ?? {})
     const currentProject = useStore((s) => s.currentProject)
-    const setImportedModel = useStore((s) => s.setImportedModel)
+    const addImportedModel = useStore((s) => s.addImportedModel)
     const removeImportedModel = useStore((s) => s.removeImportedModel)
     const removeAllImportedModels = useStore((s) => s.removeAllImportedModels)
-    const setImportedModelUnits = useStore((s) => s.setImportedModelUnits)
+    const selectImportedModel = useStore((s) => s.selectImportedModel)
+    const toggleImportedModelLocked = useStore((s) => s.toggleImportedModelLocked)
     const [selectedLot, setSelectedLot] = useState('all')
     const [uploading, setUploading] = useState(false)
     const fileInputRef = useRef(null)
@@ -1573,7 +1574,7 @@ const ModelImportSection = () => {
             await api.saveExportBinary(currentProject.id, file.name, file)
             const targetLots = selectedLot === 'all' ? lotIds : [selectedLot]
             for (const lotId of targetLots) {
-                setImportedModel(lotId, file.name)
+                addImportedModel(lotId, file.name)
             }
         } catch (err) {
             console.error('IFC upload failed:', err)
@@ -1581,6 +1582,8 @@ const ModelImportSection = () => {
         setUploading(false)
         if (fileInputRef.current) fileInputRef.current.value = ''
     }
+
+    const hasAnyModels = lotIds.some(id => (lots[id]?.importedModelOrder?.length ?? 0) > 0)
 
     if (lotIds.length === 0) {
         return (
@@ -1639,7 +1642,7 @@ const ModelImportSection = () => {
                 </button>
 
                 {/* Delete All button */}
-                {lotIds.some(id => lots[id]?.importedModel) && (
+                {hasAnyModels && (
                     <button
                         onClick={() => {
                             if (window.confirm('Remove imported models from all lots?')) {
@@ -1658,40 +1661,48 @@ const ModelImportSection = () => {
                     </button>
                 )}
 
-                {/* Per-lot status */}
+                {/* Per-lot model lists */}
                 {lotIds.map((lotId, i) => {
                     const lot = lots[lotId]
-                    const model = lot?.importedModel
-                    if (!model) return null
+                    const modelOrder = lot?.importedModelOrder ?? []
+                    if (modelOrder.length === 0) return null
                     return (
                         <div key={lotId} className="text-xs py-1 px-1 rounded space-y-1" style={{ background: 'var(--ui-input-bg)' }}>
-                            <div className="flex items-center justify-between">
-                                <span style={{ color: 'var(--ui-text)' }}>
-                                    Lot {i + 1}: <span style={{ color: 'var(--ui-text-muted)' }}>{model.filename}</span>
-                                </span>
-                                <button
-                                    onClick={() => removeImportedModel(lotId)}
-                                    className="p-0.5 rounded hover:bg-red-500/20"
-                                    style={{ color: 'var(--ui-text-muted)' }}
-                                    title="Remove model"
-                                >
-                                    <X className="w-3 h-3" />
-                                </button>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <label className="text-xs whitespace-nowrap" style={{ color: 'var(--ui-text-muted)' }}>Units:</label>
-                                <select
-                                    value={model.units ?? 'auto'}
-                                    onChange={(e) => setImportedModelUnits(lotId, e.target.value)}
-                                    className="flex-1 text-xs rounded px-1 py-0.5"
-                                    style={{ background: 'var(--ui-bg)', color: 'var(--ui-text)', border: '1px solid var(--ui-border)' }}
-                                >
-                                    <option value="auto">Auto</option>
-                                    <option value="meters">Meters</option>
-                                    <option value="feet">Feet</option>
-                                </select>
-                                <span style={{ color: 'var(--ui-text-muted)', fontSize: '10px' }}>Tiny? Try Meters</span>
-                            </div>
+                            <span className="text-[10px] font-semibold" style={{ color: 'var(--ui-text-muted)' }}>
+                                Lot {i + 1} ({modelOrder.length} model{modelOrder.length !== 1 ? 's' : ''})
+                            </span>
+                            {modelOrder.map((modelId) => {
+                                const model = lot.importedModels?.[modelId]
+                                if (!model) return null
+                                return (
+                                    <div key={modelId} className="flex items-center justify-between gap-1 pl-1">
+                                        <button
+                                            onClick={() => { if (!(model.locked ?? false)) selectImportedModel(lotId, modelId) }}
+                                            className="flex-1 min-w-0 text-left text-xs truncate rounded px-1 py-0.5 hover:bg-blue-500/10"
+                                            style={{ color: (model.locked ?? false) ? 'var(--ui-text-muted)' : 'var(--ui-text)', opacity: (model.locked ?? false) ? 0.5 : 1 }}
+                                            title={(model.locked ?? false) ? 'Model is locked' : 'Click to edit style'}
+                                        >
+                                            {model.name ?? model.filename?.replace(/\.ifc$/i, '') ?? 'Imported Model'}
+                                        </button>
+                                        <button
+                                            onClick={() => toggleImportedModelLocked(lotId, modelId)}
+                                            className="p-0.5 rounded hover:bg-amber-500/20 shrink-0"
+                                            style={{ color: (model.locked ?? false) ? '#f59e0b' : 'var(--ui-text-muted)' }}
+                                            title={(model.locked ?? false) ? 'Unlock model' : 'Lock model'}
+                                        >
+                                            {(model.locked ?? false) ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                                        </button>
+                                        <button
+                                            onClick={() => removeImportedModel(lotId, modelId)}
+                                            className="p-0.5 rounded hover:bg-red-500/20 shrink-0"
+                                            style={{ color: 'var(--ui-text-muted)' }}
+                                            title="Remove model"
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                )
+                            })}
                         </div>
                     )
                 })}
@@ -2855,6 +2866,95 @@ const BatchExportSection = () => {
 }
 
 // ============================================
+// HYBRID LINE TYPE SELECTOR (for maxHeightPlane, setbackFill)
+// ============================================
+
+const HYBRID_LINE_TYPE_PRESETS = {
+    solid:           { dashed: false },
+    dashed:          { dashed: true, dashSize: 1,   gapSize: 0.5 },
+    dotted:          { dashed: true, dashSize: 0.2, gapSize: 0.3 },
+    'dash-dot':      { dashed: true, dashSize: 1,   gapSize: 0.3 },
+    'dash-dot-dot':  { dashed: true, dashSize: 1,   gapSize: 0.25 },
+}
+
+function detectHybridLineType(style) {
+    if (!style.lineDashed) return 'solid'
+    const ds = style.lineDashSize
+    const gs = style.lineGapSize
+    for (const [key, preset] of Object.entries(HYBRID_LINE_TYPE_PRESETS)) {
+        if (key === 'solid') continue
+        if (preset.dashSize === ds && preset.gapSize === gs) return key
+    }
+    return 'custom'
+}
+
+const HybridLineTypeSelector = ({ style, onChange }) => {
+    const lineType = detectHybridLineType(style)
+
+    const handleTypeChange = (type) => {
+        if (type === 'custom') {
+            onChange('lineDashed', true)
+            onChange('lineDashSize', style.lineDashSize ?? 1)
+            onChange('lineGapSize', style.lineGapSize ?? 0.5)
+        } else {
+            const preset = HYBRID_LINE_TYPE_PRESETS[type]
+            onChange('lineDashed', preset.dashed)
+            if (preset.dashed) {
+                onChange('lineDashSize', preset.dashSize)
+                onChange('lineGapSize', preset.gapSize)
+            }
+        }
+    }
+
+    return (
+        <>
+            <div className="flex items-center gap-2">
+                <span className="text-xs shrink-0" style={{ color: 'var(--ui-text-muted)', minWidth: '60px' }}>Line Type</span>
+                <select
+                    value={lineType}
+                    onChange={(e) => handleTypeChange(e.target.value)}
+                    className="flex-1 text-xs rounded px-1 py-0.5"
+                    style={{
+                        backgroundColor: 'var(--ui-bg)',
+                        color: 'var(--ui-text)',
+                        borderWidth: '1px',
+                        borderStyle: 'solid',
+                        borderColor: 'var(--ui-border)',
+                    }}
+                >
+                    <option value="solid">Solid</option>
+                    <option value="dashed">Dashed</option>
+                    <option value="dotted">Dotted</option>
+                    <option value="dash-dot">Dash-Dot</option>
+                    <option value="dash-dot-dot">Dash-Dot-Dot</option>
+                    <option value="custom">Custom</option>
+                </select>
+            </div>
+            {lineType === 'custom' && (
+                <>
+                    <SliderInput
+                        label="Dash Size"
+                        value={style.lineDashSize ?? 1}
+                        onChange={(v) => onChange('lineDashSize', v)}
+                        min={0.1}
+                        max={5}
+                        step={0.1}
+                    />
+                    <SliderInput
+                        label="Gap Size"
+                        value={style.lineGapSize ?? 0.5}
+                        onChange={(v) => onChange('lineGapSize', v)}
+                        min={0.1}
+                        max={5}
+                        step={0.1}
+                    />
+                </>
+            )}
+        </>
+    )
+}
+
+// ============================================
 // INLINE STYLE CONTROLS (per-lot style editing)
 // ============================================
 
@@ -2908,20 +3008,10 @@ const InlineStyleControls = ({ lotId, category, style }) => {
                         value={style.lineWidth ?? 2}
                         onChange={(v) => handleChange('lineWidth', v)}
                         min={0.5}
-                        max={5}
+                        max={15}
                         step={0.5}
                     />
-                    <div style={{ paddingTop: '4px' }}>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer', color: 'var(--ui-text-muted)' }}>
-                            <input
-                                type="checkbox"
-                                checked={style.lineDashed ?? true}
-                                onChange={(e) => handleChange('lineDashed', e.target.checked)}
-                                style={{ borderColor: 'var(--ui-border)' }}
-                            />
-                            Dashed
-                        </label>
-                    </div>
+                    <HybridLineTypeSelector style={style} onChange={handleChange} />
                 </div>
             ) : isMeshCategory ? (
                 <div className="space-y-1">
@@ -2984,6 +3074,9 @@ const InlineStyleControls = ({ lotId, category, style }) => {
                         width: style.width ?? 1,
                         opacity: style.opacity ?? 1,
                         dashed: style.dashed ?? false,
+                        dashSize: style.dashSize,
+                        gapSize: style.gapSize,
+                        dashScale: style.dashScale,
                     }}
                     onChange={handleChange}
                     showDash={category !== 'buildingFaces' && category !== 'lotFill'}
@@ -3136,6 +3229,7 @@ const StylesSection = () => {
         { key: 'accessoryBuildingEdges', label: 'Accessory Building Edges' },
         { key: 'accessoryBuildingFaces', label: 'Accessory Building Faces' },
         { key: 'roofFaces', label: 'Roof' },
+        { key: 'roofEdges', label: 'Roof Edges' },
         { key: 'maxHeightPlane', label: 'Max Height Plane' },
         { key: 'importedModelFaces', label: 'Imported Model Faces' },
         { key: 'importedModelEdges', label: 'Imported Model Edges' },
@@ -3651,6 +3745,9 @@ const DimensionStylesSection = () => {
     const styleSettings = useStore((s) => s.viewSettings?.styleSettings)
     const setDimensionSetting = useStore((s) => s.setDimensionSetting)
     const setCustomLabel = useStore((s) => s.setCustomLabel)
+    const entityOrder = useStore((s) => s.entityOrder)
+    const lotVisibility = useStore((s) => s.lotVisibility)
+    const setLotVisibility = useStore((s) => s.setLotVisibility)
 
     const ds = styleSettings?.dimensionSettings ?? {}
 
@@ -3664,7 +3761,28 @@ const DimensionStylesSection = () => {
                     value={ds.lineColor ?? '#000000'}
                     onChange={(v) => setDimensionSetting('lineColor', v)}
                 />
-                <SliderInput label="Line Width" value={ds.lineWidth ?? 1} onChange={(v) => setDimensionSetting('lineWidth', v)} min={0.5} max={5} step={0.5} />
+                <SliderInput label="Line Width" value={ds.lineWidth ?? 1} onChange={(v) => setDimensionSetting('lineWidth', v)} min={0.5} max={10} step={0.5} />
+                <div className="flex items-center justify-between gap-1">
+                    <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--ui-text-secondary)' }}>Line Style</span>
+                    <select
+                        value={ds.dimensionLineStyle ?? 'solid'}
+                        onChange={(e) => setDimensionSetting('dimensionLineStyle', e.target.value)}
+                        className="flex-1 ml-2 px-1 py-0.5 text-[9px] rounded focus:outline-none"
+                        style={{ backgroundColor: 'var(--ui-bg-primary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-primary)' }}
+                    >
+                        <option value="solid">Solid</option>
+                        <option value="dashed">Dashed</option>
+                        <option value="dotted">Dotted</option>
+                        <option value="dash-dot">Dash-Dot</option>
+                        <option value="dash-dot-dot">Dash-Dot-Dot</option>
+                    </select>
+                </div>
+                {(ds.dimensionLineStyle ?? 'solid') !== 'solid' && (
+                    <>
+                        <SliderInput label="Dash Size" value={ds.dimensionDashSize ?? 1} onChange={(v) => setDimensionSetting('dimensionDashSize', v)} min={0.1} max={3} step={0.1} />
+                        <SliderInput label="Gap Size" value={ds.dimensionGapSize ?? 0.5} onChange={(v) => setDimensionSetting('dimensionGapSize', v)} min={0.1} max={3} step={0.1} />
+                    </>
+                )}
 
                 <DimDivider />
 
@@ -3684,13 +3802,28 @@ const DimensionStylesSection = () => {
                         {ds.extensionLineColor == null ? 'auto' : 'auto?'}
                     </button>
                 </div>
-                <ButtonGroupRow
-                    label="Ext. Style"
-                    options={[{ key: 'dashed', label: 'Dashed' }, { key: 'solid', label: 'Solid' }]}
-                    value={ds.extensionLineStyle ?? 'dashed'}
-                    onChange={(v) => setDimensionSetting('extensionLineStyle', v)}
-                />
-                <SliderInput label="Ext. Width" value={ds.extensionWidth ?? 0.5} onChange={(v) => setDimensionSetting('extensionWidth', v)} min={0.1} max={2} step={0.1} />
+                <div className="flex items-center justify-between gap-1">
+                    <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--ui-text-secondary)' }}>Ext. Style</span>
+                    <select
+                        value={ds.extensionLineStyle ?? 'dashed'}
+                        onChange={(e) => setDimensionSetting('extensionLineStyle', e.target.value)}
+                        className="flex-1 ml-2 px-1 py-0.5 text-[9px] rounded focus:outline-none"
+                        style={{ backgroundColor: 'var(--ui-bg-primary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-primary)' }}
+                    >
+                        <option value="solid">Solid</option>
+                        <option value="dashed">Dashed</option>
+                        <option value="dotted">Dotted</option>
+                        <option value="dash-dot">Dash-Dot</option>
+                        <option value="dash-dot-dot">Dash-Dot-Dot</option>
+                    </select>
+                </div>
+                {(ds.extensionLineStyle ?? 'dashed') !== 'solid' && (
+                    <>
+                        <SliderInput label="Ext. Dash Size" value={ds.extensionDashSize ?? 1} onChange={(v) => setDimensionSetting('extensionDashSize', v)} min={0.1} max={3} step={0.1} />
+                        <SliderInput label="Ext. Gap Size" value={ds.extensionGapSize ?? 0.5} onChange={(v) => setDimensionSetting('extensionGapSize', v)} min={0.1} max={3} step={0.1} />
+                    </>
+                )}
+                <SliderInput label="Ext. Width" value={ds.extensionWidth ?? 0.5} onChange={(v) => setDimensionSetting('extensionWidth', v)} min={0.1} max={4} step={0.1} />
 
                 <DimDivider />
 
@@ -3716,7 +3849,7 @@ const DimensionStylesSection = () => {
                         {ds.markerColor == null ? 'auto' : 'auto?'}
                     </button>
                 </div>
-                <SliderInput label="Marker Scale" value={ds.markerScale ?? 1} onChange={(v) => setDimensionSetting('markerScale', v)} min={0.5} max={3} step={0.1} />
+                <SliderInput label="Marker Scale" value={ds.markerScale ?? 1} onChange={(v) => setDimensionSetting('markerScale', v)} min={0.5} max={6} step={0.1} />
             </DimSubSection>
 
             {/* ── Text Styles ── */}
@@ -3734,17 +3867,17 @@ const DimensionStylesSection = () => {
                         ))}
                     </select>
                 </div>
-                <SliderInput label="Font Size" value={ds.fontSize ?? 2} onChange={(v) => setDimensionSetting('fontSize', v)} min={1} max={10} step={0.5} />
+                <SliderInput label="Font Size" value={ds.fontSize ?? 2} onChange={(v) => setDimensionSetting('fontSize', v)} min={1} max={20} step={0.5} />
                 <ColorPicker label="Text Color" value={ds.textColor ?? '#000000'} onChange={(v) => setDimensionSetting('textColor', v)} />
                 <ColorPicker label="Outline Color" value={ds.outlineColor ?? '#ffffff'} onChange={(v) => setDimensionSetting('outlineColor', v)} />
-                <SliderInput label="Outline Width" value={ds.outlineWidth ?? 0.1} onChange={(v) => setDimensionSetting('outlineWidth', v)} min={0} max={0.5} step={0.05} />
+                <SliderInput label="Outline Width" value={ds.outlineWidth ?? 0.1} onChange={(v) => setDimensionSetting('outlineWidth', v)} min={0} max={1.0} step={0.05} />
                 <ButtonGroupRow
                     label="Text Mode"
                     options={[{ key: 'follow-line', label: 'Follow' }, { key: 'billboard', label: 'Billboard' }]}
                     value={ds.textMode ?? 'follow-line'}
                     onChange={(v) => setDimensionSetting('textMode', v)}
                 />
-                <SliderInput label="Width Text Offset" value={ds.textPerpOffset ?? 0} onChange={(v) => setDimensionSetting('textPerpOffset', v)} min={-10} max={20} step={0.5} />
+                <SliderInput label="Width Text Offset" value={ds.textPerpOffset ?? 0} onChange={(v) => setDimensionSetting('textPerpOffset', v)} min={-30} max={50} step={0.5} />
                 <div className="flex items-center justify-between gap-1">
                     <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--ui-text-secondary)' }}>Width Text Side</span>
                     <select
@@ -3764,7 +3897,7 @@ const DimensionStylesSection = () => {
                     value={ds.textModeDepth ?? 'billboard'}
                     onChange={(v) => setDimensionSetting('textModeDepth', v)}
                 />
-                <SliderInput label="Depth Text Offset" value={ds.textPerpOffsetDepth ?? 0} onChange={(v) => setDimensionSetting('textPerpOffsetDepth', v)} min={-10} max={20} step={0.5} />
+                <SliderInput label="Depth Text Offset" value={ds.textPerpOffsetDepth ?? 0} onChange={(v) => setDimensionSetting('textPerpOffsetDepth', v)} min={-30} max={50} step={0.5} />
                 <div className="flex items-center justify-between gap-1">
                     <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--ui-text-secondary)' }}>Depth Text Side</span>
                     <select
@@ -3811,21 +3944,40 @@ const DimensionStylesSection = () => {
                     value={ds.unitFormat ?? 'feet'}
                     onChange={(v) => setDimensionSetting('unitFormat', v)}
                 />
-                <SliderInput label="Setback Offset" value={ds.setbackDimOffset ?? 5} onChange={(v) => setDimensionSetting('setbackDimOffset', v)} min={1} max={30} step={1} />
-                <SliderInput label="Lot Width Offset" value={ds.lotDimOffset ?? 15} onChange={(v) => setDimensionSetting('lotDimOffset', v)} min={5} max={40} step={1} />
-                <SliderInput label="Lot Depth Offset" value={ds.lotDepthDimOffset ?? ds.lotDimOffset ?? 15} onChange={(v) => setDimensionSetting('lotDepthDimOffset', v)} min={5} max={40} step={1} />
-                <div className="flex items-center justify-between gap-1">
-                    <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--ui-text-secondary)' }}>Lot Depth Dim Side</span>
-                    <select
-                        value={ds.lotDepthDimSide ?? 'right'}
-                        onChange={(e) => setDimensionSetting('lotDepthDimSide', e.target.value)}
-                        className="flex-1 ml-2 px-1 py-0.5 text-[9px] rounded focus:outline-none"
-                        style={{ backgroundColor: 'var(--ui-bg-primary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-primary)' }}
-                    >
-                        <option value="right">Right</option>
-                        <option value="left">Left</option>
-                    </select>
-                </div>
+                <SliderInput label="Setback Offset" value={ds.setbackDimOffset ?? 5} onChange={(v) => setDimensionSetting('setbackDimOffset', v)} min={1} max={100} step={1} />
+                <SliderInput label="Lot Width Offset" value={ds.lotDimOffset ?? 15} onChange={(v) => setDimensionSetting('lotDimOffset', v)} min={5} max={100} step={1} />
+                <SliderInput label="Lot Depth Offset" value={ds.lotDepthDimOffset ?? ds.lotDimOffset ?? 15} onChange={(v) => setDimensionSetting('lotDepthDimOffset', v)} min={5} max={100} step={1} />
+                {/* Per-Lot Depth Dims */}
+                <DimDivider />
+                <span className="text-[10px] font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Per-Lot Depth Dims</span>
+                {entityOrder?.map((lotId, idx) => {
+                    const lotNum = idx + 1
+                    const vis = lotVisibility?.[lotId]
+                    if (lotNum === 1) {
+                        return (
+                            <div key={lotId} className="flex items-center justify-between gap-1">
+                                <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--ui-text-secondary)' }}>Lot 1 Side</span>
+                                <select
+                                    value={ds.lotDepthDimSide ?? 'right'}
+                                    onChange={(e) => setDimensionSetting('lotDepthDimSide', e.target.value)}
+                                    className="flex-1 ml-2 px-1 py-0.5 text-[9px] rounded focus:outline-none"
+                                    style={{ backgroundColor: 'var(--ui-bg-primary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-primary)' }}
+                                >
+                                    <option value="right">Right</option>
+                                    <option value="left">Left</option>
+                                </select>
+                            </div>
+                        )
+                    }
+                    return (
+                        <ToggleRow
+                            key={lotId}
+                            label={`Lot ${lotNum} Depth Dim`}
+                            value={vis?.depthDimVisible ?? true}
+                            onChange={(v) => setLotVisibility(lotId, 'depthDimVisible', v)}
+                        />
+                    )
+                })}
 
                 <DimDivider />
 
@@ -3836,7 +3988,7 @@ const DimensionStylesSection = () => {
                     onChange={(v) => setDimensionSetting('verticalMode', v)}
                 />
                 {ds.verticalMode && (
-                    <SliderInput label="Vert. Height" value={ds.verticalOffset ?? 20} onChange={(v) => setDimensionSetting('verticalOffset', v)} min={5} max={60} step={1} />
+                    <SliderInput label="Vert. Height" value={ds.verticalOffset ?? 20} onChange={(v) => setDimensionSetting('verticalOffset', v)} min={5} max={120} step={1} />
                 )}
             </DimSubSection>
 
@@ -4039,9 +4191,19 @@ const ScenariosSection = () => {
     }, [showNewInput])
 
     const handleSwitch = async (name) => {
-        if (!currentProject || name === activeScenario) return
+        if (!currentProject) return
+        // If clicking the already-active scenario, just save (don't reload)
+        if (name === activeScenario) {
+            await handleSaveCurrent()
+            return
+        }
         setLoading(true)
         try {
+            // Auto-save current scenario before switching
+            if (activeScenario) {
+                const currentState = getSnapshotData()
+                await api.saveScenario(currentProject.id, activeScenario, currentState)
+            }
             const data = await api.loadScenario(currentProject.id, name)
             applySnapshot(data)
             setActiveScenario(name)
@@ -4093,6 +4255,31 @@ const ScenariosSection = () => {
             showToast(`Created scenario "${name}"`)
         } catch {
             showToast('Failed to create scenario', 'error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleDuplicate = async () => {
+        if (!currentProject || !activeScenario) return
+        const newScenarioName = window.prompt('Duplicate as:', `${activeScenario} (copy)`)
+        if (!newScenarioName?.trim()) return
+        const name = newScenarioName.trim()
+        // Check for name collision
+        if (scenarios.some(s => s.name === name)) {
+            showToast(`Scenario "${name}" already exists`, 'error')
+            return
+        }
+        setLoading(true)
+        try {
+            const state = getSnapshotData()
+            await api.saveScenario(currentProject.id, name, state)
+            const list = await api.listScenarios(currentProject.id)
+            setScenarios(list)
+            setActiveScenario(name)
+            showToast(`Duplicated as "${name}"`)
+        } catch {
+            showToast('Failed to duplicate scenario', 'error')
         } finally {
             setLoading(false)
         }
@@ -4239,6 +4426,14 @@ const ScenariosSection = () => {
                     </select>
                 </div>
 
+                {/* Active scenario indicator */}
+                {activeScenario && (
+                    <div className="flex items-center gap-1.5 text-[10px] px-1" style={{ color: 'var(--ui-text-muted)' }}>
+                        <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--ui-accent)' }} />
+                        Active: <span style={{ color: 'var(--ui-text-primary)', fontWeight: 500 }}>{activeScenario}</span>
+                    </div>
+                )}
+
                 {/* Action buttons */}
                 <div className="flex items-center gap-1 flex-wrap">
                     {activeScenario && (
@@ -4263,6 +4458,18 @@ const ScenariosSection = () => {
                         <Plus className="w-3 h-3" />
                         New
                     </button>
+                    {activeScenario && (
+                        <button
+                            onClick={handleDuplicate}
+                            disabled={loading}
+                            className="flex items-center gap-1 px-2 py-1 rounded text-[10px] transition-opacity hover:opacity-80 disabled:opacity-40"
+                            style={{ backgroundColor: 'var(--ui-bg-tertiary)', color: 'var(--ui-text-secondary)', borderWidth: '1px', borderStyle: 'solid', borderColor: 'var(--ui-border)' }}
+                            title="Duplicate this scenario"
+                        >
+                            <Copy className="w-3 h-3" />
+                            Duplicate
+                        </button>
+                    )}
                     {activeScenario && (
                         <button
                             onClick={handleDelete}

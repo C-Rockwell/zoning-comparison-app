@@ -62,8 +62,9 @@ const RoadPolygon = ({ xMin, xMax, yMin, yMax, style, zOffset = 0.01, suppressLe
                 opacity={style.lineOpacity}
                 transparent={style.lineOpacity < 1}
                 dashed={style.lineDashed}
-                dashSize={style.lineDashed ? 1 : undefined}
-                gapSize={style.lineDashed ? 0.5 : undefined}
+                dashSize={style.lineDashed ? (style.lineDashSize ?? 3) : undefined}
+                gapSize={style.lineDashed ? (style.lineGapSize ?? 2) : undefined}
+                dashScale={style.lineDashed ? (style.lineDashScale ?? 1) : undefined}
             />
             {!polyRightEnd && (
                 <Line
@@ -73,8 +74,9 @@ const RoadPolygon = ({ xMin, xMax, yMin, yMax, style, zOffset = 0.01, suppressLe
                     opacity={style.lineOpacity}
                     transparent={style.lineOpacity < 1}
                     dashed={style.lineDashed}
-                    dashSize={style.lineDashed ? 1 : undefined}
-                    gapSize={style.lineDashed ? 0.5 : undefined}
+                    dashSize={style.lineDashed ? (style.lineDashSize ?? 3) : undefined}
+                    gapSize={style.lineDashed ? (style.lineGapSize ?? 2) : undefined}
+                    dashScale={style.lineDashed ? (style.lineDashScale ?? 1) : undefined}
                 />
             )}
             <Line
@@ -84,8 +86,9 @@ const RoadPolygon = ({ xMin, xMax, yMin, yMax, style, zOffset = 0.01, suppressLe
                 opacity={style.lineOpacity}
                 transparent={style.lineOpacity < 1}
                 dashed={style.lineDashed}
-                dashSize={style.lineDashed ? 1 : undefined}
-                gapSize={style.lineDashed ? 0.5 : undefined}
+                dashSize={style.lineDashed ? (style.lineDashSize ?? 3) : undefined}
+                gapSize={style.lineDashed ? (style.lineGapSize ?? 2) : undefined}
+                dashScale={style.lineDashed ? (style.lineDashScale ?? 1) : undefined}
             />
             {!polyLeftEnd && (
                 <Line
@@ -95,8 +98,9 @@ const RoadPolygon = ({ xMin, xMax, yMin, yMax, style, zOffset = 0.01, suppressLe
                     opacity={style.lineOpacity}
                     transparent={style.lineOpacity < 1}
                     dashed={style.lineDashed}
-                    dashSize={style.lineDashed ? 1 : undefined}
-                    gapSize={style.lineDashed ? 0.5 : undefined}
+                    dashSize={style.lineDashed ? (style.lineDashSize ?? 3) : undefined}
+                    gapSize={style.lineDashed ? (style.lineGapSize ?? 2) : undefined}
+                    dashScale={style.lineDashed ? (style.lineDashScale ?? 1) : undefined}
                 />
             )}
         </group>

@@ -5,6 +5,7 @@ import SharedCanvas from './SharedCanvas'
 import DistrictSceneContent from './DistrictSceneContent'
 import DrawingToolbar from './DrawingEditor/DrawingToolbar'
 import DrawingTextInput from './DrawingEditor/DrawingTextInput'
+import ImportedModelStylePopup from './ImportedModelStylePopup'
 
 // ============================================
 // DistrictViewer — main 3D viewer for the
@@ -30,6 +31,8 @@ const DistrictViewer = () => {
     const exportView = useStore(state => state.viewSettings.exportView)
     const toggleProjection = useStore(state => state.toggleProjection)
     const deselectAllEntityBuildings = useStore(state => state.deselectAllEntityBuildings)
+    const deselectImportedModel = useStore(state => state.deselectImportedModel)
+    const selectedImportedModel = useStore(state => state.selectedImportedModel)
 
     const handlePresetClick = (index) => {
         if (isSaving) {
@@ -198,10 +201,14 @@ const DistrictViewer = () => {
                 ref={canvasRef}
                 onPointerMissed={() => {
                     if (deselectAllEntityBuildings) deselectAllEntityBuildings()
+                    if (deselectImportedModel) deselectImportedModel()
                 }}
             >
                 <DistrictSceneContent />
             </SharedCanvas>
+
+            {/* Floating style popup for selected imported model */}
+            {selectedImportedModel && <ImportedModelStylePopup />}
         </div>
     )
 }

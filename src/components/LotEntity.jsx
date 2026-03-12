@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import React, { useMemo } from 'react'
 import { Line } from '@react-three/drei'
 import * as THREE from 'three'
 import { useStore } from '../store/useStore'
@@ -45,9 +45,9 @@ const SingleLine = ({ start, end, style, side, lineScale = 1 }) => {
     const color = useOverride ? override.color : style.color
     const width = useOverride ? override.width : style.width
     const dashed = useOverride ? override.dashed : style.dashed
-    const dashScale = style.dashScale || 5
-    const dashSize = style.dashSize || 1
-    const gapSize = style.gapSize || 0.5
+    const dashScale = (useOverride ? override.dashScale : style.dashScale) ?? 1
+    const dashSize = (useOverride ? override.dashSize : style.dashSize) ?? 3
+    const gapSize = (useOverride ? override.gapSize : style.gapSize) ?? 2
 
     return (
         <Line
@@ -60,6 +60,8 @@ const SingleLine = ({ start, end, style, side, lineScale = 1 }) => {
             gapSize={gapSize}
             transparent
             opacity={style.opacity}
+            renderOrder={3}
+            depthTest={false}
         />
     )
 }
@@ -86,7 +88,7 @@ const computeSetbackInner = (lotWidth, lotDepth, setbacks, streetSides) => {
 // ============================================
 // LotFillFrame — lot fill with inner hole cut out
 // ============================================
-const LotFillFrame = ({ width, depth, innerX1, innerY1, innerX2, innerY2, style, z = 0.02 }) => {
+const LotFillFrame = ({ width, depth, innerX1, innerY1, innerX2, innerY2, style, z = 0.001 }) => {
     const geometry = useMemo(() => {
         const w2 = width / 2, d2 = depth / 2
         const outer = new THREE.Shape()
@@ -122,7 +124,7 @@ const LotFillFrame = ({ width, depth, innerX1, innerY1, innerX2, innerY2, style,
 // ============================================
 // RectLot — rectangular lot lines + fill + dimensions
 // ============================================
-const RectLot = ({ width, depth, style, fillStyle, setbackFillActive = false, setbackInner = null, setbackFillStyle = null, showWidthDimensions = false, showDepthDimensions = false, dimensionSettings = {}, lineScale = 1 }) => {
+const RectLot = ({ width, depth, style, fillStyle, setbackFillActive = false, setbackInner = null, setbackFillStyle = null, showWidthDimensions = false, showDepthDimensions = false, dimensionSettings = {}, lineScale = 1, lotIndex = 1 }) => {
     const w2 = width / 2
     const d2 = depth / 2
 
@@ -141,7 +143,7 @@ const RectLot = ({ width, depth, style, fillStyle, setbackFillActive = false, se
                         innerX2={setbackInner.x2} innerY2={setbackInner.y2}
                         style={fillStyle}
                     />
-                    <mesh position={[(setbackInner.x1 + setbackInner.x2) / 2, (setbackInner.y1 + setbackInner.y2) / 2, 0.02]} receiveShadow>
+                    <mesh position={[(setbackInner.x1 + setbackInner.x2) / 2, (setbackInner.y1 + setbackInner.y2) / 2, 0.001]} receiveShadow>
                         <planeGeometry args={[setbackInner.x2 - setbackInner.x1, setbackInner.y2 - setbackInner.y1]} />
                         <meshStandardMaterial
                             color={setbackFillStyle.color ?? '#90EE90'}
@@ -154,7 +156,7 @@ const RectLot = ({ width, depth, style, fillStyle, setbackFillActive = false, se
                     </mesh>
                 </>
             ) : fillStyle.visible ? (
-                <mesh position={[0, 0, 0.02]} receiveShadow>
+                <mesh position={[0, 0, 0.001]} receiveShadow>
                     <planeGeometry args={[width, depth]} />
                     <meshStandardMaterial
                         color={fillStyle.color}
@@ -189,13 +191,16 @@ const RectLot = ({ width, depth, style, fillStyle, setbackFillActive = false, se
                 const vMode = dimensionSettings?.verticalMode
                 const vOffset = dimensionSettings?.verticalOffset ?? 20
                 const depthOffset = dimensionSettings?.lotDepthDimOffset ?? dimensionSettings?.lotDimOffset ?? 15
+                const effectiveDepthDimSide = lotIndex === 1
+                    ? (dimensionSettings?.lotDepthDimSide ?? 'right')
+                    : 'left'
                 const depthSettings = dimensionSettings ? {
                     ...dimensionSettings,
                     textPerpOffset: dimensionSettings.textPerpOffsetDepth ?? 0,
                     textAnchorY: dimensionSettings.textAnchorYDepth ?? 'center',
                     textMode: dimensionSettings.textModeDepth ?? 'billboard',
                 } : dimensionSettings
-                return dimensionSettings?.lotDepthDimSide === 'left' ? (
+                return effectiveDepthDimSide === 'left' ? (
                     <Dimension
                         start={p4} end={p1}
                         label={resolveDimensionLabel(depth, 'lotDepth', dimensionSettings)}
@@ -732,6 +737,8 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
 
     // Imported model actions
     const setImportedModelPosition = useStore(state => state.setImportedModelPosition)
+    const selectImportedModel = useStore(state => state.selectImportedModel)
+    const selectedImportedModel = useStore(state => state.selectedImportedModel)
 
     // Annotation positions for draggable elements (lot access arrows, etc.)
     const annotationPositions = useStore(state => state.annotationPositions)
@@ -748,7 +755,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
 
     // Show dimension layers from global settings
     const showWidthDim = layers.dimensionsLotWidth
-    const showDepthDim = layers.dimensionsLotDepth
+    const showDepthDim = layers.dimensionsLotDepth && (visibility.depthDimVisible ?? true)
     const showSetbackDim = layers.dimensionsSetbacks
     const showParkingSetbackDim = layers.dimensionsParkingSetbacks
     const showPrincipalHeightDim = layers.dimensionsHeightPrincipal ?? layers.dimensionsHeight
@@ -791,6 +798,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                         showDepthDimensions={showDepthDim}
                         dimensionSettings={dimensionSettings}
                         lineScale={exportLineScale}
+                        lotIndex={lotIndex}
                     />
                 )
             )}
@@ -969,34 +977,56 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
             )}
 
             {/* ============================================ */}
-            {/* Imported Model */}
+            {/* Imported Models (multi-model) */}
             {/* ============================================ */}
-            {layers.importedModels && visibility.importedModel && lot.importedModel && (
-                <>
-                    <ImportedModelMesh
-                        lotId={lotId}
-                        filename={lot.importedModel.filename}
-                        x={lot.importedModel.x}
-                        y={lot.importedModel.y}
-                        rotation={lot.importedModel.rotation ?? 0}
-                        scale={lot.importedModel.scale ?? 1}
-                        units={lot.importedModel.units ?? 'auto'}
-                        style={{
-                            faces: style.importedModelFaces,
-                            edges: style.importedModelEdges,
-                        }}
-                    />
-                    <MoveHandle
-                        position={[lot.importedModel.x ?? 0, lot.importedModel.y ?? 0]}
-                        zPosition={0}
-                        displayOffset={[0, -13]}
-                        offsetGroupX={offset + lotWidth / 2}
-                        offsetGroupY={lotDepth / 2}
-                        onDrag={(newX, newY) => {
-                            useStore.getState().setImportedModelPosition(lotId, newX, newY)
-                        }}
-                    />
-                </>
+            {layers.importedModels && visibility.importedModel && lot.importedModelOrder?.length > 0 && (
+                lot.importedModelOrder.map((modelId) => {
+                    const model = lot.importedModels?.[modelId]
+                    if (!model) return null
+                    const isSelected = selectedImportedModel?.lotId === lotId && selectedImportedModel?.modelId === modelId
+                    return (
+                        <React.Fragment key={modelId}>
+                            <ImportedModelMesh
+                                lotId={lotId}
+                                modelId={modelId}
+                                filename={model.filename}
+                                x={model.x}
+                                y={model.y}
+                                rotation={model.rotation ?? 0}
+                                scale={model.scale ?? 1}
+                                units={model.units ?? 'auto'}
+                                selected={isSelected}
+                                locked={model.locked ?? false}
+                                onSelect={() => { if (!(model.locked ?? false)) selectImportedModel(lotId, modelId) }}
+                                style={{
+                                    faces: {
+                                        color: model.style?.faces?.color ?? style.importedModelFaces?.color ?? '#D5D5D5',
+                                        opacity: model.style?.faces?.opacity ?? style.importedModelFaces?.opacity ?? 1.0,
+                                    },
+                                    edges: {
+                                        color: model.style?.edges?.color ?? style.importedModelEdges?.color ?? '#000000',
+                                        width: model.style?.edges?.width ?? style.importedModelEdges?.width ?? 1.5,
+                                        opacity: model.style?.edges?.opacity ?? style.importedModelEdges?.opacity ?? 1.0,
+                                        visible: model.style?.edges?.visible ?? style.importedModelEdges?.visible ?? true,
+                                    },
+                                }}
+                            />
+                            {isSelected && !(model.locked ?? false) && (
+                                <MoveHandle
+                                    position={[model.x ?? 0, model.y ?? 0]}
+                                    zPosition={1}
+                                    displayOffset={[0, -30]}
+                                    offsetGroupX={offset + lotWidth / 2}
+                                    offsetGroupY={lotDepth / 2}
+                                    onDrag={(newX, newY) => {
+                                        useStore.getState().setImportedModelPosition(lotId, modelId, newX, newY)
+                                    }}
+                                    parentHovered={true}
+                                />
+                            )}
+                        </React.Fragment>
+                    )
+                })
             )}
 
             {/* ============================================ */}

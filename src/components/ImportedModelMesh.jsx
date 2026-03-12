@@ -7,7 +7,7 @@ import { loadIFCMeshes } from '../utils/ifcLoader'
 const API_BASE = 'http://localhost:3001/api'
 const METERS_TO_FEET = 3.28084
 
-const ImportedModelMesh = ({ lotId, filename, x = 0, y = 0, rotation = 0, scale = 1, units = 'auto', style }) => {
+const ImportedModelMesh = ({ lotId, modelId, filename, x = 0, y = 0, rotation = 0, scale = 1, units = 'auto', style, selected, onSelect, locked }) => {
   const [meshData, setMeshData] = useState(null)
   const [detectedUnits, setDetectedUnits] = useState('meters')
   const [error, setError] = useState(null)
@@ -15,7 +15,6 @@ const ImportedModelMesh = ({ lotId, filename, x = 0, y = 0, rotation = 0, scale 
   const groupRef = useRef()
 
   const currentProject = useStore(state => state.currentProject)
-  const setImportedModelPosition = useStore(state => state.setImportedModelPosition)
 
   const faces = style?.faces
   const edges = style?.edges
@@ -150,9 +149,10 @@ const ImportedModelMesh = ({ lotId, filename, x = 0, y = 0, rotation = 0, scale 
   return (
     <group
       ref={groupRef}
-      position={[x, y, 0.102]}
+      position={[x, y, 0.005]}
       rotation={[0, 0, rotation]}
       scale={[scale, scale, scale]}
+      onPointerDown={(e) => { if (locked) return; e.stopPropagation(); onSelect?.() }}
     >
       {/* Center horizontally (XY), ground vertically (floor at Z=0) */}
       <group position={[-center[0], -center[1], -zMin]}>
@@ -165,6 +165,8 @@ const ImportedModelMesh = ({ lotId, filename, x = 0, y = 0, rotation = 0, scale 
               depthWrite={faceOpacity >= 0.95}
               side={THREE.DoubleSide}
               flatShading
+              emissive={selected ? '#4488ff' : '#000000'}
+              emissiveIntensity={selected ? 0.15 : 0}
             />
             {edgesVisible && (
               <Edges

@@ -351,8 +351,8 @@ const BuildingEditor = ({
                         color={maxHeightPlaneStyle.lineColor || '#FF0000'}
                         lineWidth={(maxHeightPlaneStyle.lineWidth || 2) * lineScale}
                         dashed={maxHeightPlaneStyle.lineDashed || false}
-                        dashSize={1}
-                        gapSize={0.5}
+                        dashSize={maxHeightPlaneStyle.lineDashSize ?? 1}
+                        gapSize={maxHeightPlaneStyle.lineGapSize ?? 0.5}
                     />
                 </group>
             )}
@@ -466,12 +466,13 @@ const BuildingEditor = ({
             {bounds && bounds.d > 0 && (
                 <MoveHandle
                     position={[bounds.cx, bounds.cy - bounds.d / 2]}
-                    zPosition={0}
-                    displayOffset={[0, -13]}
+                    zPosition={1}
+                    displayOffset={[0, -30]}
                     offsetGroupX={offsetGroupX}
                     offsetGroupY={offsetGroupY}
                     onDrag={(newX, newY) => { if (onBuildingMove) onBuildingMove(newX, newY) }}
                     onDragEnd={() => {}}
+                    parentHovered={hovered || selected}
                 />
             )}
 

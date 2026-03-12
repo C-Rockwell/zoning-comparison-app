@@ -178,66 +178,67 @@ export const createDefaultLot = (overrides = {}) => ({
     parking: { front: false, sideInterior: false, sideStreet: false, rear: false },
     // Parking setbacks (Model Parameters)
     parkingSetbacks: { front: null, sideInterior: null, sideStreet: null, rear: null },
-    importedModel: null, // { filename, x, y, rotation, scale } or null
+    importedModels: {},        // { [modelId]: { filename, name, x, y, rotation, scale, units, style } }
+    importedModelOrder: [],    // [modelId, ...] for display order
     ...overrides,
 });
 
 export const createDefaultLotStyle = (overrides = {}) => ({
     lotLines: {
-        color: '#000000', width: 1.5, dashed: false, dashSize: 0.5, gapSize: 0.2, opacity: 1.0,
+        color: '#000000', width: 1.5, dashed: false, dashSize: 3, gapSize: 2, dashScale: 1, opacity: 1.0,
         overrides: {
-            front: { enabled: false, color: '#000000', width: 1.5, dashed: false },
-            rear: { enabled: false, color: '#000000', width: 1.5, dashed: false },
-            left: { enabled: false, color: '#000000', width: 1.5, dashed: false },
-            right: { enabled: false, color: '#000000', width: 1.5, dashed: false },
+            front: { enabled: false, color: '#000000', width: 1.5, dashed: false, dashSize: 3, gapSize: 2, dashScale: 1 },
+            rear: { enabled: false, color: '#000000', width: 1.5, dashed: false, dashSize: 3, gapSize: 2, dashScale: 1 },
+            left: { enabled: false, color: '#000000', width: 1.5, dashed: false, dashSize: 3, gapSize: 2, dashScale: 1 },
+            right: { enabled: false, color: '#000000', width: 1.5, dashed: false, dashSize: 3, gapSize: 2, dashScale: 1 },
         }
     },
     setbacks: {
-        color: '#000000', width: 1, dashed: true, dashSize: 1, gapSize: 0.5, dashScale: 1, opacity: 1.0,
+        color: '#000000', width: 1, dashed: true, dashSize: 3, gapSize: 2, dashScale: 1, opacity: 1.0,
         overrides: {
-            front: { enabled: false, color: '#000000', width: 1, dashed: true },
-            rear: { enabled: false, color: '#000000', width: 1, dashed: true },
-            left: { enabled: false, color: '#000000', width: 1, dashed: true },
-            right: { enabled: false, color: '#000000', width: 1, dashed: true },
+            front: { enabled: false, color: '#000000', width: 1, dashed: true, dashSize: 3, gapSize: 2, dashScale: 1 },
+            rear: { enabled: false, color: '#000000', width: 1, dashed: true, dashSize: 3, gapSize: 2, dashScale: 1 },
+            left: { enabled: false, color: '#000000', width: 1, dashed: true, dashSize: 3, gapSize: 2, dashScale: 1 },
+            right: { enabled: false, color: '#000000', width: 1, dashed: true, dashSize: 3, gapSize: 2, dashScale: 1 },
         }
     },
     lotFill: { color: '#E5E5E5', opacity: 1.0, visible: true },
     setbackFill: { color: '#90EE90', opacity: 0.3, lineColor: '#228B22', lineWidth: 1, lineDashed: false },
-    buildingEdges: { color: '#000000', width: 1.5, visible: true, dashed: false, opacity: 1.0 },
+    buildingEdges: { color: '#000000', width: 1.5, visible: true, dashed: false, dashSize: 3, gapSize: 2, dashScale: 1, opacity: 1.0 },
     buildingFaces: { color: '#D5D5D5', opacity: 1.0, transparent: true },
     principalBuildingEdges: { color: '#000000', width: 1.5, visible: true, dashed: false, opacity: 1.0 },
     principalBuildingFaces: { color: '#D5D5D5', opacity: 1.0, transparent: true },
     accessoryBuildingEdges: { color: '#666666', width: 1.5, visible: true, dashed: false, opacity: 1.0 },
     accessoryBuildingFaces: { color: '#B0B0B0', opacity: 1.0, transparent: true },
-    maxHeightPlane: { color: '#FF6B6B', opacity: 0.3, lineColor: '#FF0000', lineWidth: 2, lineDashed: true },
+    maxHeightPlane: { color: '#FF6B6B', opacity: 0.3, lineColor: '#FF0000', lineWidth: 2, lineDashed: true, lineDashSize: 3, lineGapSize: 2 },
     maxSetbacks: {
-        color: '#000000', width: 1, dashed: true, dashSize: 0.5, gapSize: 0.3, dashScale: 1, opacity: 1.0,
+        color: '#000000', width: 1, dashed: true, dashSize: 1.5, gapSize: 2, dashScale: 1, opacity: 1.0,
         overrides: {
-            front: { enabled: false, color: '#000000', width: 1, dashed: true },
-            rear: { enabled: false, color: '#000000', width: 1, dashed: true },
-            left: { enabled: false, color: '#000000', width: 1, dashed: true },
-            right: { enabled: false, color: '#000000', width: 1, dashed: true },
+            front: { enabled: false, color: '#000000', width: 1, dashed: true, dashSize: 1.5, gapSize: 2, dashScale: 1 },
+            rear: { enabled: false, color: '#000000', width: 1, dashed: true, dashSize: 1.5, gapSize: 2, dashScale: 1 },
+            left: { enabled: false, color: '#000000', width: 1, dashed: true, dashSize: 1.5, gapSize: 2, dashScale: 1 },
+            right: { enabled: false, color: '#000000', width: 1, dashed: true, dashSize: 1.5, gapSize: 2, dashScale: 1 },
         }
     },
     roofFaces: { color: '#B8A088', opacity: 1.0 },
     roofEdges: { color: '#000000', width: 1.5, visible: true, opacity: 1.0 },
     btzPlanes: { color: '#AA00FF', opacity: 1.0 },
     accessorySetbacks: {
-        color: '#2196F3', width: 1, dashed: true, dashSize: 0.8, gapSize: 0.4, dashScale: 1, opacity: 1.0,
+        color: '#2196F3', width: 1, dashed: true, dashSize: 2.5, gapSize: 1.5, dashScale: 1, opacity: 1.0,
         overrides: {
-            front: { enabled: false, color: '#2196F3', width: 1, dashed: true },
-            rear: { enabled: false, color: '#2196F3', width: 1, dashed: true },
-            left: { enabled: false, color: '#2196F3', width: 1, dashed: true },
-            right: { enabled: false, color: '#2196F3', width: 1, dashed: true },
+            front: { enabled: false, color: '#2196F3', width: 1, dashed: true, dashSize: 2.5, gapSize: 1.5, dashScale: 1 },
+            rear: { enabled: false, color: '#2196F3', width: 1, dashed: true, dashSize: 2.5, gapSize: 1.5, dashScale: 1 },
+            left: { enabled: false, color: '#2196F3', width: 1, dashed: true, dashSize: 2.5, gapSize: 1.5, dashScale: 1 },
+            right: { enabled: false, color: '#2196F3', width: 1, dashed: true, dashSize: 2.5, gapSize: 1.5, dashScale: 1 },
         }
     },
     parkingSetbacks: {
-        color: '#FF9800', width: 1, dashed: true, dashSize: 0.8, gapSize: 0.4, dashScale: 1, opacity: 1.0,
+        color: '#FF9800', width: 1, dashed: true, dashSize: 2.5, gapSize: 1.5, dashScale: 1, opacity: 1.0,
         overrides: {
-            front: { enabled: false, color: '#FF9800', width: 1, dashed: true },
-            rear: { enabled: false, color: '#FF9800', width: 1, dashed: true },
-            left: { enabled: false, color: '#FF9800', width: 1, dashed: true },
-            right: { enabled: false, color: '#FF9800', width: 1, dashed: true },
+            front: { enabled: false, color: '#FF9800', width: 1, dashed: true, dashSize: 2.5, gapSize: 1.5, dashScale: 1 },
+            rear: { enabled: false, color: '#FF9800', width: 1, dashed: true, dashSize: 2.5, gapSize: 1.5, dashScale: 1 },
+            left: { enabled: false, color: '#FF9800', width: 1, dashed: true, dashSize: 2.5, gapSize: 1.5, dashScale: 1 },
+            right: { enabled: false, color: '#FF9800', width: 1, dashed: true, dashSize: 2.5, gapSize: 1.5, dashScale: 1 },
         }
     },
     lotAccessArrows: { color: '#FF00FF', opacity: 1.0, scale: 1 },
@@ -339,6 +340,7 @@ export const createDefaultLotVisibility = () => ({
     accessorySetbacks: true,
     lotAccessArrows: true,
     importedModel: true,
+    depthDimVisible: true,
 });
 
 // Maps district parameter dot-paths to lot property setter functions (mutates lot in place)
@@ -547,6 +549,7 @@ export const useStore = create(
                 nextEntityId: 1,
                 activeEntityId: null,
                 selectedBuildingType: null, // 'principal' | 'accessory' | null
+                selectedImportedModel: null, // { lotId, modelId } or null
                 moveMode: {
                     active: false,
                     phase: null, // 'selectObject' | 'selectBase' | 'moving'
@@ -755,6 +758,8 @@ export const useStore = create(
                                 lineColor: '#FF0000',
                                 lineWidth: 2,
                                 lineDashed: true,
+                                lineDashSize: 1,
+                                lineGapSize: 0.5,
                             },
                             roofFaces: {
                                 color: '#B8A088',
@@ -844,6 +849,8 @@ export const useStore = create(
                                 lineColor: '#FF0000',
                                 lineWidth: 2,
                                 lineDashed: true,
+                                lineDashSize: 1,
+                                lineGapSize: 0.5,
                             },
                             roofFaces: {
                                 color: '#C4B8A8',
@@ -921,7 +928,13 @@ export const useStore = create(
                             draggableText: false,      // Allow dragging dimension text (future)
                             // Extension line separate styling
                             extensionLineColor: null,  // null = inherit lineColor
-                            extensionLineStyle: 'dashed', // 'solid' | 'dashed'
+                            extensionLineStyle: 'dashed', // 'solid' | 'dashed' | 'dotted' | 'dash-dot' | 'dash-dot-dot'
+                            // Main dimension line style
+                            dimensionLineStyle: 'solid', // 'solid' | 'dashed' | 'dotted' | 'dash-dot' | 'dash-dot-dot'
+                            dimensionDashSize: 1,
+                            dimensionGapSize: 0.5,
+                            extensionDashSize: 1,
+                            extensionGapSize: 0.5,
                             // Marker separate styling
                             markerColor: null,         // null = inherit lineColor
                             markerScale: 1.0,          // multiplier on marker sizing
@@ -1955,11 +1968,22 @@ export const useStore = create(
                     };
                 }),
 
-                // Imported model actions
-                setImportedModel: (lotId, filename) => set((state) => {
+                // Imported model actions (multi-model)
+                addImportedModel: (lotId, filename) => set((state) => {
                     const lot = state.entities.lots[lotId]
                     if (!lot) return state
                     const principal = lot.buildings?.principal
+                    const modelId = generateEntityId('imodel')
+                    const newModel = {
+                        filename,
+                        name: filename.replace(/\.ifc$/i, ''),
+                        x: principal?.x ?? 0,
+                        y: principal?.y ?? 0,
+                        rotation: 0,
+                        scale: 1,
+                        units: 'auto',
+                        locked: false,
+                    }
                     return {
                         entities: {
                             ...state.entities,
@@ -1967,13 +1991,95 @@ export const useStore = create(
                                 ...state.entities.lots,
                                 [lotId]: {
                                     ...lot,
-                                    importedModel: {
-                                        filename,
-                                        x: principal?.x ?? 0,
-                                        y: principal?.y ?? 0,
-                                        rotation: 0,
-                                        scale: 1,
-                                        units: 'auto',
+                                    importedModels: { ...lot.importedModels, [modelId]: newModel },
+                                    importedModelOrder: [...(lot.importedModelOrder ?? []), modelId],
+                                },
+                            },
+                        },
+                    }
+                }),
+
+                setImportedModelName: (lotId, modelId, name) => set((state) => {
+                    const lot = state.entities.lots[lotId]
+                    const model = lot?.importedModels?.[modelId]
+                    if (!model) return state
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    importedModels: { ...lot.importedModels, [modelId]: { ...model, name } },
+                                },
+                            },
+                        },
+                    }
+                }),
+
+                setImportedModelUnits: (lotId, modelId, units) => set((state) => {
+                    const lot = state.entities.lots[lotId]
+                    const model = lot?.importedModels?.[modelId]
+                    if (!model) return state
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    importedModels: { ...lot.importedModels, [modelId]: { ...model, units } },
+                                },
+                            },
+                        },
+                    }
+                }),
+
+                setImportedModelPosition: (lotId, modelId, newX, newY) => set((state) => {
+                    const lot = state.entities.lots[lotId]
+                    const model = lot?.importedModels?.[modelId]
+                    if (!model) return state
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    importedModels: { ...lot.importedModels, [modelId]: { ...model, x: newX, y: newY } },
+                                },
+                            },
+                        },
+                    }
+                }),
+
+                setImportedModelStyle: (lotId, modelId, category, property, value) => set((state) => {
+                    const lot = state.entities.lots[lotId]
+                    const model = lot?.importedModels?.[modelId]
+                    if (!model) return state
+                    const currentStyle = model.style ?? {
+                        faces: { color: null, opacity: null },
+                        edges: { color: null, width: null, opacity: null, visible: null },
+                    }
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    importedModels: {
+                                        ...lot.importedModels,
+                                        [modelId]: {
+                                            ...model,
+                                            style: {
+                                                ...currentStyle,
+                                                [category]: {
+                                                    ...currentStyle[category],
+                                                    [property]: value,
+                                                },
+                                            },
+                                        },
                                     },
                                 },
                             },
@@ -1981,62 +2087,70 @@ export const useStore = create(
                     }
                 }),
 
-                setImportedModelUnits: (lotId, units) => set((state) => {
-                    const lot = state.entities.lots[lotId]
-                    if (!lot?.importedModel) return state
-                    return {
-                        entities: {
-                            ...state.entities,
-                            lots: {
-                                ...state.entities.lots,
-                                [lotId]: {
-                                    ...lot,
-                                    importedModel: { ...lot.importedModel, units },
-                                },
-                            },
-                        },
-                    }
-                }),
-
-                setImportedModelPosition: (lotId, newX, newY) => set((state) => {
-                    const lot = state.entities.lots[lotId]
-                    if (!lot?.importedModel) return state
-                    return {
-                        entities: {
-                            ...state.entities,
-                            lots: {
-                                ...state.entities.lots,
-                                [lotId]: {
-                                    ...lot,
-                                    importedModel: { ...lot.importedModel, x: newX, y: newY },
-                                },
-                            },
-                        },
-                    }
-                }),
-
-                removeImportedModel: (lotId) => set((state) => {
+                removeImportedModel: (lotId, modelId) => set((state) => {
                     const lot = state.entities.lots[lotId]
                     if (!lot) return state
+                    const newModels = { ...lot.importedModels }
+                    delete newModels[modelId]
+                    const newOrder = (lot.importedModelOrder ?? []).filter(id => id !== modelId)
+                    // Also deselect if this model was selected
+                    const sel = state.selectedImportedModel
+                    const deselect = sel?.lotId === lotId && sel?.modelId === modelId
                     return {
                         entities: {
                             ...state.entities,
                             lots: {
                                 ...state.entities.lots,
-                                [lotId]: { ...lot, importedModel: null },
+                                [lotId]: { ...lot, importedModels: newModels, importedModelOrder: newOrder },
                             },
                         },
+                        ...(deselect ? { selectedImportedModel: null } : {}),
                     }
                 }),
 
                 removeAllImportedModels: () => set((state) => {
                     const newLots = { ...state.entities.lots }
                     for (const lotId of state.entityOrder) {
-                        if (newLots[lotId]?.importedModel) {
-                            newLots[lotId] = { ...newLots[lotId], importedModel: null }
+                        if (newLots[lotId]?.importedModelOrder?.length > 0) {
+                            newLots[lotId] = { ...newLots[lotId], importedModels: {}, importedModelOrder: [] }
                         }
                     }
-                    return { entities: { ...state.entities, lots: newLots } }
+                    return { entities: { ...state.entities, lots: newLots }, selectedImportedModel: null }
+                }),
+
+                // Imported model selection
+                selectImportedModel: (lotId, modelId) => set((state) => {
+                    const model = state.entities?.lots?.[lotId]?.importedModels?.[modelId]
+                    if (model?.locked) return state
+                    return { selectedImportedModel: { lotId, modelId } }
+                }),
+                deselectImportedModel: () => set({ selectedImportedModel: null }),
+
+                toggleImportedModelLocked: (lotId, modelId) => set((state) => {
+                    const lot = state.entities?.lots?.[lotId]
+                    const model = lot?.importedModels?.[modelId]
+                    if (!model) return state
+                    const wasLocked = model.locked ?? false
+                    const sel = state.selectedImportedModel
+                    return {
+                        entities: {
+                            ...state.entities,
+                            lots: {
+                                ...state.entities.lots,
+                                [lotId]: {
+                                    ...lot,
+                                    importedModels: {
+                                        ...lot.importedModels,
+                                        [modelId]: { ...model, locked: !wasLocked },
+                                    },
+                                },
+                            },
+                        },
+                        // Deselect if locking a currently-selected model
+                        ...(!wasLocked && sel?.lotId === lotId && sel?.modelId === modelId
+                            ? { selectedImportedModel: null }
+                            : {}),
+                    }
                 }),
 
                 // Entity selection
@@ -2125,6 +2239,7 @@ export const useStore = create(
                     return {
                         entities: { ...state.entities, lots },
                         selectedBuildingType: null,
+                        selectedImportedModel: null,
                     };
                 }),
 
@@ -2659,18 +2774,75 @@ export const useStore = create(
                     return {
                         entityStyles: activeLotId ? state.entityStyles[activeLotId] : null,
                         roadModuleStyles: state.roadModuleStyles,
+                        dimensionSettings: state.viewSettings.styleSettings.dimensionSettings,
+                        annotationSettings: state.annotationSettings,
+                        renderSettings: state.renderSettings,
+                        lighting: state.viewSettings.lighting,
+                        sunSettings: state.sunSettings,
                     }
                 },
 
                 applyStylePreset: (presetData) => set((state) => {
-                    const newStyles = { ...state.entityStyles }
-                    for (const lotId of state.entityOrder) {
-                        newStyles[lotId] = JSON.parse(JSON.stringify(presetData.entityStyles))
+                    const result = {}
+
+                    // Entity styles — apply to all lots
+                    if (presetData.entityStyles !== undefined) {
+                        const newStyles = { ...state.entityStyles }
+                        for (const lotId of state.entityOrder) {
+                            newStyles[lotId] = JSON.parse(JSON.stringify(presetData.entityStyles))
+                        }
+                        result.entityStyles = newStyles
                     }
-                    return {
-                        entityStyles: newStyles,
-                        ...(presetData.roadModuleStyles ? { roadModuleStyles: presetData.roadModuleStyles } : {}),
+
+                    // Road module styles
+                    if (presetData.roadModuleStyles !== undefined) {
+                        result.roadModuleStyles = presetData.roadModuleStyles
                     }
+
+                    // Annotation settings
+                    if (presetData.annotationSettings !== undefined) {
+                        result.annotationSettings = { ...state.annotationSettings, ...presetData.annotationSettings }
+                    }
+
+                    // Render settings
+                    if (presetData.renderSettings !== undefined) {
+                        result.renderSettings = { ...state.renderSettings, ...presetData.renderSettings }
+                    }
+
+                    // Sun settings
+                    if (presetData.sunSettings !== undefined) {
+                        result.sunSettings = { ...state.sunSettings, ...presetData.sunSettings }
+                    }
+
+                    // Dimension settings + lighting live inside viewSettings
+                    const hasDimension = presetData.dimensionSettings !== undefined
+                    const hasLighting = presetData.lighting !== undefined
+                    if (hasDimension || hasLighting) {
+                        result.viewSettings = {
+                            ...state.viewSettings,
+                            ...(hasLighting ? { lighting: { ...state.viewSettings.lighting, ...presetData.lighting } } : {}),
+                            styleSettings: {
+                                ...state.viewSettings.styleSettings,
+                                ...(hasDimension ? {
+                                    dimensionSettings: {
+                                        ...state.viewSettings.styleSettings.dimensionSettings,
+                                        ...presetData.dimensionSettings,
+                                        // Merge nested objects carefully
+                                        textBackground: {
+                                            ...state.viewSettings.styleSettings.dimensionSettings.textBackground,
+                                            ...(presetData.dimensionSettings.textBackground ?? {}),
+                                        },
+                                        customLabels: {
+                                            ...state.viewSettings.styleSettings.dimensionSettings.customLabels,
+                                            ...(presetData.dimensionSettings.customLabels ?? {}),
+                                        },
+                                    },
+                                } : {}),
+                            },
+                        }
+                    }
+
+                    return result
                 }),
 
                 // Per-lot visibility toggles
@@ -3600,7 +3772,7 @@ export const useStore = create(
             }),
             {
                 name: 'zoning-app-storage',
-                version: 31, // v31: accessory BTZ, W:D ratio, impervious surface
+                version: 34, // v34: model lock, dashScale fixes, z-ordering
                 migrate: (persistedState, version) => {
                     // Split dimensionsLot into dimensionsLotWidth and dimensionsLotDepth
                     if (persistedState.viewSettings && persistedState.viewSettings.layers && persistedState.viewSettings.layers.dimensionsLot !== undefined) {
@@ -4427,9 +4599,33 @@ export const useStore = create(
                         }
                     }
 
+                    if (version < 33) {
+                        // v33: multi-model import — migrate importedModel (singular) to importedModels map + importedModelOrder
+                        const lots33 = persistedState.entities?.lots
+                        if (lots33) {
+                            for (const lotId of Object.keys(lots33)) {
+                                const lot = lots33[lotId]
+                                if (lot.importedModel !== undefined) {
+                                    if (lot.importedModel != null) {
+                                        const modelId = `imodel-migrated-${lotId}`
+                                        lot.importedModels = { [modelId]: lot.importedModel }
+                                        lot.importedModelOrder = [modelId]
+                                    } else {
+                                        lot.importedModels = {}
+                                        lot.importedModelOrder = []
+                                    }
+                                    delete lot.importedModel
+                                }
+                                // Ensure new keys exist even if lot had neither
+                                if (lot.importedModels === undefined) lot.importedModels = {}
+                                if (lot.importedModelOrder === undefined) lot.importedModelOrder = []
+                            }
+                        }
+                    }
+
                     return {
                         ...persistedState,
-                        version: 31
+                        version: 34
                     };
                 },
                 partialize: (state) => ({
@@ -4477,6 +4673,56 @@ export const useStore = create(
                                     merged.entityStyles[lotId][key] = JSON.parse(JSON.stringify(val));
                                 }
                             }
+                            // Patch missing sub-keys on maxHeightPlane (lineDashSize/lineGapSize)
+                            if (merged.entityStyles[lotId].maxHeightPlane) {
+                                const mhp = merged.entityStyles[lotId].maxHeightPlane;
+                                if (mhp.lineDashSize === undefined) mhp.lineDashSize = 3;
+                                if (mhp.lineGapSize === undefined) mhp.lineGapSize = 2;
+                            }
+                            // Patch dash params: migrate old tiny world-space values to scene-scaled values
+                            // Old: dashScale=5 with dashSize=1,gapSize=0.5 → New: dashScale=1 with dashSize=3,gapSize=2
+                            const dashCategories = ['lotLines', 'setbacks', 'maxSetbacks', 'accessorySetbacks', 'parkingSetbacks'];
+                            for (const cat of dashCategories) {
+                                const s = merged.entityStyles[lotId][cat];
+                                if (s) {
+                                    // Migrate old dashScale=5 regime to dashScale=1 with larger sizes
+                                    if (s.dashScale === 5) {
+                                        s.dashScale = 1;
+                                        s.dashSize = (s.dashSize ?? 1) * 5;
+                                        s.gapSize = (s.gapSize ?? 0.5) * 5;
+                                    }
+                                    if (s.dashScale === undefined) s.dashScale = 1;
+                                    if (s.dashSize === undefined) s.dashSize = 3;
+                                    if (s.gapSize === undefined) s.gapSize = 2;
+                                    if (s.overrides) {
+                                        for (const side of ['front', 'rear', 'left', 'right']) {
+                                            const o = s.overrides[side];
+                                            if (o) {
+                                                if (o.dashScale === 5) {
+                                                    o.dashScale = 1;
+                                                    o.dashSize = (o.dashSize ?? 1) * 5;
+                                                    o.gapSize = (o.gapSize ?? 0.5) * 5;
+                                                }
+                                                if (o.dashScale === undefined) o.dashScale = 1;
+                                                if (o.dashSize === undefined) o.dashSize = 3;
+                                                if (o.gapSize === undefined) o.gapSize = 2;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            // Patch buildingEdges dash props
+                            const be = merged.entityStyles[lotId].buildingEdges;
+                            if (be) {
+                                if (be.dashScale === 5) {
+                                    be.dashScale = 1;
+                                    be.dashSize = (be.dashSize ?? 1) * 5;
+                                    be.gapSize = (be.gapSize ?? 0.5) * 5;
+                                }
+                                if (be.dashSize === undefined) be.dashSize = 3;
+                                if (be.gapSize === undefined) be.gapSize = 2;
+                                if (be.dashScale === undefined) be.dashScale = 1;
+                            }
                         }
                     }
                     // Patch missing lotVisibility keys for all lots
@@ -4499,13 +4745,29 @@ export const useStore = create(
                             if (merged.districtParameters.setbacksAccessory.btzSideStreet === undefined) merged.districtParameters.setbacksAccessory.btzSideStreet = null;
                         }
                     }
-                    // Patch missing lot data keys (parkingSetbacks, importedModel) + reconcile with district params
+                    // Patch missing lot data keys (parkingSetbacks, importedModels) + reconcile with district params
                     if (merged.entities?.lots) {
                         const dp = merged.districtParameters;
                         for (const lotId of Object.keys(merged.entities.lots)) {
                             const lot = merged.entities.lots[lotId];
-                            if (lot.importedModel === undefined) {
-                                lot.importedModel = null;
+                            // Migrate legacy single importedModel if still present
+                            if (lot.importedModel !== undefined) {
+                                if (lot.importedModel != null) {
+                                    const mId = `imodel-migrated-${lotId}`
+                                    if (!lot.importedModels) lot.importedModels = {}
+                                    if (!lot.importedModelOrder) lot.importedModelOrder = []
+                                    lot.importedModels[mId] = lot.importedModel
+                                    lot.importedModelOrder.push(mId)
+                                }
+                                delete lot.importedModel
+                            }
+                            if (lot.importedModels === undefined) lot.importedModels = {}
+                            if (lot.importedModelOrder === undefined) lot.importedModelOrder = []
+                            // Patch missing locked flag on imported models (v34)
+                            for (const mId of Object.keys(lot.importedModels)) {
+                                if (lot.importedModels[mId].locked === undefined) {
+                                    lot.importedModels[mId].locked = false
+                                }
                             }
                             // Patch missing sharedDriveLocation
                             if (lot.lotAccess && lot.lotAccess.sharedDriveLocation === undefined) {
@@ -4596,6 +4858,12 @@ export const useStore = create(
                                 ds[key] = val;
                             }
                         }
+                        // Patch dimension line style keys (v32)
+                        if (ds.dimensionLineStyle === undefined) ds.dimensionLineStyle = 'solid';
+                        if (ds.dimensionDashSize === undefined) ds.dimensionDashSize = 1;
+                        if (ds.dimensionGapSize === undefined) ds.dimensionGapSize = 0.5;
+                        if (ds.extensionDashSize === undefined) ds.extensionDashSize = 1;
+                        if (ds.extensionGapSize === undefined) ds.extensionGapSize = 0.5;
                         // Patch new dimensionSettings keys (v25)
                         if (ds.textPerpOffset === undefined) ds.textPerpOffset = 0;
                         if (ds.textAnchorY === undefined) ds.textAnchorY = 'bottom';

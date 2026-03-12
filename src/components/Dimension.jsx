@@ -3,6 +3,24 @@ import { Text, Line, Billboard } from '@react-three/drei'
 import * as THREE from 'three'
 import { DIMENSION_FONT_OPTIONS } from '../store/useStore'
 
+const LINE_TYPE_PRESETS = {
+    solid:           { dashed: false },
+    dashed:          { dashed: true, dashSize: 3,   gapSize: 2 },
+    dotted:          { dashed: true, dashSize: 0.5, gapSize: 2 },
+    'dash-dot':      { dashed: true, dashSize: 3,   gapSize: 1.5 },
+    'dash-dot-dot':  { dashed: true, dashSize: 3,   gapSize: 1 },
+}
+
+function resolveDashProps(lineType, customDash, customGap) {
+    const preset = LINE_TYPE_PRESETS[lineType] ?? LINE_TYPE_PRESETS.solid
+    if (!preset.dashed) return { dashed: false }
+    return {
+        dashed: true,
+        dashSize: customDash ?? preset.dashSize,
+        gapSize: customGap ?? preset.gapSize,
+    }
+}
+
 /**
  * Compute perpendicular vector for offset based on dimension plane.
  * When verticalMode is true, perpendicular is always +Z.
@@ -59,7 +77,10 @@ const Dimension = ({
 
     // New: separate extension line styling
     const extColor = settings.extensionLineColor ?? lineColor
-    const extDashed = settings.extensionLineStyle !== 'solid'
+    const extDashProps = resolveDashProps(settings.extensionLineStyle ?? 'dashed', settings.extensionDashSize, settings.extensionGapSize)
+
+    // Main dimension line style
+    const dimDashProps = resolveDashProps(settings.dimensionLineStyle ?? 'solid', settings.dimensionDashSize, settings.dimensionGapSize)
 
     // New: separate marker styling
     const markerColor = settings.markerColor ?? lineColor
@@ -193,9 +214,24 @@ const Dimension = ({
 
         // follow-line mode
         if (verticalMode) {
-            // Stand text upright in the XZ/YZ plane (90° rotation around X)
+            // Use quaternion math to properly orient text along any line direction
+            // Step 1: rotate text to stand upright (lie in XZ plane facing +Z)
+            const standUp = new THREE.Quaternion().setFromAxisAngle(
+                new THREE.Vector3(1, 0, 0), Math.PI / 2
+            )
+            // Step 2: rotate around Z to align with the line direction in XY plane
+            const lineAngle = Math.atan2(uy, ux)
+            // Flip text 180° if it would be upside-down when standing
+            const correctedAngle = (lineAngle > Math.PI / 2 || lineAngle <= -Math.PI / 2)
+                ? lineAngle + Math.PI : lineAngle
+            const alignToLine = new THREE.Quaternion().setFromAxisAngle(
+                new THREE.Vector3(0, 0, 1), correctedAngle
+            )
+            // Combine: first stand up, then align to line direction
+            const combined = alignToLine.multiply(standUp)
+            const euler = new THREE.Euler().setFromQuaternion(combined)
             return (
-                <group position={[tmx, tmy, tmz]} rotation={[Math.PI / 2, 0, textAngle]}>
+                <group position={[tmx, tmy, tmz]} rotation={[euler.x, euler.y, euler.z]}>
                     {bgMesh}
                     <Text {...textProps}>{label}</Text>
                 </group>
@@ -231,7 +267,7 @@ const Dimension = ({
     return (
         <group>
             {/* Main Dimension Line */}
-            <Line points={linePoints} color={lineColor} lineWidth={lineWidth} />
+            <Line points={linePoints} color={lineColor} lineWidth={lineWidth} {...dimDashProps} />
 
             {/* End Markers */}
             {endMarker === 'tick' && (
@@ -276,15 +312,13 @@ const Dimension = ({
                         points={[[start[0], start[1], start[2]], [s[0], s[1], s[2]]]}
                         color={extColor}
                         lineWidth={lineWidth * (settings.extensionWidth ?? 0.5)}
-                        dashed={extDashed}
-                        dashScale={extDashed ? 2 : 0}
+                        {...extDashProps}
                     />
                     <Line
                         points={[[end[0], end[1], end[2]], [e[0], e[1], e[2]]]}
                         color={extColor}
                         lineWidth={lineWidth * (settings.extensionWidth ?? 0.5)}
-                        dashed={extDashed}
-                        dashScale={extDashed ? 2 : 0}
+                        {...extDashProps}
                     />
                 </>
             )}

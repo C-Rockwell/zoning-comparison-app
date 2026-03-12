@@ -7,7 +7,7 @@ import { useStore } from '../../store/useStore'
 // Click-and-drag to reposition the building. Follows the same pointer
 // capture pattern as EdgeHandle/VertexHandle (stopPropagation + controls.enabled
 // + setPointerCapture + invisible capture plane).
-const MoveHandle = ({ position, zPosition = 1.0, displayOffset = [0, 0], offsetGroupX = 0, offsetGroupY = 0, onDrag, onDragEnd }) => {
+const MoveHandle = ({ position, zPosition = 1.0, displayOffset = [0, 0], offsetGroupX = 0, offsetGroupY = 0, onDrag, onDragEnd, parentHovered = false }) => {
     const [hovered, setHovered] = useState(false)
     const [dragging, setDragging] = useState(false)
     const { controls } = useThree()
@@ -60,7 +60,7 @@ const MoveHandle = ({ position, zPosition = 1.0, displayOffset = [0, 0], offsetG
     }
 
     const color = dragging ? '#ffff00' : (hovered ? '#ffaa00' : '#ff8800')
-    const visible = hovered || dragging
+    const visible = parentHovered || hovered || dragging
     const sphereSize = dragging ? 1.6 : (hovered ? 1.4 : 1.2)
     const arrowLength = 3.0
     const arrowRadius = 0.5
@@ -152,12 +152,12 @@ const MoveHandle = ({ position, zPosition = 1.0, displayOffset = [0, 0], offsetG
             {/* Large invisible capture plane during drag */}
             {dragging && (
                 <mesh
-                    visible={false}
                     position={[0, 0, 0]}
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
                 >
                     <planeGeometry args={[1000, 1000]} />
+                    <meshBasicMaterial transparent opacity={0} depthTest={false} />
                 </mesh>
             )}
         </group>
