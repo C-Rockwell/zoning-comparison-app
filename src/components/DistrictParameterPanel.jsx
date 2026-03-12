@@ -1076,7 +1076,8 @@ const LAYER_GROUPS = [
             { key: 'principalBuildings', label: 'Principal Buildings' },
             { key: 'accessoryBuildings', label: 'Accessory Buildings' },
             { key: 'roof', label: 'Roof' },
-            { key: 'maxHeightPlane', label: 'Max Height Plane' },
+            { key: 'maxHeightPlanePrincipal', label: 'Max Height Plane (Principal)' },
+            { key: 'maxHeightPlaneAccessory', label: 'Max Height Plane (Accessory)' },
             { key: 'importedModels', label: 'Imported Models' },
         ],
     },
@@ -1105,6 +1106,7 @@ const LAYER_GROUPS = [
             { key: 'dimensionsSetbacks', label: 'Dim: Setbacks' },
             { key: 'dimensionsHeightPrincipal', label: 'Dim: Principal Height' },
             { key: 'dimensionsHeightAccessory', label: 'Dim: Accessory Height' },
+            { key: 'dimensionsFirstFloorHeight', label: 'Dim: 1st Floor Height' },
             { key: 'dimensionsParkingSetbacks', label: 'Dim: Parking Setbacks' },
         ],
     },
@@ -1562,6 +1564,7 @@ const ModelImportSection = () => {
     const removeAllImportedModels = useStore((s) => s.removeAllImportedModels)
     const selectImportedModel = useStore((s) => s.selectImportedModel)
     const toggleImportedModelLocked = useStore((s) => s.toggleImportedModelLocked)
+    const toggleImportedModelVisible = useStore((s) => s.toggleImportedModelVisible)
     const [selectedLot, setSelectedLot] = useState('all')
     const [uploading, setUploading] = useState(false)
     const fileInputRef = useRef(null)
@@ -1680,10 +1683,18 @@ const ModelImportSection = () => {
                                         <button
                                             onClick={() => { if (!(model.locked ?? false)) selectImportedModel(lotId, modelId) }}
                                             className="flex-1 min-w-0 text-left text-xs truncate rounded px-1 py-0.5 hover:bg-blue-500/10"
-                                            style={{ color: (model.locked ?? false) ? 'var(--ui-text-muted)' : 'var(--ui-text)', opacity: (model.locked ?? false) ? 0.5 : 1 }}
+                                            style={{ color: (model.locked ?? false) ? 'var(--ui-text-muted)' : 'var(--ui-text)', opacity: (model.visible ?? true) ? ((model.locked ?? false) ? 0.5 : 1) : 0.4 }}
                                             title={(model.locked ?? false) ? 'Model is locked' : 'Click to edit style'}
                                         >
                                             {model.name ?? model.filename?.replace(/\.ifc$/i, '') ?? 'Imported Model'}
+                                        </button>
+                                        <button
+                                            onClick={() => toggleImportedModelVisible(lotId, modelId)}
+                                            className="p-0.5 rounded hover:bg-blue-500/20 shrink-0"
+                                            style={{ color: (model.visible ?? true) ? 'var(--ui-text-secondary)' : 'var(--ui-text-muted)' }}
+                                            title={(model.visible ?? true) ? 'Hide model' : 'Show model'}
+                                        >
+                                            {(model.visible ?? true) ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
                                         </button>
                                         <button
                                             onClick={() => toggleImportedModelLocked(lotId, modelId)}
@@ -3982,6 +3993,10 @@ const DimensionStylesSection = () => {
                 <SliderInput label="Setback Offset" value={ds.setbackDimOffset ?? 5} onChange={(v) => setDimensionSetting('setbackDimOffset', v)} min={1} max={100} step={1} />
                 <SliderInput label="Lot Width Offset" value={ds.lotDimOffset ?? 15} onChange={(v) => setDimensionSetting('lotDimOffset', v)} min={5} max={100} step={1} />
                 <SliderInput label="Lot Depth Offset" value={ds.lotDepthDimOffset ?? ds.lotDimOffset ?? 15} onChange={(v) => setDimensionSetting('lotDepthDimOffset', v)} min={5} max={100} step={1} />
+                <SliderInput label="Side Dim Position" value={ds.sideSetbackDimYPosition ?? 0.5} onChange={(v) => setDimensionSetting('sideSetbackDimYPosition', v)} min={0} max={1} step={0.01} />
+                <SliderInput label="Building Height Dim Offset" value={ds.buildingHeightDimOffset ?? -10} onChange={(v) => setDimensionSetting('buildingHeightDimOffset', v)} min={-60} max={0} step={1} />
+                <SliderInput label="Max Height Dim Offset" value={ds.maxHeightDimOffset ?? -20} onChange={(v) => setDimensionSetting('maxHeightDimOffset', v)} min={-60} max={0} step={1} />
+                <SliderInput label="1st Floor Height Dim Offset" value={ds.firstFloorHeightDimOffset ?? -30} onChange={(v) => setDimensionSetting('firstFloorHeightDimOffset', v)} min={-60} max={0} step={1} />
                 {/* Per-Lot Depth Dims */}
                 <DimDivider />
                 <span className="text-[10px] font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Per-Lot Depth Dims</span>

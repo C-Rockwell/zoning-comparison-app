@@ -38,10 +38,11 @@ const CameraHandler = ({ controlsRef }) => {
         // Compute ortho zoom to fit worldW × worldH into canvas
         const canvas = gl.domElement
         const PADDING = 0.75
-        const fitZoom = (worldW, worldH) => {
+        const ISO_PADDING = 0.95
+        const fitZoom = (worldW, worldH, padding = PADDING) => {
             const zoomW = canvas.clientWidth / worldW
             const zoomH = canvas.clientHeight / worldH
-            return Math.min(zoomW, zoomH) * PADDING
+            return Math.min(zoomW, zoomH) * padding
         }
 
         switch (cameraView) {
@@ -79,7 +80,7 @@ const CameraHandler = ({ controlsRef }) => {
                 // ISO projection: use larger of XY extents + height, with slight extra margin
                 const isoW = Math.max(extX, extY) * 1.15
                 const isoH = Math.max(Math.max(extX, extY) * 0.7 + extZ * 0.7, extZ)
-                controls.zoomTo(fitZoom(isoW, isoH), transition)
+                controls.zoomTo(fitZoom(isoW, isoH, ISO_PADDING), transition)
                 break
             default:
                 if (cameraView.startsWith('custom-')) {

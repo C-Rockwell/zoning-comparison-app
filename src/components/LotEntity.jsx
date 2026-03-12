@@ -330,10 +330,12 @@ const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, s
                 />
             )}
             {/* Left Setback dimension */}
-            {hasSideLeft && (
+            {hasSideLeft && (() => {
+                const sideY = -lotDepth / 2 + (dimensionSettings.sideSetbackDimYPosition ?? 0.5) * lotDepth
+                return (
                 <Dimension
-                    start={[-lotWidth / 2, 0, 0.1]}
-                    end={[x1, 0, 0.1]}
+                    start={[-lotWidth / 2, sideY, 0.1]}
+                    end={[x1, sideY, 0.1]}
                     label={resolveDimensionLabel(leftValue, streetSides.left ? 'setbackSideStreet' : 'setbackSideInterior', dimensionSettings)}
                     offset={dimensionSettings.setbackDimOffset ?? 5}
                     color={style.color || 'red'}
@@ -341,12 +343,15 @@ const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, s
                     settings={dimensionSettings}
                     lineScale={lineScale}
                 />
-            )}
+                )
+            })()}
             {/* Right Setback dimension */}
-            {hasSideRight && (
+            {hasSideRight && (() => {
+                const sideY = -lotDepth / 2 + (dimensionSettings.sideSetbackDimYPosition ?? 0.5) * lotDepth
+                return (
                 <Dimension
-                    start={[x2, 0, 0.1]}
-                    end={[lotWidth / 2, 0, 0.1]}
+                    start={[x2, sideY, 0.1]}
+                    end={[lotWidth / 2, sideY, 0.1]}
                     label={resolveDimensionLabel(rightValue, streetSides.right ? 'setbackSideStreet' : 'setbackSideInterior', dimensionSettings)}
                     offset={dimensionSettings.setbackDimOffset ?? 5}
                     color={style.color || 'red'}
@@ -354,7 +359,8 @@ const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, s
                     settings={dimensionSettings}
                     lineScale={lineScale}
                 />
-            )}
+                )
+            })()}
         </group>
     )
 }
@@ -532,10 +538,12 @@ const ParkingSetbackLines = ({ lotWidth, lotDepth, parkingSetbacks, style, stree
                 />
             )}
             {/* Left Parking Setback dimension */}
-            {hasSideLeft && (
+            {hasSideLeft && (() => {
+                const sideY = -lotDepth / 2 + (dimensionSettings.sideSetbackDimYPosition ?? 0.5) * lotDepth
+                return (
                 <Dimension
-                    start={[-lotWidth / 2, 0, z]}
-                    end={[x1, 0, z]}
+                    start={[-lotWidth / 2, sideY, z]}
+                    end={[x1, sideY, z]}
                     label={resolveDimensionLabel(pLeftValue, streetSides.left ? 'setbackSideStreet' : 'setbackSideInterior', dimensionSettings)}
                     offset={dimensionSettings.setbackDimOffset ?? 5}
                     color={style.color || '#FF9800'}
@@ -543,12 +551,15 @@ const ParkingSetbackLines = ({ lotWidth, lotDepth, parkingSetbacks, style, stree
                     settings={dimensionSettings}
                     lineScale={lineScale}
                 />
-            )}
+                )
+            })()}
             {/* Right Parking Setback dimension */}
-            {hasSideRight && (
+            {hasSideRight && (() => {
+                const sideY = -lotDepth / 2 + (dimensionSettings.sideSetbackDimYPosition ?? 0.5) * lotDepth
+                return (
                 <Dimension
-                    start={[x2, 0, z]}
-                    end={[lotWidth / 2, 0, z]}
+                    start={[x2, sideY, z]}
+                    end={[lotWidth / 2, sideY, z]}
                     label={resolveDimensionLabel(pRightValue, streetSides.right ? 'setbackSideStreet' : 'setbackSideInterior', dimensionSettings)}
                     offset={dimensionSettings.setbackDimOffset ?? 5}
                     color={style.color || '#FF9800'}
@@ -556,7 +567,8 @@ const ParkingSetbackLines = ({ lotWidth, lotDepth, parkingSetbacks, style, stree
                     settings={dimensionSettings}
                     lineScale={lineScale}
                 />
-            )}
+                )
+            })()}
         </group>
     )
 }
@@ -699,6 +711,65 @@ const BTZPlanes = ({ principal, setbacks, streetSides = {}, style }) => {
     if (planes.length === 0) return null
 
     return <group>{planes}</group>
+}
+
+// ============================================
+// MaxHeightPlaneStandalone — renders height plane
+// when building layer is off but height plane layer is on
+// ============================================
+const MaxHeightPlaneStandalone = ({ building, maxHeight, style: planeStyle, lineScale }) => {
+    const vertices = useMemo(() => {
+        const geo = building.geometry
+        if (geo?.mode === 'polygon' && geo?.vertices?.length >= 3) return geo.vertices
+        const { x = 0, y = 0, width, depth } = building
+        return [
+            { x: x - width / 2, y: y - depth / 2 },
+            { x: x + width / 2, y: y - depth / 2 },
+            { x: x + width / 2, y: y + depth / 2 },
+            { x: x - width / 2, y: y + depth / 2 },
+        ]
+    }, [building])
+
+    const shape = useMemo(() => {
+        if (!vertices || vertices.length < 3) return null
+        const s = new THREE.Shape()
+        s.moveTo(vertices[0].x, vertices[0].y)
+        for (let i = 1; i < vertices.length; i++) s.lineTo(vertices[i].x, vertices[i].y)
+        s.closePath()
+        return s
+    }, [vertices])
+
+    const borderPoints = useMemo(() => {
+        if (!vertices || vertices.length < 3) return null
+        const pts = vertices.map(v => [v.x, v.y, 0])
+        pts.push([vertices[0].x, vertices[0].y, 0])
+        return pts
+    }, [vertices])
+
+    if (!shape || !borderPoints) return null
+
+    return (
+        <group position={[0, 0, maxHeight + 0.05]}>
+            <mesh renderOrder={6}>
+                <shapeGeometry args={[shape]} />
+                <meshStandardMaterial
+                    color={planeStyle.color ?? '#FF6B6B'}
+                    transparent={(planeStyle.opacity ?? 0.3) < 1}
+                    opacity={planeStyle.opacity ?? 0.3}
+                    side={THREE.DoubleSide}
+                    depthWrite={(planeStyle.opacity ?? 0.3) >= 0.95}
+                />
+            </mesh>
+            <Line
+                points={borderPoints}
+                color={planeStyle.lineColor || '#FF0000'}
+                lineWidth={(planeStyle.lineWidth || 2) * lineScale}
+                dashed={planeStyle.lineDashed || false}
+                dashSize={planeStyle.lineDashSize ?? 1}
+                gapSize={planeStyle.lineGapSize ?? 0.5}
+            />
+        </group>
+    )
 }
 
 // ============================================
@@ -920,12 +991,13 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     firstFloorHeight={principal.firstFloorHeight ?? 12}
                     upperFloorHeight={principal.upperFloorHeight ?? 10}
                     maxHeight={principalMaxHeight}
-                    showMaxHeightPlane={layers.maxHeightPlane && (visibility.maxHeightPlanePrincipal ?? visibility.maxHeightPlane)}
+                    showMaxHeightPlane={(layers.maxHeightPlanePrincipal ?? layers.maxHeightPlane) && (visibility.maxHeightPlanePrincipal ?? visibility.maxHeightPlane)}
                     maxHeightPlaneStyle={style.maxHeightPlane}
                     roof={principal.roof}
                     roofStyles={{ roofFaces: style.roofFaces, roofEdges: style.roofEdges }}
                     showRoof={layers.roof && visibility.roof}
                     showHeightDimensions={showPrincipalHeightDim}
+                    showFirstFloorHeightDim={layers.dimensionsFirstFloorHeight ?? true}
                     dimensionSettings={dimensionSettings}
                     lineScale={exportLineScale}
                     enableBuildingPolygonMode={() => enableEntityBuildingPolygonMode(lotId, 'principal')}
@@ -934,6 +1006,18 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     extrudeBuildingEdge={(_model, edgeIndex, distance) => extrudeEntityBuildingEdge(lotId, 'principal', edgeIndex, distance)}
                     setBuildingTotalHeight={(_model, newHeight) => setEntityBuildingTotalHeight(lotId, 'principal', newHeight)}
                     onBuildingMove={(newX, newY) => setEntityBuildingPosition(lotId, 'principal', newX, newY)}
+                />
+            )}
+
+            {/* Standalone principal max height plane — shown when building layer is off but height plane layer is on */}
+            {!((layers.principalBuildings ?? layers.buildings) && visibility.buildings) && principal &&
+             (layers.maxHeightPlanePrincipal ?? layers.maxHeightPlane) && (visibility.maxHeightPlanePrincipal ?? visibility.maxHeightPlane) &&
+             principalMaxHeight > 0 && (
+                <MaxHeightPlaneStandalone
+                    building={principal}
+                    maxHeight={principalMaxHeight}
+                    style={style.maxHeightPlane}
+                    lineScale={exportLineScale}
                 />
             )}
 
@@ -959,12 +1043,13 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     firstFloorHeight={accessory.firstFloorHeight ?? 10}
                     upperFloorHeight={accessory.upperFloorHeight ?? 10}
                     maxHeight={accessoryMaxHeight}
-                    showMaxHeightPlane={layers.maxHeightPlane && (visibility.maxHeightPlaneAccessory ?? visibility.maxHeightPlane)}
+                    showMaxHeightPlane={(layers.maxHeightPlaneAccessory ?? layers.maxHeightPlane) && (visibility.maxHeightPlaneAccessory ?? visibility.maxHeightPlane)}
                     maxHeightPlaneStyle={style.maxHeightPlane}
                     roof={accessory.roof}
                     roofStyles={{ roofFaces: style.roofFaces, roofEdges: style.roofEdges }}
                     showRoof={layers.roof && visibility.roof}
                     showHeightDimensions={showAccessoryHeightDim}
+                    showFirstFloorHeightDim={layers.dimensionsFirstFloorHeight ?? true}
                     dimensionSettings={dimensionSettings}
                     lineScale={exportLineScale}
                     enableBuildingPolygonMode={() => enableEntityBuildingPolygonMode(lotId, 'accessory')}
@@ -976,6 +1061,18 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                 />
             )}
 
+            {/* Standalone accessory max height plane — shown when building layer is off but height plane layer is on */}
+            {!((layers.accessoryBuildings ?? layers.buildings) && visibility.accessoryBuilding) && accessory && accessory.width > 0 &&
+             (layers.maxHeightPlaneAccessory ?? layers.maxHeightPlane) && (visibility.maxHeightPlaneAccessory ?? visibility.maxHeightPlane) &&
+             accessoryMaxHeight > 0 && (
+                <MaxHeightPlaneStandalone
+                    building={accessory}
+                    maxHeight={accessoryMaxHeight}
+                    style={style.maxHeightPlane}
+                    lineScale={exportLineScale}
+                />
+            )}
+
             {/* ============================================ */}
             {/* Imported Models (multi-model) */}
             {/* ============================================ */}
@@ -983,6 +1080,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                 lot.importedModelOrder.map((modelId) => {
                     const model = lot.importedModels?.[modelId]
                     if (!model) return null
+                    if (model.visible === false) return null
                     const isSelected = selectedImportedModel?.lotId === lotId && selectedImportedModel?.modelId === modelId
                     return (
                         <React.Fragment key={modelId}>

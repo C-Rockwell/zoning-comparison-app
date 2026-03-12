@@ -55,6 +55,7 @@ const BuildingEditor = ({
     lineScale = 1,
     // Dimensions
     showHeightDimensions = false,
+    showFirstFloorHeightDim = false,
     dimensionSettings = {},
     heightDimensionKey = 'buildingHeight',
     // Layout
@@ -244,6 +245,26 @@ const BuildingEditor = ({
         ]
     }, [isPolygon, vertices, x, y, width, depth])
 
+    // Shape for dynamic height plane (conforms to building footprint)
+    const heightPlaneShape = useMemo(() => {
+        if (!activeVertices || activeVertices.length < 3) return null
+        const shape = new THREE.Shape()
+        shape.moveTo(activeVertices[0].x, activeVertices[0].y)
+        for (let i = 1; i < activeVertices.length; i++) {
+            shape.lineTo(activeVertices[i].x, activeVertices[i].y)
+        }
+        shape.closePath()
+        return shape
+    }, [activeVertices])
+
+    // Border points for height plane outline
+    const heightPlaneBorderPoints = useMemo(() => {
+        if (!activeVertices || activeVertices.length < 3) return null
+        const pts = activeVertices.map(v => [v.x, v.y, 0])
+        pts.push([activeVertices[0].x, activeVertices[0].y, 0]) // close loop
+        return pts
+    }, [activeVertices])
+
     return (
         <group>
             {/* ============================================ */}
@@ -328,26 +349,20 @@ const BuildingEditor = ({
             {/* Max Height Plane */}
             {/* ============================================ */}
 
-            {showMaxHeightPlane && maxHeight > 0 && (
-                <group position={[bounds.cx, bounds.cy, maxHeight + 0.05]}>
+            {showMaxHeightPlane && maxHeight > 0 && heightPlaneShape && heightPlaneBorderPoints && (
+                <group position={[0, 0, maxHeight + 0.05]}>
                     <mesh renderOrder={6}>
-                        <planeGeometry args={[bounds.w, bounds.d]} />
+                        <shapeGeometry args={[heightPlaneShape]} />
                         <meshStandardMaterial
                             color={maxHeightPlaneStyle.color ?? '#FF6B6B'}
-                            transparent={true}
+                            transparent={(maxHeightPlaneStyle.opacity ?? 0.3) < 1}
                             opacity={maxHeightPlaneStyle.opacity ?? 0.3}
                             side={THREE.DoubleSide}
-                            depthWrite={false}
+                            depthWrite={(maxHeightPlaneStyle.opacity ?? 0.3) >= 0.95}
                         />
                     </mesh>
                     <Line
-                        points={[
-                            [-bounds.w / 2, -bounds.d / 2, 0],
-                            [bounds.w / 2, -bounds.d / 2, 0],
-                            [bounds.w / 2, bounds.d / 2, 0],
-                            [-bounds.w / 2, bounds.d / 2, 0],
-                            [-bounds.w / 2, -bounds.d / 2, 0],
-                        ]}
+                        points={heightPlaneBorderPoints}
                         color={maxHeightPlaneStyle.lineColor || '#FF0000'}
                         lineWidth={(maxHeightPlaneStyle.lineWidth || 2) * lineScale}
                         dashed={maxHeightPlaneStyle.lineDashed || false}
@@ -365,7 +380,7 @@ const BuildingEditor = ({
                 start={dimStart}
                 end={dimEnd}
                 label={resolveDimensionLabel(totalBuildingHeight, heightDimensionKey, dimensionSettings)}
-                offset={-10}
+                offset={dimensionSettings.buildingHeightDimOffset ?? -10}
                 color="black"
                 visible={showHeightDimensions}
                 settings={dimensionSettings}
@@ -380,7 +395,23 @@ const BuildingEditor = ({
                     start={dimStart}
                     end={[dimStart[0], dimStart[1], maxHeight]}
                     label={resolveDimensionLabel(maxHeight, maxHeightDimKey, dimensionSettings)}
-                    offset={-20}
+                    offset={dimensionSettings.maxHeightDimOffset ?? -20}
+                    color="black"
+                    visible={true}
+                    settings={dimensionSettings}
+                    lineScale={lineScale}
+                    plane="XZ"
+                    textMode="billboard"
+                />
+            )}
+
+            {/* 1st floor height dimension */}
+            {showFirstFloorHeightDim && showHeightDimensions && firstFloorHeight > 0 && (
+                <Dimension
+                    start={dimStart}
+                    end={[dimStart[0], dimStart[1], firstFloorHeight + BUILDING_Z_OFFSET]}
+                    label={resolveDimensionLabel(firstFloorHeight, 'firstFloorHeight', dimensionSettings)}
+                    offset={dimensionSettings.firstFloorHeightDimOffset ?? -30}
                     color="black"
                     visible={true}
                     settings={dimensionSettings}

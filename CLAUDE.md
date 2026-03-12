@@ -38,6 +38,10 @@ React + Vite + Three.js via @react-three/fiber | Zustand + Zundo (undo/redo, 50-
 
 **Imported Models** (v33): Multi-model per lot. `lot.importedModels` (object map by modelId) + `lot.importedModelOrder` (array). Actions take `(lotId, modelId, ...)`. Selection state: `selectedImportedModel: { lotId, modelId }` (transient). Style editing via `ImportedModelStylePopup.jsx` floating panel in `DistrictViewer`. Sidebar (`ModelImportSection`) shows compact model lists — click name to select, style in popup.
 
+**Height Planes**: Use `<shapeGeometry>` from `activeVertices` (not bounding-box `<planeGeometry>`), so planes conform to polygon/L-shaped building footprints. Border uses same vertex loop. Group at `[0, 0, maxHeight + 0.05]` — no XY offset since vertices encode position. `MaxHeightPlaneStandalone` in `LotEntity.jsx` renders height planes independently when the building layer is off — conditions are mutually exclusive with BuildingEditor's own height plane rendering.
+
+**Dimension Positioning**: Side setback dimensions use `sideSetbackDimYPosition` (0=front, 0.5=center, 1=rear) in `dimensionSettings` to control where left/right dims render along lot depth. Applies to both regular and parking setback side dims.
+
 
 ## Conventions (CRITICAL)
 

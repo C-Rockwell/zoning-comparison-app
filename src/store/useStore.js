@@ -669,6 +669,7 @@ export const useStore = create(
                         dimensionsHeight: true,           // keep for migration fallback
                         dimensionsHeightPrincipal: true,
                         dimensionsHeightAccessory: true,
+                        dimensionsFirstFloorHeight: true, // 1st floor height dimension
                         parkingSetbacks: true,
                         dimensionsParkingSetbacks: true,
                         setbackFill: true,
@@ -954,7 +955,11 @@ export const useStore = create(
                             textPerpOffsetDepth: 0,    // depth dim text perp offset (independent)
                             textAnchorYDepth: 'center', // depth dim text side (independent)
                             textModeDepth: 'billboard', // depth dim text mode (billboard faces camera)
+                            sideSetbackDimYPosition: 0.5, // 0=front, 0.5=center, 1=rear
                             lotDepthDimSide: 'right',
+                            buildingHeightDimOffset: -10,     // building height dimension offset
+                            maxHeightDimOffset: -20,          // max height dimension offset
+                            firstFloorHeightDimOffset: -30,   // 1st floor height dimension offset
                             customLabels: {
                                 lotWidth: { mode: 'value', text: 'A' },
                                 lotDepth: { mode: 'value', text: 'B' },
@@ -965,6 +970,7 @@ export const useStore = create(
                                 buildingHeight: { mode: 'value', text: '' },
                                 principalMaxHeight: { mode: 'value', text: '' },
                                 accessoryMaxHeight: { mode: 'value', text: '' },
+                                firstFloorHeight: { mode: 'value', text: '' },
                             }
                         }
                     },
@@ -2129,6 +2135,19 @@ export const useStore = create(
                 deselectImportedModel: () => set({ selectedImportedModel: null }),
 
                 setCameraControlsRef: (ref) => set({ _cameraControlsRef: ref }),
+
+                toggleImportedModelVisible: (lotId, modelId) => set((state) => {
+                    const lot = state.entities?.lots?.[lotId]
+                    const model = lot?.importedModels?.[modelId]
+                    if (!model) return state
+                    return {
+                        entities: { ...state.entities, lots: { ...state.entities.lots, [lotId]: {
+                            ...lot, importedModels: { ...lot.importedModels, [modelId]: {
+                                ...model, visible: !(model.visible ?? true)
+                            }}
+                        }}}
+                    }
+                }),
 
                 toggleImportedModelLocked: (lotId, modelId) => set((state) => {
                     const lot = state.entities?.lots?.[lotId]
@@ -4872,11 +4891,16 @@ export const useStore = create(
                         if (ds.textPerpOffset === undefined) ds.textPerpOffset = 0;
                         if (ds.textAnchorY === undefined) ds.textAnchorY = 'bottom';
                         if (ds.lotDepthDimSide === undefined) ds.lotDepthDimSide = 'right';
+                        if (ds.sideSetbackDimYPosition === undefined) ds.sideSetbackDimYPosition = 0.5;
                         // Patch new depth-independent keys
                         if (ds.lotDepthDimOffset === undefined) ds.lotDepthDimOffset = ds.lotDimOffset ?? 15;
                         if (ds.textPerpOffsetDepth === undefined) ds.textPerpOffsetDepth = 0;
                         if (ds.textAnchorYDepth === undefined) ds.textAnchorYDepth = 'center';
                         if (ds.textModeDepth === undefined) ds.textModeDepth = 'billboard';
+                        // Patch height dimension offset keys
+                        if (ds.buildingHeightDimOffset === undefined) ds.buildingHeightDimOffset = -10;
+                        if (ds.maxHeightDimOffset === undefined) ds.maxHeightDimOffset = -20;
+                        if (ds.firstFloorHeightDimOffset === undefined) ds.firstFloorHeightDimOffset = -30;
                         // Patch missing customLabels keys
                         if (!ds.customLabels) ds.customLabels = {};
                         // Migrate old setbackLeft/setbackRight keys to semantic names
@@ -4891,6 +4915,7 @@ export const useStore = create(
                             accessoryMaxHeight: { mode: 'value', text: '' },
                             setbackSideInterior: { mode: 'value', text: '' },
                             setbackSideStreet: { mode: 'value', text: '' },
+                            firstFloorHeight: { mode: 'value', text: '' },
                         };
                         for (const [key, val] of Object.entries(customLabelDefaults)) {
                             if (ds.customLabels[key] === undefined) {
@@ -4900,7 +4925,7 @@ export const useStore = create(
                     }
                     // Patch missing viewSettings.layers keys
                     if (merged.viewSettings?.layers) {
-                        const layerDefaults = { maxSetbacks: true, btzPlanes: true, accessorySetbacks: true, lotAccessArrows: true, maxHeightPlanePrincipal: true, maxHeightPlaneAccessory: true, parkingSetbacks: true, dimensionsParkingSetbacks: true, setbackFill: true, drawingEditor: true };
+                        const layerDefaults = { maxSetbacks: true, btzPlanes: true, accessorySetbacks: true, lotAccessArrows: true, maxHeightPlanePrincipal: true, maxHeightPlaneAccessory: true, parkingSetbacks: true, dimensionsParkingSetbacks: true, setbackFill: true, drawingEditor: true, dimensionsFirstFloorHeight: true };
                         for (const [key, val] of Object.entries(layerDefaults)) {
                             if (merged.viewSettings.layers[key] === undefined) {
                                 merged.viewSettings.layers[key] = val;
