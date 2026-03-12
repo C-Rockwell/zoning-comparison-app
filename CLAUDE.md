@@ -32,7 +32,9 @@ React + Vite + Three.js via @react-three/fiber | Zustand + Zundo (undo/redo, 50-
 
 **Store** (`useStore.js`, ~4,000 lines, v34): Persist `merge` function patches missing keys on every hydration. Dash param migration: old `dashScale=5` regime auto-converted to `dashScale=1` with scaled-up sizes. See code for full merge logic.
 
-**Scenarios** (`ScenariosSection` in `DistrictParameterPanel.jsx`): Auto-saves active scenario before switching. Re-clicking active scenario triggers save. Duplicate button creates a copy under a new name. Active scenario shown with accent dot indicator.
+**Scenarios** (`ScenariosSection` in `DistrictParameterPanel.jsx`): Auto-saves active scenario before switching. Re-clicking active scenario triggers save. Duplicate button creates a copy under a new name. Active scenario shown with accent dot indicator. "Save as New" button shown when no scenario is active.
+
+**Saved Views**: Store camera position/target/zoom + projection + layers. `_cameraControlsRef` (transient) set by `DistrictViewer` for sidebar `ViewsSection` access to camera controls.
 
 **Imported Models** (v33): Multi-model per lot. `lot.importedModels` (object map by modelId) + `lot.importedModelOrder` (array). Actions take `(lotId, modelId, ...)`. Selection state: `selectedImportedModel: { lotId, modelId }` (transient). Style editing via `ImportedModelStylePopup.jsx` floating panel in `DistrictViewer`. Sidebar (`ModelImportSection`) shows compact model lists — click name to select, style in popup.
 
@@ -63,7 +65,7 @@ React + Vite + Three.js via @react-three/fiber | Zustand + Zundo (undo/redo, 50-
 - **Dimension verticalMode text rotation**: Uses quaternion composition (`alignToLine * standUp`) not raw Euler angles — handles both X-axis and Y-axis dimension lines correctly.
 
 ### Street-Aware Setbacks
-`streetSides` prop determines which lot sides face streets. Street-facing sides use `minSideStreet`/`maxSideStreet`; interior sides use `sideInterior`. Critical for corner lots.
+`streetSides` prop determines which lot sides face streets. Street-facing sides use `minSideStreet`/`maxSideStreet`; interior sides use `sideInterior`. Critical for corner lots. Dimension custom labels use semantic keys `setbackSideStreet`/`setbackSideInterior` (not positional left/right) — each lot resolves per-side based on `streetSides`.
 
 ### Road System
 Roads stop at lot boundaries. Intersection fills use notched geometry with quarter-circle cutouts (`intersectionGeometry.js`). S3 (Alley) T-junctions: fillets/fills suppressed when meeting non-S3. Road types: S1 (Primary, ROW 50'), S2 (Secondary, ROW 40'), S3 (Alley, ROW 20'). Alley-specific style keys default `null` (fall back to regular style).

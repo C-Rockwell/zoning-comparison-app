@@ -560,6 +560,8 @@ export const useStore = create(
                     basePoint: null, // [x, y]
                     originalPosition: null, // [x, y]
                 },
+                // Camera controls ref — transient, set by DistrictViewer (excluded from persist/Zundo)
+                _cameraControlsRef: null,
                 // Scene bounds — transient, computed from DistrictSceneContent (excluded from persist/Zundo)
                 sceneBounds: null, // { minX, maxX, minY, maxY, maxZ }
                 entityStyles: {},     // { [lotId]: styleData }
@@ -958,8 +960,8 @@ export const useStore = create(
                                 lotDepth: { mode: 'value', text: 'B' },
                                 setbackFront: { mode: 'value', text: '' },
                                 setbackRear: { mode: 'value', text: '' },
-                                setbackLeft: { mode: 'value', text: '' },
-                                setbackRight: { mode: 'value', text: '' },
+                                setbackSideInterior: { mode: 'value', text: '' },
+                                setbackSideStreet: { mode: 'value', text: '' },
                                 buildingHeight: { mode: 'value', text: '' },
                                 principalMaxHeight: { mode: 'value', text: '' },
                                 accessoryMaxHeight: { mode: 'value', text: '' },
@@ -2125,6 +2127,8 @@ export const useStore = create(
                     return { selectedImportedModel: { lotId, modelId } }
                 }),
                 deselectImportedModel: () => set({ selectedImportedModel: null }),
+
+                setCameraControlsRef: (ref) => set({ _cameraControlsRef: ref }),
 
                 toggleImportedModelLocked: (lotId, modelId) => set((state) => {
                     const lot = state.entities?.lots?.[lotId]
@@ -4875,9 +4879,18 @@ export const useStore = create(
                         if (ds.textModeDepth === undefined) ds.textModeDepth = 'billboard';
                         // Patch missing customLabels keys
                         if (!ds.customLabels) ds.customLabels = {};
+                        // Migrate old setbackLeft/setbackRight keys to semantic names
+                        if (ds.customLabels.setbackLeft !== undefined && ds.customLabels.setbackSideInterior === undefined) {
+                            ds.customLabels.setbackSideInterior = ds.customLabels.setbackLeft;
+                        }
+                        if (ds.customLabels.setbackRight !== undefined && ds.customLabels.setbackSideStreet === undefined) {
+                            ds.customLabels.setbackSideStreet = ds.customLabels.setbackRight;
+                        }
                         const customLabelDefaults = {
                             principalMaxHeight: { mode: 'value', text: '' },
                             accessoryMaxHeight: { mode: 'value', text: '' },
+                            setbackSideInterior: { mode: 'value', text: '' },
+                            setbackSideStreet: { mode: 'value', text: '' },
                         };
                         for (const [key, val] of Object.entries(customLabelDefaults)) {
                             if (ds.customLabels[key] === undefined) {

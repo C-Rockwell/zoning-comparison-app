@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import * as THREE from 'three'
 import { useStore, calculatePolygonArea, DIMENSION_FONT_OPTIONS } from '../store/useStore'
 import {
     useLotIds,
@@ -2601,7 +2602,23 @@ const ViewsSection = () => {
     const viewSettings = useStore((s) => s.viewSettings)
 
     const handleSaveView = useCallback((slot) => {
+        const store = useStore.getState()
+        const canvasRef = store._cameraControlsRef
+        const controls = canvasRef?.cameraControls
+        let position = null, target = null, zoom = 1
+        if (controls) {
+            const pos = new THREE.Vector3()
+            const tgt = new THREE.Vector3()
+            controls.getPosition(pos)
+            controls.getTarget(tgt)
+            position = { x: pos.x, y: pos.y, z: pos.z }
+            target = { x: tgt.x, y: tgt.y, z: tgt.z }
+            zoom = controls.camera?.zoom || 1
+        }
         setSavedView(slot, {
+            position,
+            target,
+            zoom,
             cameraView: viewSettings.cameraView,
             projection: viewSettings.projection,
             layers: { ...viewSettings.layers },
@@ -2612,14 +2629,32 @@ const ViewsSection = () => {
     const handleLoadView = useCallback((slot) => {
         const saved = savedViews[slot]
         if (!saved) return
-        // Restore via individual store actions
         const store = useStore.getState()
-        if (saved.cameraView) store.setCameraView(saved.cameraView)
+        // Restore projection and layers
         if (saved.projection) store.setProjection(saved.projection)
         if (saved.layers) {
             Object.entries(saved.layers).forEach(([key, val]) => {
                 store.setLayer(key, val)
             })
+        }
+        // Restore camera position if available
+        if (saved.position && saved.target) {
+            const canvasRef = store._cameraControlsRef
+            const controls = canvasRef?.cameraControls
+            if (controls) {
+                controls.setLookAt(
+                    saved.position.x, saved.position.y, saved.position.z,
+                    saved.target.x, saved.target.y, saved.target.z,
+                    true // animate
+                )
+                if (saved.zoom != null && controls.camera) {
+                    controls.zoomTo(saved.zoom, true)
+                }
+            }
+            // Set cameraView to custom so preset buttons don't highlight wrong
+            store.setCameraView(saved.cameraView ?? `custom-${slot}`)
+        } else if (saved.cameraView) {
+            store.setCameraView(saved.cameraView)
         }
     }, [savedViews])
 
@@ -2663,7 +2698,7 @@ const ViewsSection = () => {
                             {saved && (
                                 <>
                                     <span className="text-[9px] flex-1 truncate" style={{ color: 'var(--ui-text-muted)' }}>
-                                        {saved.cameraView} / {saved.projection?.slice(0, 5)}
+                                        {saved.cameraView ?? 'custom'} / {saved.projection?.slice(0, 5) ?? '—'}
                                     </span>
                                     <button
                                         onClick={() => setSavedView(slot, null)}
@@ -3556,7 +3591,7 @@ const AnnotationSettingsSection = () => {
                 </div>
                 <div className="flex items-center justify-between">
                     <span className="text-[10px] font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Font Size</span>
-                    <SliderInput value={annotationSettings.fontSize} onChange={(v) => setAnnotationSetting('fontSize', v)} min={0.5} max={5} step={0.25} />
+                    <SliderInput value={annotationSettings.fontSize} onChange={(v) => setAnnotationSetting('fontSize', v)} min={0.5} max={10} step={0.25} />
                 </div>
                 <div className="flex items-center justify-between">
                     <span className="text-[10px] font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Text Color</span>
@@ -3568,7 +3603,7 @@ const AnnotationSettingsSection = () => {
                 </div>
                 <div className="flex items-center justify-between">
                     <span className="text-[10px] font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Outline Width</span>
-                    <SliderInput value={annotationSettings.outlineWidth ?? 0.15} onChange={(v) => setAnnotationSetting('outlineWidth', v)} min={0} max={0.5} step={0.05} />
+                    <SliderInput value={annotationSettings.outlineWidth ?? 0.15} onChange={(v) => setAnnotationSetting('outlineWidth', v)} min={0} max={1.0} step={0.05} />
                 </div>
                 <div className="flex items-center justify-between">
                     <span className="text-[10px] font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Background</span>
@@ -3589,7 +3624,7 @@ const AnnotationSettingsSection = () => {
                 </div>
                 <div className="flex items-center justify-between">
                     <span className="text-[10px] font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Leader Width</span>
-                    <SliderInput value={annotationSettings.leaderLineWidth} onChange={(v) => setAnnotationSetting('leaderLineWidth', v)} min={0.5} max={5} step={0.5} />
+                    <SliderInput value={annotationSettings.leaderLineWidth} onChange={(v) => setAnnotationSetting('leaderLineWidth', v)} min={0.5} max={10} step={0.5} />
                 </div>
                 <div className="flex items-center justify-between">
                     <span className="text-[10px] font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Leader Dashed</span>
@@ -3761,7 +3796,7 @@ const DimensionStylesSection = () => {
                     value={ds.lineColor ?? '#000000'}
                     onChange={(v) => setDimensionSetting('lineColor', v)}
                 />
-                <SliderInput label="Line Width" value={ds.lineWidth ?? 1} onChange={(v) => setDimensionSetting('lineWidth', v)} min={0.5} max={10} step={0.5} />
+                <SliderInput label="Line Width" value={ds.lineWidth ?? 1} onChange={(v) => setDimensionSetting('lineWidth', v)} min={0.5} max={20} step={0.5} />
                 <div className="flex items-center justify-between gap-1">
                     <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--ui-text-secondary)' }}>Line Style</span>
                     <select
@@ -3779,8 +3814,8 @@ const DimensionStylesSection = () => {
                 </div>
                 {(ds.dimensionLineStyle ?? 'solid') !== 'solid' && (
                     <>
-                        <SliderInput label="Dash Size" value={ds.dimensionDashSize ?? 1} onChange={(v) => setDimensionSetting('dimensionDashSize', v)} min={0.1} max={3} step={0.1} />
-                        <SliderInput label="Gap Size" value={ds.dimensionGapSize ?? 0.5} onChange={(v) => setDimensionSetting('dimensionGapSize', v)} min={0.1} max={3} step={0.1} />
+                        <SliderInput label="Dash Size" value={ds.dimensionDashSize ?? 1} onChange={(v) => setDimensionSetting('dimensionDashSize', v)} min={0.1} max={6} step={0.1} />
+                        <SliderInput label="Gap Size" value={ds.dimensionGapSize ?? 0.5} onChange={(v) => setDimensionSetting('dimensionGapSize', v)} min={0.1} max={6} step={0.1} />
                     </>
                 )}
 
@@ -3819,11 +3854,11 @@ const DimensionStylesSection = () => {
                 </div>
                 {(ds.extensionLineStyle ?? 'dashed') !== 'solid' && (
                     <>
-                        <SliderInput label="Ext. Dash Size" value={ds.extensionDashSize ?? 1} onChange={(v) => setDimensionSetting('extensionDashSize', v)} min={0.1} max={3} step={0.1} />
-                        <SliderInput label="Ext. Gap Size" value={ds.extensionGapSize ?? 0.5} onChange={(v) => setDimensionSetting('extensionGapSize', v)} min={0.1} max={3} step={0.1} />
+                        <SliderInput label="Ext. Dash Size" value={ds.extensionDashSize ?? 1} onChange={(v) => setDimensionSetting('extensionDashSize', v)} min={0.1} max={6} step={0.1} />
+                        <SliderInput label="Ext. Gap Size" value={ds.extensionGapSize ?? 0.5} onChange={(v) => setDimensionSetting('extensionGapSize', v)} min={0.1} max={6} step={0.1} />
                     </>
                 )}
-                <SliderInput label="Ext. Width" value={ds.extensionWidth ?? 0.5} onChange={(v) => setDimensionSetting('extensionWidth', v)} min={0.1} max={4} step={0.1} />
+                <SliderInput label="Ext. Width" value={ds.extensionWidth ?? 0.5} onChange={(v) => setDimensionSetting('extensionWidth', v)} min={0.1} max={8} step={0.1} />
 
                 <DimDivider />
 
@@ -3849,7 +3884,7 @@ const DimensionStylesSection = () => {
                         {ds.markerColor == null ? 'auto' : 'auto?'}
                     </button>
                 </div>
-                <SliderInput label="Marker Scale" value={ds.markerScale ?? 1} onChange={(v) => setDimensionSetting('markerScale', v)} min={0.5} max={6} step={0.1} />
+                <SliderInput label="Marker Scale" value={ds.markerScale ?? 1} onChange={(v) => setDimensionSetting('markerScale', v)} min={0.5} max={12} step={0.1} />
             </DimSubSection>
 
             {/* ── Text Styles ── */}
@@ -3870,7 +3905,7 @@ const DimensionStylesSection = () => {
                 <SliderInput label="Font Size" value={ds.fontSize ?? 2} onChange={(v) => setDimensionSetting('fontSize', v)} min={1} max={20} step={0.5} />
                 <ColorPicker label="Text Color" value={ds.textColor ?? '#000000'} onChange={(v) => setDimensionSetting('textColor', v)} />
                 <ColorPicker label="Outline Color" value={ds.outlineColor ?? '#ffffff'} onChange={(v) => setDimensionSetting('outlineColor', v)} />
-                <SliderInput label="Outline Width" value={ds.outlineWidth ?? 0.1} onChange={(v) => setDimensionSetting('outlineWidth', v)} min={0} max={1.0} step={0.05} />
+                <SliderInput label="Outline Width" value={ds.outlineWidth ?? 0.1} onChange={(v) => setDimensionSetting('outlineWidth', v)} min={0} max={2.0} step={0.05} />
                 <ButtonGroupRow
                     label="Text Mode"
                     options={[{ key: 'follow-line', label: 'Follow' }, { key: 'billboard', label: 'Billboard' }]}
@@ -4001,8 +4036,8 @@ const DimensionStylesSection = () => {
                 <CustomLabelRowDim label="Lot Depth" dimensionKey="lotDepth" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
                 <CustomLabelRowDim label="Front Setback" dimensionKey="setbackFront" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
                 <CustomLabelRowDim label="Rear Setback" dimensionKey="setbackRear" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
-                <CustomLabelRowDim label="Left Setback" dimensionKey="setbackLeft" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
-                <CustomLabelRowDim label="Right Setback" dimensionKey="setbackRight" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                <CustomLabelRowDim label="Side Interior Setback" dimensionKey="setbackSideInterior" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                <CustomLabelRowDim label="Side Street Setback" dimensionKey="setbackSideStreet" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
                 <CustomLabelRowDim label="Bldg Height" dimensionKey="buildingHeight" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
                 <CustomLabelRowDim label="Principal Max Ht" dimensionKey="principalMaxHeight" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
                 <CustomLabelRowDim label="Accessory Max Ht" dimensionKey="accessoryMaxHeight" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
@@ -4436,18 +4471,16 @@ const ScenariosSection = () => {
 
                 {/* Action buttons */}
                 <div className="flex items-center gap-1 flex-wrap">
-                    {activeScenario && (
-                        <button
-                            onClick={handleSaveCurrent}
-                            disabled={loading}
-                            className="flex items-center gap-1 px-2 py-1 rounded text-[10px] transition-opacity hover:opacity-80 disabled:opacity-40"
-                            style={{ backgroundColor: 'var(--ui-accent)', color: '#fff' }}
-                            title="Overwrite this scenario with current model state"
-                        >
-                            <Save className="w-3 h-3" />
-                            Save
-                        </button>
-                    )}
+                    <button
+                        onClick={activeScenario ? handleSaveCurrent : () => setShowNewInput(v => !v)}
+                        disabled={loading}
+                        className="flex items-center gap-1 px-2 py-1 rounded text-[10px] transition-opacity hover:opacity-80 disabled:opacity-40"
+                        style={{ backgroundColor: 'var(--ui-accent)', color: '#fff' }}
+                        title={activeScenario ? 'Overwrite this scenario with current model state' : 'Save current model as a new named scenario'}
+                    >
+                        <Save className="w-3 h-3" />
+                        {activeScenario ? 'Save' : 'Save as New'}
+                    </button>
                     <button
                         onClick={() => setShowNewInput(v => !v)}
                         disabled={loading}

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import * as THREE from 'three'
 import { useStore } from '../store/useStore'
 import SharedCanvas from './SharedCanvas'
@@ -34,6 +34,22 @@ const DistrictViewer = () => {
     const deselectImportedModel = useStore(state => state.deselectImportedModel)
     const selectedImportedModel = useStore(state => state.selectedImportedModel)
 
+    // Register camera controls ref for sidebar ViewsSection access
+    useEffect(() => {
+        const checkRef = () => {
+            if (canvasRef.current?.cameraControls) {
+                useStore.getState().setCameraControlsRef(canvasRef.current)
+            }
+        }
+        // Check immediately and after a short delay (canvas may not be ready)
+        checkRef()
+        const timer = setTimeout(checkRef, 500)
+        return () => {
+            clearTimeout(timer)
+            useStore.getState().setCameraControlsRef(null)
+        }
+    }, [])
+
     const handlePresetClick = (index) => {
         if (isSaving) {
             const controls = canvasRef.current?.cameraControls
@@ -43,7 +59,16 @@ const DistrictViewer = () => {
                 controls.getPosition(position)
                 controls.getTarget(target)
                 const zoom = controls.camera?.zoom || 1
-                setSavedView(index, { position, target, zoom })
+                const vs = useStore.getState().viewSettings
+                setSavedView(index, {
+                    position: { x: position.x, y: position.y, z: position.z },
+                    target: { x: target.x, y: target.y, z: target.z },
+                    zoom,
+                    cameraView: vs.cameraView,
+                    projection: vs.projection,
+                    layers: { ...vs.layers },
+                    savedAt: new Date().toISOString(),
+                })
                 setIsSaving(false)
             }
         } else {

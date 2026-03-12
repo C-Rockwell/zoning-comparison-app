@@ -334,7 +334,7 @@ const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, s
                 <Dimension
                     start={[-lotWidth / 2, 0, 0.1]}
                     end={[x1, 0, 0.1]}
-                    label={resolveDimensionLabel(leftValue, 'setbackLeft', dimensionSettings)}
+                    label={resolveDimensionLabel(leftValue, streetSides.left ? 'setbackSideStreet' : 'setbackSideInterior', dimensionSettings)}
                     offset={dimensionSettings.setbackDimOffset ?? 5}
                     color={style.color || 'red'}
                     visible={showDimensions}
@@ -347,7 +347,7 @@ const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, s
                 <Dimension
                     start={[x2, 0, 0.1]}
                     end={[lotWidth / 2, 0, 0.1]}
-                    label={resolveDimensionLabel(rightValue, 'setbackRight', dimensionSettings)}
+                    label={resolveDimensionLabel(rightValue, streetSides.right ? 'setbackSideStreet' : 'setbackSideInterior', dimensionSettings)}
                     offset={dimensionSettings.setbackDimOffset ?? 5}
                     color={style.color || 'red'}
                     visible={showDimensions}
@@ -536,7 +536,7 @@ const ParkingSetbackLines = ({ lotWidth, lotDepth, parkingSetbacks, style, stree
                 <Dimension
                     start={[-lotWidth / 2, 0, z]}
                     end={[x1, 0, z]}
-                    label={resolveDimensionLabel(pLeftValue, 'setbackLeft', dimensionSettings)}
+                    label={resolveDimensionLabel(pLeftValue, streetSides.left ? 'setbackSideStreet' : 'setbackSideInterior', dimensionSettings)}
                     offset={dimensionSettings.setbackDimOffset ?? 5}
                     color={style.color || '#FF9800'}
                     visible={showDimensions}
@@ -549,7 +549,7 @@ const ParkingSetbackLines = ({ lotWidth, lotDepth, parkingSetbacks, style, stree
                 <Dimension
                     start={[x2, 0, z]}
                     end={[lotWidth / 2, 0, z]}
-                    label={resolveDimensionLabel(pRightValue, 'setbackRight', dimensionSettings)}
+                    label={resolveDimensionLabel(pRightValue, streetSides.right ? 'setbackSideStreet' : 'setbackSideInterior', dimensionSettings)}
                     offset={dimensionSettings.setbackDimOffset ?? 5}
                     color={style.color || '#FF9800'}
                     visible={showDimensions}
