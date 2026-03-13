@@ -189,6 +189,7 @@ const Viewer3D = () => {
     const triggerExport = useStore(state => state.triggerExport)
     const exportFormat = useStore(state => state.viewSettings.exportFormat)
     const exportView = useStore(state => state.viewSettings.exportView)
+    const exportSettings = useStore(state => state.viewSettings.exportSettings)
     const toggleProjection = useStore(state => state.toggleProjection)
     const gimbalLayer = useStore(state => state.viewSettings.layers.gimbal)
     const gridLayer = useStore(state => state.viewSettings.layers.grid)
@@ -323,7 +324,7 @@ const Viewer3D = () => {
                     </select>
 
                     <select
-                        value={`${useStore.getState().viewSettings.exportSettings.width}x${useStore.getState().viewSettings.exportSettings.height}`}
+                        value={`${exportSettings.width}x${exportSettings.height}`}
                         onChange={(e) => {
                             const [width, height] = e.target.value.split('x').map(Number)
                             const label = e.target.options[e.target.selectedIndex].text

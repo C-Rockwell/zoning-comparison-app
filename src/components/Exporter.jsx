@@ -75,7 +75,7 @@ const Exporter = ({ target }) => {
                 gl.setPixelRatio(1)
 
                 // Resize the renderer - use true to update CSS size as well
-                gl.setSize(width, height, true)
+                gl.setSize(width, height, false)
 
                 if (camera.isOrthographicCamera) {
                     // For orthographic: scale the frustum to match export aspect ratio

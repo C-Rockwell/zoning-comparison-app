@@ -61,6 +61,10 @@ React + Vite + Three.js via @react-three/fiber | Zustand + Zundo (undo/redo, 50-
 - **4-place update** for new style/visibility/layer keys: `createDefaultLotStyle()`, `createDefaultLotVisibility()`, `viewSettings.layers`, persist `merge` function. For custom labels: also add to initial `customLabels` object + `customLabelDefaults` in merge
 - **`=== undefined`** for existence checks in merge patching (not `!value` which catches `0`, `false`, `''`)
 
+### Export System
+- **Reactive `exportSettings` subscription** in viewer components — use `useStore(s => s.viewSettings.exportSettings)`, never `getState()` for controlled `<select>` values
+- **`gl.setSize(w, h, false)` for export capture** — `false` prevents CSS update which would trigger R3F's ResizeObserver to race the capture. Restore call uses `true` to re-sync CSS.
+
 ### React + Three.js Rules
 - **NEVER define components inside render functions** — causes unmount/remount render loops
 - **NEVER put `return null` before hooks** — all hooks must come BEFORE any early return

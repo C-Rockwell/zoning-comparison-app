@@ -77,9 +77,12 @@ const CameraHandler = ({ controlsRef }) => {
                 const dir = new THREE.Vector3(200, -150, 200).normalize()
                 const isoPos = new THREE.Vector3(cx, cy, 0).addScaledVector(dir, 300)
                 controls.setLookAt(isoPos.x, isoPos.y, isoPos.z, cx, cy, 0, transition)
-                // ISO projection: use larger of XY extents + height, with slight extra margin
-                const isoW = Math.max(extX, extY) * 1.15
-                const isoH = Math.max(Math.max(extX, extY) * 0.7 + extZ * 0.7, extZ)
+                // Project bounding box onto camera's screen axes for accurate fit
+                // Camera right = normalize(dir × Z-up) = (-0.6, -0.8, 0)
+                // Camera up = normalize(right × dir) ≈ (-0.5, 0.375, 0.78)
+                const dimMargin = 20
+                const isoW = extX * 0.6 + extY * 0.8 + dimMargin * 2
+                const isoH = extX * 0.5 + extY * 0.375 + extZ * 0.78 + dimMargin
                 controls.zoomTo(fitZoom(isoW, isoH, ISO_PADDING), transition)
                 break
             default:
