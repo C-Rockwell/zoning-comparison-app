@@ -12,6 +12,84 @@ import {
 import * as api from '../services/api'
 import JSZip from 'jszip'
 
+const TILE_SIZE = 4096
+
+/**
+ * Render scene in GPU-safe tiles, compositing onto an offscreen canvas.
+ * Uses camera.setViewOffset() to render each tile's frustum slice.
+ */
+function renderTiled(gl, scene, camera, fullWidth, fullHeight, tileSize) {
+    const offscreen = document.createElement('canvas')
+    offscreen.width = fullWidth
+    offscreen.height = fullHeight
+    const ctx = offscreen.getContext('2d')
+
+    const cols = Math.ceil(fullWidth / tileSize)
+    const rows = Math.ceil(fullHeight / tileSize)
+
+    // MSAA render target — matches canvas antialias quality
+    const rt = new THREE.WebGLRenderTarget(tileSize, tileSize, { samples: 4 })
+
+    // Build LUT: tone mapping + linear→sRGB (replicates GPU output transform)
+    const exposure = gl.toneMappingExposure ?? 1.0
+    const lut = new Uint8Array(256)
+    for (let i = 0; i < 256; i++) {
+        let v = (i / 255) * exposure
+        // ACES Filmic (Narkowicz approximation — matches Three.js shader)
+        if (gl.toneMapping === THREE.ACESFilmicToneMapping) {
+            v = (v * (2.51 * v + 0.03)) / (v * (2.43 * v + 0.59) + 0.14)
+        } else if (gl.toneMapping === THREE.ReinhardToneMapping) {
+            v = v / (1.0 + v)
+        }
+        v = Math.min(1, Math.max(0, v))
+        // Linear to sRGB transfer function
+        v = v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1.0 / 2.4) - 0.055
+        lut[i] = Math.round(Math.min(255, Math.max(0, v * 255)))
+    }
+
+    for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+            const x = col * tileSize
+            const y = row * tileSize
+            const w = Math.min(tileSize, fullWidth - x)
+            const h = Math.min(tileSize, fullHeight - y)
+
+            if (rt.width !== w || rt.height !== h) rt.setSize(w, h)
+
+            camera.setViewOffset(fullWidth, fullHeight, x, y, w, h)
+            camera.updateProjectionMatrix()
+
+            gl.setRenderTarget(rt)
+            gl.clear()
+            gl.render(scene, camera)
+
+            // Read pixels from MSAA RT (Three.js resolves multisample internally)
+            const pixels = new Uint8Array(w * h * 4)
+            gl.readRenderTargetPixels(rt, 0, 0, w, h, pixels)
+
+            // Flip Y + apply tone mapping/sRGB LUT (RGB only, alpha passthrough)
+            const imageData = ctx.createImageData(w, h)
+            for (let r = 0; r < h; r++) {
+                const src = (h - 1 - r) * w * 4
+                const dst = r * w * 4
+                for (let c = 0; c < w * 4; c += 4) {
+                    imageData.data[dst + c]     = lut[pixels[src + c]]
+                    imageData.data[dst + c + 1] = lut[pixels[src + c + 1]]
+                    imageData.data[dst + c + 2] = lut[pixels[src + c + 2]]
+                    imageData.data[dst + c + 3] = pixels[src + c + 3]
+                }
+            }
+            ctx.putImageData(imageData, x, y)
+        }
+    }
+
+    gl.setRenderTarget(null)
+    camera.clearViewOffset()
+    camera.updateProjectionMatrix()
+    rt.dispose()
+    return offscreen
+}
+
 const Exporter = ({ target }) => {
     const exportRequested = useStore(state => state.viewSettings.exportRequested)
     const exportFormat = useStore(state => state.viewSettings.exportFormat)
@@ -57,7 +135,9 @@ const Exporter = ({ target }) => {
                 const originalAspect = camera.aspect
 
                 // 2. CONFIGURE FOR EXPORT
-                const { width, height } = exportSettings
+                const width = exportSettings.width
+                const height = exportSettings.height
+                const needsTiling = width > TILE_SIZE || height > TILE_SIZE
                 const exportAspect = width / height
 
                 // Save original pixel ratio
@@ -74,8 +154,10 @@ const Exporter = ({ target }) => {
                 // Set pixel ratio to 1 for consistent export sizing
                 gl.setPixelRatio(1)
 
-                // Resize the renderer - use true to update CSS size as well
-                gl.setSize(width, height, false)
+                // Resize the renderer (tiled path resizes per-tile inside renderTiled)
+                if (!needsTiling) {
+                    gl.setSize(width, height, false)
+                }
 
                 if (camera.isOrthographicCamera) {
                     // For orthographic: scale the frustum to match export aspect ratio
@@ -155,7 +237,12 @@ const Exporter = ({ target }) => {
                 requestAnimationFrame(() => {
                     try {
                         // Force a render frame to update buffers with new camera/size and line scales
-                        gl.render(scene, camera)
+                        let tiledCanvas = null
+                        if (needsTiling) {
+                            tiledCanvas = renderTiled(gl, scene, camera, width, height, TILE_SIZE)
+                        } else {
+                            gl.render(scene, camera)
+                        }
 
                         // 3. EXPORT LOGIC
                         const tempGroup = new THREE.Group()
@@ -224,7 +311,8 @@ const Exporter = ({ target }) => {
                             }
 
                         } else if (exportFormat === 'png') {
-                            const url = gl.domElement.toDataURL('image/png')
+                            const captureSource = tiledCanvas || gl.domElement
+                            const url = captureSource.toDataURL('image/png')
 
                             if (isBatchExporting && zipRef.current) {
                                 // Batch mode: capture to ZIP
@@ -243,7 +331,8 @@ const Exporter = ({ target }) => {
                             gl.setClearColor(originalClearColor, originalClearAlpha)
 
                         } else if (exportFormat === 'jpg') {
-                            const url = gl.domElement.toDataURL('image/jpeg', 0.9)
+                            const captureSource = tiledCanvas || gl.domElement
+                            const url = captureSource.toDataURL('image/jpeg', 0.9)
 
                             if (isBatchExporting && zipRef.current) {
                                 // Batch mode: capture to ZIP

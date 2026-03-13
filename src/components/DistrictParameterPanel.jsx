@@ -1063,6 +1063,7 @@ const LAYER_GROUPS = [
             { key: 'setbacks', label: 'Setbacks' },
             { key: 'accessorySetbacks', label: 'Accessory Setbacks' },
             { key: 'maxSetbacks', label: 'Max Setbacks' },
+            { key: 'placementZone', label: 'Placement Zone' },
             { key: 'lotAccessFront', label: 'Lot Access Front' },
             { key: 'lotAccessRear', label: 'Lot Access Rear' },
             { key: 'lotAccessSideStreet', label: 'Lot Access Side Street' },
@@ -1111,6 +1112,8 @@ const LAYER_GROUPS = [
             { key: 'dimensionsHeightAccessory', label: 'Dim: Accessory Height' },
             { key: 'dimensionsFirstFloorHeight', label: 'Dim: 1st Floor Height' },
             { key: 'dimensionsParkingSetbacks', label: 'Dim: Parking Setbacks' },
+            { key: 'dimensionsMaxFrontSetback', label: 'Dim: Max Front Setback' },
+            { key: 'dimensionsMaxSideStreetSetback', label: 'Dim: Max Side Street Setback' },
         ],
     },
     {
@@ -2660,15 +2663,28 @@ const ViewsSection = () => {
                 store.setLayer(key, val)
             })
         }
-        // Restore comprehensive state snapshot
+        // Restore comprehensive state snapshot — merge per-lot to avoid breaking cross-scenario views
+        const currentLots = store.entities?.lots ?? {}
         if (saved.entityStyles) {
-            useStore.setState({ entityStyles: structuredClone(saved.entityStyles) })
+            const merged = { ...store.entityStyles }
+            for (const lotId of Object.keys(saved.entityStyles)) {
+                if (currentLots[lotId]) {
+                    merged[lotId] = structuredClone(saved.entityStyles[lotId])
+                }
+            }
+            useStore.setState({ entityStyles: merged })
         }
         if (saved.roadModuleStyles) {
             useStore.setState({ roadModuleStyles: structuredClone(saved.roadModuleStyles) })
         }
         if (saved.lotVisibility) {
-            useStore.setState({ lotVisibility: structuredClone(saved.lotVisibility) })
+            const merged = { ...store.lotVisibility }
+            for (const lotId of Object.keys(saved.lotVisibility)) {
+                if (currentLots[lotId]) {
+                    merged[lotId] = structuredClone(saved.lotVisibility[lotId])
+                }
+            }
+            useStore.setState({ lotVisibility: merged })
         }
         if (saved.dimensionSettings) {
             useStore.setState((state) => ({
@@ -3068,7 +3084,7 @@ const InlineStyleControls = ({ lotId, category, style }) => {
     // Mesh-only categories: only color + opacity (no line width/dashed)
     const isMeshCategory = ['lotFill', 'btzPlanes', 'lotAccessArrows', 'sharedDriveArrow', 'principalBuildingFaces', 'accessoryBuildingFaces', 'buildingFaces', 'roofFaces', 'importedModelFaces'].includes(category)
     // Hybrid categories: mesh controls (fill color/opacity) + line controls (lineColor/lineWidth/lineDashed)
-    const isHybridCategory = ['maxHeightPlane', 'setbackFill'].includes(category)
+    const isHybridCategory = ['maxHeightPlane', 'setbackFill', 'placementZone'].includes(category)
 
     return (
         <div
@@ -3343,6 +3359,7 @@ const StylesSection = () => {
         { key: 'setbacks', label: 'Setbacks' },
         { key: 'accessorySetbacks', label: 'Accessory Setbacks' },
         { key: 'maxSetbacks', label: 'Max Setbacks' },
+        { key: 'placementZone', label: 'Placement Zone' },
         { key: 'parkingSetbacks', label: 'Parking Setbacks' },
         { key: 'btzPlanes', label: 'BTZ Planes' },
         { key: 'lotAccessArrows', label: 'Lot Access Arrows' },
@@ -4068,6 +4085,8 @@ const DimensionStylesSection = () => {
                     onChange={(v) => setDimensionSetting('unitFormat', v)}
                 />
                 <SliderInput label="Setback Offset" value={ds.setbackDimOffset ?? 5} onChange={(v) => setDimensionSetting('setbackDimOffset', v)} min={1} max={100} step={1} />
+                <SliderInput label="Max Front Setback Offset" value={ds.maxFrontSetbackDimOffset ?? 5} onChange={(v) => setDimensionSetting('maxFrontSetbackDimOffset', v)} min={1} max={100} step={1} />
+                <SliderInput label="Max Side Street Setback Offset" value={ds.maxSideStreetSetbackDimOffset ?? 5} onChange={(v) => setDimensionSetting('maxSideStreetSetbackDimOffset', v)} min={1} max={100} step={1} />
                 <SliderInput label="Lot Width Offset" value={ds.lotDimOffset ?? 15} onChange={(v) => setDimensionSetting('lotDimOffset', v)} min={5} max={100} step={1} />
                 <SliderInput label="Lot Depth Offset" value={ds.lotDepthDimOffset ?? ds.lotDimOffset ?? 15} onChange={(v) => setDimensionSetting('lotDepthDimOffset', v)} min={5} max={100} step={1} />
                 <SliderInput label="Side Dim Position" value={ds.sideSetbackDimYPosition ?? 0.5} onChange={(v) => setDimensionSetting('sideSetbackDimYPosition', v)} min={0} max={1} step={0.01} />
@@ -4452,6 +4471,27 @@ const ScenariosSection = () => {
                             ...styleData.viewSettings,
                         },
                         renderSettings: styleData.renderSettings || scenarioData.renderSettings,
+                        roadModuleStyles: styleData.roadModuleStyles || scenarioData.roadModuleStyles,
+                        sunSettings: styleData.sunSettings || scenarioData.sunSettings,
+                        annotationSettings: styleData.annotationSettings || scenarioData.annotationSettings,
+                    }
+                    // Merge entityStyles per-lot — preserve target lots not in source
+                    if (styleData.entityStyles) {
+                        merged.entityStyles = { ...(scenarioData.entityStyles || {}) }
+                        for (const [lotId, style] of Object.entries(styleData.entityStyles)) {
+                            if (scenarioData.entities?.lots?.[lotId]) {
+                                merged.entityStyles[lotId] = style
+                            }
+                        }
+                    }
+                    // Merge lotVisibility per-lot — preserve target lots not in source
+                    if (styleData.lotVisibility) {
+                        merged.lotVisibility = { ...(scenarioData.lotVisibility || {}) }
+                        for (const [lotId, vis] of Object.entries(styleData.lotVisibility)) {
+                            if (scenarioData.entities?.lots?.[lotId]) {
+                                merged.lotVisibility[lotId] = vis
+                            }
+                        }
                     }
                     await api.saveScenario(currentProject.id, s.name, merged)
                     count++

@@ -41,10 +41,10 @@ export const StudioLighting = () => {
                 shadow-mapSize-height={4096}
                 shadow-camera-near={0.1}
                 shadow-camera-far={1000}
-                shadow-camera-left={-300}
-                shadow-camera-right={300}
-                shadow-camera-top={300}
-                shadow-camera-bottom={-300}
+                shadow-camera-left={-500}
+                shadow-camera-right={500}
+                shadow-camera-top={500}
+                shadow-camera-bottom={-500}
                 shadow-bias={-0.001}
                 shadow-normalBias={0.05}
             />
@@ -102,10 +102,10 @@ export const SunLighting = () => {
                 shadow-mapSize-height={4096}
                 shadow-camera-near={0.1}
                 shadow-camera-far={1000}
-                shadow-camera-left={-300}
-                shadow-camera-right={300}
-                shadow-camera-top={300}
-                shadow-camera-bottom={-300}
+                shadow-camera-left={-500}
+                shadow-camera-right={500}
+                shadow-camera-top={500}
+                shadow-camera-bottom={-500}
                 shadow-bias={-0.001}
                 shadow-normalBias={0.05}
             />

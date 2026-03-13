@@ -32,7 +32,7 @@ React + Vite + Three.js via @react-three/fiber | Zustand + Zundo (undo/redo, 50-
 
 **Store** (`useStore.js`, ~4,000 lines, v34): Persist `merge` function patches missing keys on every hydration. Dash param migration: old `dashScale=5` regime auto-converted to `dashScale=1` with scaled-up sizes. See code for full merge logic.
 
-**Scenarios** (`ScenariosSection` in `DistrictParameterPanel.jsx`): Auto-saves active scenario before switching. Re-clicking active scenario triggers save. Duplicate button creates a copy under a new name. Active scenario shown with accent dot indicator. "Save as New" button shown when no scenario is active.
+**Scenarios** (`ScenariosSection` in `DistrictParameterPanel.jsx`): Auto-saves active scenario before switching. Re-clicking active scenario triggers save. Duplicate button creates a copy under a new name. Active scenario shown with accent dot indicator. "Save as New" button shown when no scenario is active. **Known bug**: `handleApplyStyleToAll()` has a per-lot merge for `entityStyles`/`lotVisibility` that was intended to prevent lot disappearance across scenarios with different lot counts, but the fix isn't working yet — needs further investigation.
 
 **Saved Views**: Comprehensive state snapshots — camera position/target/zoom, projection, layers, plus `entityStyles`, `roadModuleStyles`, `lotVisibility`, `dimensionSettings`, `sunSettings`, `annotationSettings`. Custom names per slot (editable inline). Old views without new fields load fine (`if (saved.X)` guards). `_cameraControlsRef` (transient) set by `DistrictViewer` for sidebar `ViewsSection` access to camera controls. Both sidebar and canvas overlay REC save the full snapshot.
 
@@ -43,6 +43,8 @@ React + Vite + Three.js via @react-three/fiber | Zustand + Zundo (undo/redo, 50-
 **Imported Models** (v33): Multi-model per lot. `lot.importedModels` (object map by modelId) + `lot.importedModelOrder` (array). Actions take `(lotId, modelId, ...)`. Selection state: `selectedImportedModel: { lotId, modelId }` (transient). Style editing via `ImportedModelStylePopup.jsx` floating panel in `DistrictViewer`. Sidebar (`ModelImportSection`) shows compact model lists — click name to select, style in popup.
 
 **Height Planes**: Use `<shapeGeometry>` from `activeVertices` (not bounding-box `<planeGeometry>`), so planes conform to polygon/L-shaped building footprints. Border uses same vertex loop. Group at `[0, 0, maxHeight + 0.05]` — no XY offset since vertices encode position. `MaxHeightPlaneStandalone` in `LotEntity.jsx` renders height planes independently when the building layer is off — conditions are mutually exclusive with BuildingEditor's own height plane rendering.
+
+**Placement Zone**: `PlacementZone` in `LotEntity.jsx` renders a ground-plane polygon highlighting the area between min and max front/side street setbacks — the zone where a building must be placed. Derives from existing `maxFront`/`maxSideStreet` setback values (no new params). Geometry: front-only strip, side-only strip(s), L-shape, or U-shape (with `THREE.Shape` hole). Fill at z=0.06, outline at z=0.065. Hybrid style key `placementZone` (fill color/opacity + line color/width/dash). Distinct from BTZ planes (vertical facade percentage planes).
 
 **Dimension Positioning**: Side setback dimensions use `sideSetbackDimYPosition` (0=front, 0.5=center, 1=rear) in `dimensionSettings` to control where left/right dims render along lot depth. Applies to both regular and parking setback side dims.
 

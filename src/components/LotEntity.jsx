@@ -370,7 +370,7 @@ const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, s
 // Only renders lines for sides where a max value is set.
 // Front uses maxFront; street-facing sides use maxSideStreet.
 // ============================================
-const MaxSetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, lineScale = 1, showDimensions, dimensionSettings }) => {
+const MaxSetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, lineScale = 1, showMaxFrontDim, showMaxSideStreetDim, dimensionSettings }) => {
     const { maxFront, maxSideStreet, front, rear, sideInterior, minSideStreet } = setbacks
     const z = 0.12 // Above min setback lines at z=0.1
 
@@ -427,12 +427,12 @@ const MaxSetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}
                 <SingleLine key={i} start={line.start} end={line.end} style={style} side={line.side} lineScale={lineScale} />
             ))}
             {/* Max front setback dimension */}
-            {showDimensions && maxFront != null && maxFront > 0 && dimensionSettings && (
+            {showMaxFrontDim && maxFront != null && maxFront > 0 && dimensionSettings && (
                 <Dimension
                     start={[0, -lotDepth / 2, z]}
                     end={[0, -lotDepth / 2 + maxFront, z]}
                     label={resolveDimensionLabel(maxFront, 'setbackMaxFront', dimensionSettings)}
-                    offset={dimensionSettings.setbackDimOffset ?? 5}
+                    offset={dimensionSettings.maxFrontSetbackDimOffset ?? 5}
                     color={style.color || '#FF9800'}
                     visible={true}
                     settings={dimensionSettings}
@@ -440,7 +440,7 @@ const MaxSetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}
                 />
             )}
             {/* Max side street setback dimension (first street side found) */}
-            {showDimensions && maxSideStreet != null && maxSideStreet > 0 && dimensionSettings && (() => {
+            {showMaxSideStreetDim && maxSideStreet != null && maxSideStreet > 0 && dimensionSettings && (() => {
                 const sideY = -lotDepth / 2 + (dimensionSettings.sideSetbackDimYPosition ?? 0.5) * lotDepth
                 if (streetSides.left) {
                     return (
@@ -448,7 +448,7 @@ const MaxSetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}
                             start={[-lotWidth / 2, sideY, z]}
                             end={[-lotWidth / 2 + maxSideStreet, sideY, z]}
                             label={resolveDimensionLabel(maxSideStreet, 'setbackMaxSideStreet', dimensionSettings)}
-                            offset={dimensionSettings.setbackDimOffset ?? 5}
+                            offset={dimensionSettings.maxSideStreetSetbackDimOffset ?? 5}
                             color={style.color || '#FF9800'}
                             visible={true}
                             settings={dimensionSettings}
@@ -462,7 +462,7 @@ const MaxSetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}
                             start={[lotWidth / 2 - maxSideStreet, sideY, z]}
                             end={[lotWidth / 2, sideY, z]}
                             label={resolveDimensionLabel(maxSideStreet, 'setbackMaxSideStreet', dimensionSettings)}
-                            offset={dimensionSettings.setbackDimOffset ?? 5}
+                            offset={dimensionSettings.maxSideStreetSetbackDimOffset ?? 5}
                             color={style.color || '#FF9800'}
                             visible={true}
                             settings={dimensionSettings}
@@ -514,6 +514,173 @@ const AccessorySetbackLines = ({ lotWidth, lotDepth, accessorySetbacks, style, s
             {hasSideRight && <SingleLine start={p2} end={p3} style={style} side="right" lineScale={lineScale} />}
             {hasRear && <SingleLine start={p3} end={p4} style={style} side="rear" lineScale={lineScale} />}
             {hasSideLeft && <SingleLine start={p4} end={p1} style={style} side="left" lineScale={lineScale} />}
+        </group>
+    )
+}
+
+// ============================================
+// PlacementZone — ground-plane polygon showing where building must be placed
+// Appears between min and max front/side street setbacks.
+// ============================================
+const PlacementZone = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, lineScale = 1 }) => {
+    const { front, rear, sideInterior, minSideStreet, maxFront, maxSideStreet } = setbacks
+
+    const hasMaxFront = maxFront != null && maxFront > 0
+    const hasMaxSideLeft = streetSides.left && maxSideStreet != null && maxSideStreet > 0
+    const hasMaxSideRight = streetSides.right && maxSideStreet != null && maxSideStreet > 0
+
+    if (!hasMaxFront && !hasMaxSideLeft && !hasMaxSideRight) return null
+
+    const shape = useMemo(() => {
+        const w2 = lotWidth / 2
+        const d2 = lotDepth / 2
+
+        // Outer boundary = min setback positions
+        const minFrontY = (front != null && front > 0) ? -d2 + front : -d2
+        const rearY = (rear != null && rear > 0) ? d2 - rear : d2
+        const leftMinX = streetSides.left
+            ? (minSideStreet != null && minSideStreet > 0 ? -w2 + minSideStreet : -w2)
+            : (sideInterior != null && sideInterior > 0 ? -w2 + sideInterior : -w2)
+        const rightMinX = streetSides.right
+            ? (minSideStreet != null && minSideStreet > 0 ? w2 - minSideStreet : w2)
+            : (sideInterior != null && sideInterior > 0 ? w2 - sideInterior : w2)
+
+        // Inner boundary = max setback positions
+        const maxFrontY = hasMaxFront ? -d2 + maxFront : minFrontY
+        const maxSideLeftX = hasMaxSideLeft ? -w2 + maxSideStreet : leftMinX
+        const maxSideRightX = hasMaxSideRight ? w2 - maxSideStreet : rightMinX
+
+        // Build shape as a polygon ring (outer minus inner buildable area)
+        const s = new THREE.Shape()
+        const pts = []
+
+        if (hasMaxFront && !hasMaxSideLeft && !hasMaxSideRight) {
+            // Front strip only: rectangle from minFront to maxFront
+            pts.push([leftMinX, minFrontY])
+            pts.push([rightMinX, minFrontY])
+            pts.push([rightMinX, maxFrontY])
+            pts.push([leftMinX, maxFrontY])
+        } else if (!hasMaxFront && (hasMaxSideLeft || hasMaxSideRight)) {
+            // Side strip(s) only: from front setback to rear setback
+            if (hasMaxSideLeft) {
+                pts.push([leftMinX, minFrontY])
+                pts.push([maxSideLeftX, minFrontY])
+                pts.push([maxSideLeftX, rearY])
+                pts.push([leftMinX, rearY])
+            }
+            if (hasMaxSideRight && !hasMaxSideLeft) {
+                pts.push([maxSideRightX, minFrontY])
+                pts.push([rightMinX, minFrontY])
+                pts.push([rightMinX, rearY])
+                pts.push([maxSideRightX, rearY])
+            }
+            if (hasMaxSideRight && hasMaxSideLeft) {
+                // Two separate strips — use hole approach instead; for simplicity, make U-shape
+                // Reset and build full outer with inner cutout
+                pts.length = 0
+                pts.push([leftMinX, minFrontY])
+                pts.push([rightMinX, minFrontY])
+                pts.push([rightMinX, rearY])
+                pts.push([leftMinX, rearY])
+                // Will add hole below
+            }
+        } else if (hasMaxFront && (hasMaxSideLeft || hasMaxSideRight)) {
+            // L-shape or U-shape: front strip + side strip(s)
+            if (hasMaxSideLeft && hasMaxSideRight) {
+                // U-shape: outer rectangle with inner cutout
+                pts.push([leftMinX, minFrontY])
+                pts.push([rightMinX, minFrontY])
+                pts.push([rightMinX, rearY])
+                pts.push([leftMinX, rearY])
+            } else if (hasMaxSideLeft) {
+                // L-shape: front strip + left side strip
+                pts.push([leftMinX, minFrontY])
+                pts.push([rightMinX, minFrontY])
+                pts.push([rightMinX, maxFrontY])
+                pts.push([maxSideLeftX, maxFrontY])
+                pts.push([maxSideLeftX, rearY])
+                pts.push([leftMinX, rearY])
+            } else {
+                // L-shape: front strip + right side strip
+                pts.push([leftMinX, minFrontY])
+                pts.push([rightMinX, minFrontY])
+                pts.push([rightMinX, rearY])
+                pts.push([maxSideRightX, rearY])
+                pts.push([maxSideRightX, maxFrontY])
+                pts.push([leftMinX, maxFrontY])
+            }
+        }
+
+        if (pts.length < 3) return null
+
+        s.moveTo(pts[0][0], pts[0][1])
+        for (let i = 1; i < pts.length; i++) {
+            s.lineTo(pts[i][0], pts[i][1])
+        }
+        s.closePath()
+
+        // For U-shape or both-sides-only, cut out the inner buildable area
+        const needsHole = (hasMaxFront && hasMaxSideLeft && hasMaxSideRight) ||
+            (!hasMaxFront && hasMaxSideLeft && hasMaxSideRight)
+        if (needsHole) {
+            const hole = new THREE.Path()
+            hole.moveTo(maxSideLeftX, maxFrontY)
+            hole.lineTo(maxSideRightX, maxFrontY)
+            hole.lineTo(maxSideRightX, rearY)
+            hole.lineTo(maxSideLeftX, rearY)
+            hole.closePath()
+            s.holes.push(hole)
+        }
+
+        return { shape: s, outlinePts: pts }
+    }, [lotWidth, lotDepth, front, rear, sideInterior, minSideStreet, maxFront, maxSideStreet, streetSides.left, streetSides.right, hasMaxFront, hasMaxSideLeft, hasMaxSideRight])
+
+    if (!shape) return null
+
+    const { opacity = 0.25 } = style
+    const zFill = 0.06
+    const zLine = 0.065
+
+    // Build outline segments from polygon points
+    const outlineSegments = useMemo(() => {
+        const { outlinePts } = shape
+        const segs = []
+        for (let i = 0; i < outlinePts.length; i++) {
+            const a = outlinePts[i]
+            const b = outlinePts[(i + 1) % outlinePts.length]
+            segs.push([[a[0], a[1], zLine], [b[0], b[1], zLine]])
+        }
+        return segs
+    }, [shape, zLine])
+
+    return (
+        <group>
+            {/* Fill */}
+            <mesh position={[0, 0, zFill]} rotation={[0, 0, 0]}>
+                <shapeGeometry args={[shape.shape]} />
+                <meshStandardMaterial
+                    color={style.color ?? '#FFD700'}
+                    opacity={opacity}
+                    transparent={opacity < 1}
+                    depthWrite={opacity >= 0.95}
+                    side={THREE.FrontSide}
+                    roughness={1}
+                    metalness={0}
+                />
+            </mesh>
+            {/* Outline */}
+            {outlineSegments.map((seg, i) => (
+                <Line
+                    key={i}
+                    points={seg}
+                    color={style.lineColor ?? '#DAA520'}
+                    lineWidth={(style.lineWidth ?? 1) * lineScale}
+                    dashed={style.lineDashed ?? false}
+                    dashSize={style.lineDashSize ?? 3}
+                    gapSize={style.lineGapSize ?? 2}
+                    dashScale={1}
+                />
+            ))}
         </group>
     )
 }
@@ -875,6 +1042,8 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
     const showDepthDim = layers.dimensionsLotDepth && (visibility.depthDimVisible ?? true)
     const showSetbackDim = layers.dimensionsSetbacks
     const showParkingSetbackDim = layers.dimensionsParkingSetbacks
+    const showMaxFrontSetbackDim = layers.dimensionsMaxFrontSetback
+    const showMaxSideStreetSetbackDim = layers.dimensionsMaxSideStreetSetback
     const showPrincipalHeightDim = layers.dimensionsHeightPrincipal ?? layers.dimensionsHeight
     const showAccessoryHeightDim = layers.dimensionsHeightAccessory ?? layers.dimensionsHeight
 
@@ -961,8 +1130,23 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     style={style.maxSetbacks}
                     streetSides={streetSides}
                     lineScale={exportLineScale}
-                    showDimensions={showSetbackDim}
+                    showMaxFrontDim={showMaxFrontSetbackDim}
+                    showMaxSideStreetDim={showMaxSideStreetSetbackDim}
                     dimensionSettings={dimensionSettings}
+                />
+            )}
+
+            {/* ============================================ */}
+            {/* Placement Zone (between min and max setbacks) */}
+            {/* ============================================ */}
+            {layers.placementZone && visibility.placementZone && setbacks?.principal && style?.placementZone && (
+                <PlacementZone
+                    lotWidth={lotWidth}
+                    lotDepth={lotDepth}
+                    setbacks={setbacks.principal}
+                    style={style.placementZone}
+                    streetSides={streetSides}
+                    lineScale={exportLineScale}
                 />
             )}
 

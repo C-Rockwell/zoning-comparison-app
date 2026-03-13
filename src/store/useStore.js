@@ -243,6 +243,7 @@ export const createDefaultLotStyle = (overrides = {}) => ({
     },
     lotAccessArrows: { color: '#FF00FF', opacity: 1.0, scale: 1, heightScale: 1, positionOffsetX: 0, positionOffsetY: 0 },
     sharedDriveArrow: { color: '#FF00FF', opacity: 1.0, scale: 1, heightScale: 1, positionOffsetX: 0, positionOffsetY: 0, outlineColor: '#000000', outlineWidth: 1, outlineType: 'solid' },
+    placementZone: { color: '#FFD700', opacity: 0.25, lineColor: '#DAA520', lineWidth: 1, lineDashed: false, lineDashSize: 3, lineGapSize: 2 },
     importedModelFaces: { color: '#D5D5D5', opacity: 1.0, transparent: true },
     importedModelEdges: { color: '#000000', width: 1.5, visible: true, opacity: 1.0 },
     ...overrides,
@@ -343,6 +344,7 @@ export const createDefaultLotVisibility = () => ({
     lotAccessSideStreet: true,
     lotAccessSharedDrive: true,
     importedModel: true,
+    placementZone: true,
     depthDimVisible: true,
 });
 
@@ -675,6 +677,8 @@ export const useStore = create(
                         dimensionsFirstFloorHeight: true, // 1st floor height dimension
                         parkingSetbacks: true,
                         dimensionsParkingSetbacks: true,
+                        dimensionsMaxFrontSetback: true,
+                        dimensionsMaxSideStreetSetback: true,
                         setbackFill: true,
                         grid: true,
                         axes: false, // Default axes off
@@ -704,6 +708,7 @@ export const useStore = create(
                         lotAccessSharedDrive: true, // Lot access shared drive arrow
                         roadIntersections: true, // Road intersection fillet geometry
                         importedModels: true, // Imported IFC models
+                        placementZone: true, // Building placement zone
                     },
                     exportRequested: false,
                     exportFormat: 'obj', // 'obj' | 'glb' | 'dae' | 'dxf' | 'png' | 'jpg' | 'svg'
@@ -962,6 +967,8 @@ export const useStore = create(
                             textAnchorYDepth: 'center', // depth dim text side (independent)
                             textModeDepth: 'billboard', // depth dim text mode (billboard faces camera)
                             sideSetbackDimYPosition: 0.5, // 0=front, 0.5=center, 1=rear
+                            maxFrontSetbackDimOffset: 5,
+                            maxSideStreetSetbackDimOffset: 5,
                             lotDepthDimSide: 'right',
                             buildingHeightDimOffset: -10,     // building height dimension offset
                             maxHeightDimOffset: -20,          // max height dimension offset
@@ -3667,6 +3674,11 @@ export const useStore = create(
                             lighting: state.viewSettings.lighting,
                         },
                         renderSettings: state.renderSettings,
+                        entityStyles: state.entityStyles,
+                        roadModuleStyles: state.roadModuleStyles,
+                        lotVisibility: state.lotVisibility,
+                        sunSettings: state.sunSettings,
+                        annotationSettings: state.annotationSettings,
                         drawingLayerVisibility,
                     };
                 },
@@ -3725,6 +3737,11 @@ export const useStore = create(
                         },
                         renderSettings: layerStateData.renderSettings || state.renderSettings,
                     }
+                    if (layerStateData.entityStyles) newState.entityStyles = layerStateData.entityStyles
+                    if (layerStateData.roadModuleStyles) newState.roadModuleStyles = layerStateData.roadModuleStyles
+                    if (layerStateData.lotVisibility) newState.lotVisibility = layerStateData.lotVisibility
+                    if (layerStateData.sunSettings) newState.sunSettings = layerStateData.sunSettings
+                    if (layerStateData.annotationSettings) newState.annotationSettings = layerStateData.annotationSettings
                     // Restore drawing layer visibility if present
                     if (layerStateData.drawingLayerVisibility) {
                         const updatedLayers = { ...state.drawingLayers }
@@ -4923,6 +4940,8 @@ export const useStore = create(
                         if (ds.buildingHeightDimOffset === undefined) ds.buildingHeightDimOffset = -10;
                         if (ds.maxHeightDimOffset === undefined) ds.maxHeightDimOffset = -20;
                         if (ds.firstFloorHeightDimOffset === undefined) ds.firstFloorHeightDimOffset = -30;
+                        if (ds.maxFrontSetbackDimOffset === undefined) ds.maxFrontSetbackDimOffset = 5;
+                        if (ds.maxSideStreetSetbackDimOffset === undefined) ds.maxSideStreetSetbackDimOffset = 5;
                         // Patch missing customLabels keys
                         if (!ds.customLabels) ds.customLabels = {};
                         // Migrate old setbackLeft/setbackRight keys to semantic names
@@ -4953,7 +4972,7 @@ export const useStore = create(
                     }
                     // Patch missing viewSettings.layers keys
                     if (merged.viewSettings?.layers) {
-                        const layerDefaults = { maxSetbacks: true, btzPlanes: true, accessorySetbacks: true, lotAccessArrows: true, lotAccessFront: true, lotAccessRear: true, lotAccessSideStreet: true, lotAccessSharedDrive: true, maxHeightPlanePrincipal: true, maxHeightPlaneAccessory: true, parkingSetbacks: true, dimensionsParkingSetbacks: true, setbackFill: true, drawingEditor: true, dimensionsFirstFloorHeight: true };
+                        const layerDefaults = { maxSetbacks: true, btzPlanes: true, accessorySetbacks: true, lotAccessArrows: true, lotAccessFront: true, lotAccessRear: true, lotAccessSideStreet: true, lotAccessSharedDrive: true, maxHeightPlanePrincipal: true, maxHeightPlaneAccessory: true, parkingSetbacks: true, dimensionsParkingSetbacks: true, dimensionsMaxFrontSetback: true, dimensionsMaxSideStreetSetback: true, setbackFill: true, drawingEditor: true, dimensionsFirstFloorHeight: true, placementZone: true };
                         for (const [key, val] of Object.entries(layerDefaults)) {
                             if (merged.viewSettings.layers[key] === undefined) {
                                 merged.viewSettings.layers[key] = val;
