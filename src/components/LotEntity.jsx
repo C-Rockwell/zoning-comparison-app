@@ -1340,6 +1340,7 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                                         visible: model.style?.edges?.visible ?? style.importedModelEdges?.visible ?? true,
                                     },
                                 }}
+                                lineScale={exportLineScale}
                             />
                             {isSelected && !(model.locked ?? false) && (
                                 <MoveHandle

@@ -7,7 +7,7 @@ import { loadIFCMeshes } from '../utils/ifcLoader'
 const API_BASE = 'http://localhost:3001/api'
 const METERS_TO_FEET = 3.28084
 
-const ImportedModelMesh = ({ lotId, modelId, filename, x = 0, y = 0, rotation = 0, scale = 1, units = 'auto', style, selected, onSelect, locked }) => {
+const ImportedModelMesh = ({ lotId, modelId, filename, x = 0, y = 0, rotation = 0, scale = 1, units = 'auto', style, selected, onSelect, locked, lineScale = 1 }) => {
   const [meshData, setMeshData] = useState(null)
   const [detectedUnits, setDetectedUnits] = useState('meters')
   const [error, setError] = useState(null)
@@ -170,7 +170,7 @@ const ImportedModelMesh = ({ lotId, modelId, filename, x = 0, y = 0, rotation = 
             />
             {edgesVisible && (
               <Edges
-                linewidth={edgeWidth}
+                linewidth={edgeWidth * lineScale}
                 threshold={15}
                 color={edgeColor}
                 transparent={edgeOpacity < 1}
