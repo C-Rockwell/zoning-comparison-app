@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "main",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "bold-hamilton",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd '/Users/oliverseabolt/Dropbox/$_PIXELWORKS/$_Apps/Zoning_Claude/zoning-comparison-app/.claude/worktrees/bold-hamilton' && PORT=3002 npx concurrently 'vite --port 5174' 'PORT=3002 node server/index.js'"],
+      "port": 5174
+    }
+  ]
+}

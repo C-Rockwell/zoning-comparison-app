@@ -21,19 +21,26 @@ const TILE_SIZE = 4096
  */
 function freezeLineResolution(scene, width, height) {
     const saved = []
+    const resVec = new THREE.Vector2(width, height)
     scene.traverse((obj) => {
-        if (obj.material?.isLineMaterial) {
-            saved.push({ obj, fn: obj.onBeforeRender })
+        if (obj.isLineSegments2 || obj.material?.isLineMaterial) {
             const mat = obj.material
-            obj.onBeforeRender = () => {
-                mat.resolution.set(width, height)
+            if (mat?.uniforms?.resolution) {
+                saved.push({ obj, fn: obj.onBeforeRender })
+                obj.onBeforeRender = () => {
+                    mat.uniforms.resolution.value.copy(resVec)
+                }
             }
         }
     })
-    return () => {
-        for (const { obj, fn } of saved) {
-            obj.onBeforeRender = fn
-        }
+    // Diagnostic — remove after confirming fix
+    let totalLine2 = 0
+    scene.traverse((obj) => { if (obj.isLineSegments2) totalLine2++ })
+    console.log(`[Export] Line2 total: ${totalLine2}, frozen: ${saved.length}, resolution: ${width}x${height}`)
+
+    return {
+        setResolution: (w, h) => resVec.set(w, h),
+        restore: () => { for (const { obj, fn } of saved) obj.onBeforeRender = fn }
     }
 }
 
@@ -70,9 +77,9 @@ function renderTiled(gl, scene, camera, fullWidth, fullHeight, tileSize) {
         lut[i] = Math.round(Math.min(255, Math.max(0, v * 255)))
     }
 
-    // Freeze line resolution for entire tiled render — use full export dimensions
-    // because camera.setViewOffset makes the projection act as if rendering the full image
-    const restoreLines = freezeLineResolution(scene, fullWidth, fullHeight)
+    // Freeze line resolution per-tile — resolution must match the tile viewport dimensions
+    // so the shader's aspect ratio correction matches the actual pixel aspect of each tile
+    const lineFreeze = freezeLineResolution(scene, tileSize, tileSize)
 
     for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
@@ -85,6 +92,9 @@ function renderTiled(gl, scene, camera, fullWidth, fullHeight, tileSize) {
 
             camera.setViewOffset(fullWidth, fullHeight, x, y, w, h)
             camera.updateProjectionMatrix()
+
+            // Update line resolution to match this tile's actual pixel dimensions
+            lineFreeze.setResolution(w, h)
 
             gl.setRenderTarget(rt)
             gl.clear()
@@ -110,7 +120,7 @@ function renderTiled(gl, scene, camera, fullWidth, fullHeight, tileSize) {
         }
     }
 
-    restoreLines()
+    lineFreeze.restore()
     gl.setRenderTarget(null)
     camera.clearViewOffset()
     camera.updateProjectionMatrix()
@@ -177,8 +187,10 @@ const Exporter = ({ target }) => {
                 const lineScaleFactor = width / viewportWidth
 
                 // Set line scale for WYSIWYG rendering (lines scale with resolution)
+                // This React state update must happen OUTSIDE RAF so React can reconcile line width props
                 setExportLineScale(lineScaleFactor)
 
+                // GL state changes OUTSIDE RAF — proven pattern from HEAD~1
                 // Set pixel ratio to 1 for consistent export sizing
                 gl.setPixelRatio(1)
 
@@ -187,58 +199,74 @@ const Exporter = ({ target }) => {
                     gl.setSize(width, height, false)
                 }
 
+                // Step 1: Adjust frustum for export aspect ratio (world units — same for all paths)
+                // Keep frustum in world/canvas units so LineMaterial resolution stays consistent
                 if (camera.isOrthographicCamera) {
-                    // For orthographic: scale the frustum to match export aspect ratio
-                    // while keeping the same visible area (vertically)
                     const currentFrustumHeight = (camera.top - camera.bottom)
-
-                    // Calculate new frustum maintaining vertical extent
                     const halfHeight = currentFrustumHeight / 2
                     const halfWidth = halfHeight * exportAspect
-
                     camera.left = -halfWidth
                     camera.right = halfWidth
                     camera.top = halfHeight
                     camera.bottom = -halfHeight
                 } else {
-                    // Perspective
                     camera.aspect = exportAspect
                 }
 
-                camera.updateProjectionMatrix()
-
-                // B. Viewpoint Override
+                // Step 2: For named viewpoints, override position/lookAt/zoom from scene bounds
                 if (exportView !== 'current') {
-                    // Standard Views (Centered at Y=50, Z-Up)
+                    const b = useStore.getState().sceneBounds
+                        ?? { minX: -50, maxX: 50, minY: 0, maxY: 100, maxZ: 40 }
+                    const cx = (b.minX + b.maxX) / 2
+                    const cy = (b.minY + b.maxY) / 2
+                    const cz = b.maxZ / 2
+                    const extX = Math.max(b.maxX - b.minX, 1)
+                    const extY = Math.max(b.maxY - b.minY, 1)
+                    const extZ = Math.max(b.maxZ, 1)
+
+                    // fitZoom using the frustum dimensions (world units), not pixel dimensions
+                    const frustumW = camera.isOrthographicCamera ? (camera.right - camera.left) : width
+                    const frustumH = camera.isOrthographicCamera ? (camera.top - camera.bottom) : height
+                    const PADDING = 0.75
+                    const ISO_PADDING = 0.95
+                    const fitZoom = (worldW, worldH, padding = PADDING) => {
+                        const zoomW = frustumW / worldW
+                        const zoomH = frustumH / worldH
+                        return Math.min(zoomW, zoomH) * padding
+                    }
+
+                    let computedZoom = 6
+                    camera.up.set(0, 0, 1)
+
                     if (exportView === 'iso') {
-                        camera.position.set(200, -150, 200)
-                        camera.up.set(0, 0, 1)
-                        camera.lookAt(0, 50, 0)
-                        if (camera.isOrthographicCamera) camera.zoom = 6
+                        const dir = new THREE.Vector3(200, -150, 200).normalize()
+                        const isoPos = new THREE.Vector3(cx, cy, 0).addScaledVector(dir, 300)
+                        camera.position.copy(isoPos)
+                        camera.lookAt(cx, cy, 0)
+                        const dimMargin = 20
+                        const isoW = extX * 0.6 + extY * 0.8 + dimMargin * 2
+                        const isoH = extX * 0.5 + extY * 0.375 + extZ * 0.78 + dimMargin
+                        computedZoom = fitZoom(isoW, isoH, ISO_PADDING)
                     } else if (exportView === 'front') {
-                        // Looking from South to North, center Y=50
-                        camera.position.set(0, -50, 20)
-                        camera.up.set(0, 0, 1)
-                        camera.lookAt(0, 50, 20)
-                        if (camera.isOrthographicCamera) camera.zoom = 6
+                        camera.position.set(cx, cy - 100, cz)
+                        camera.lookAt(cx, cy, cz)
+                        computedZoom = fitZoom(extX, Math.max(extZ, extX * 0.4))
                     } else if (exportView === 'side' || exportView === 'right') {
-                        // From East
-                        camera.position.set(150, 50, 20)
-                        camera.up.set(0, 0, 1)
-                        camera.lookAt(0, 50, 20)
-                        if (camera.isOrthographicCamera) camera.zoom = 6
+                        camera.position.set(cx + 150, cy, cz)
+                        camera.lookAt(cx, cy, cz)
+                        computedZoom = fitZoom(extY, Math.max(extZ, extY * 0.4))
                     } else if (exportView === 'left') {
-                        // From West
-                        camera.position.set(-150, 50, 20)
-                        camera.up.set(0, 0, 1)
-                        camera.lookAt(0, 50, 20)
-                        if (camera.isOrthographicCamera) camera.zoom = 6
+                        camera.position.set(cx - 150, cy, cz)
+                        camera.lookAt(cx, cy, cz)
+                        computedZoom = fitZoom(extY, Math.max(extZ, extY * 0.4))
                     } else if (exportView === 'top') {
-                        // Top view offset logic for Z-Up
-                        camera.position.set(0, 49.99, 150)
-                        camera.up.set(0, 0, 1)
-                        camera.lookAt(0, 50, 0)
-                        if (camera.isOrthographicCamera) camera.zoom = 6
+                        camera.position.set(cx, cy - 0.01, 150)
+                        camera.lookAt(cx, cy, 0)
+                        computedZoom = fitZoom(extX, extY)
+                    }
+
+                    if (camera.isOrthographicCamera) {
+                        camera.zoom = computedZoom
                     }
                 }
 
@@ -251,29 +279,24 @@ const Exporter = ({ target }) => {
                 let originalClearAlpha = gl.getClearAlpha()
 
                 if (isImageExport && exportFormat === 'png') {
-                    // Save original background
                     originalBackground = scene.background
                     gl.getClearColor(originalClearColor)
-
-                    // Set transparent background for PNG
                     scene.background = null
                     gl.setClearColor(0x000000, 0)
                 }
 
                 // Use requestAnimationFrame to wait for React to process line scale update
-                // This ensures line widths are updated before capturing
+                // Only render/capture + restore inside RAF
                 requestAnimationFrame(() => {
                     try {
-                        // Force a render frame to update buffers with new camera/size and line scales
+                        // Render with frozen line resolution
                         let tiledCanvas = null
                         if (needsTiling) {
                             tiledCanvas = renderTiled(gl, scene, camera, width, height, TILE_SIZE)
                         } else {
-                            // Freeze line resolution to export size so drei's onBeforeRender
-                            // doesn't reset it to viewport size during gl.render()
-                            const restoreLines = freezeLineResolution(scene, width, height)
+                            const lineFreeze = freezeLineResolution(scene, width, height)
                             gl.render(scene, camera)
-                            restoreLines()
+                            lineFreeze.restore()
                         }
 
                         // 3. EXPORT LOGIC

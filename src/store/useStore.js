@@ -4694,6 +4694,7 @@ export const useStore = create(
                     userDefaults: state.userDefaults,
                     projectConfig: state.projectConfig,
                     currentProject: state.currentProject,
+                    activeScenario: state.activeScenario,
                     uiTheme: state.uiTheme,
                     // Entity system
                     entities: state.entities,
