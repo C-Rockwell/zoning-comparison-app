@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef } from 'react'
-import { Upload, FileText, ArrowRight, ArrowLeft, Check, X, AlertCircle } from 'lucide-react'
+import { Upload, FileText, ArrowRight, ArrowLeft, Check, X, AlertCircle, Download } from 'lucide-react'
 import { useStore } from '../store/useStore'
-import { parseCSV, APP_FIELDS, DISTRICT_FIELDS, autoMatchHeaders, applyMapping, parseAllDistrictRows, detectTransposedFormat, parseTransposedCSV } from '../utils/importParser'
+import { parseCSV, parseXLSXToCSV, APP_FIELDS, DISTRICT_FIELDS, autoMatchHeaders, applyMapping, parseAllDistrictRows, detectTransposedFormat, parseTransposedCSV } from '../utils/importParser'
+import { downloadDistrictTemplate } from '../utils/templateGenerator'
 import * as api from '../services/api'
 
 /**
@@ -55,9 +56,12 @@ const ImportWizard = ({ isOpen, onClose }) => {
 
     if (!file) return
 
-    // Check file type
-    if (!file.name.toLowerCase().endsWith('.csv')) {
-      setError('Please select a CSV file (.csv)')
+    const name = file.name.toLowerCase()
+    const isXLSX = name.endsWith('.xlsx') || name.endsWith('.xls')
+    const isCSV = name.endsWith('.csv')
+
+    if (!isCSV && !isXLSX) {
+      setError('Please select a CSV or Excel file (.csv, .xlsx, .xls)')
       return
     }
 
@@ -69,62 +73,79 @@ const ImportWizard = ({ isOpen, onClose }) => {
 
     setFileName(file.name)
 
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      try {
-        const text = e.target.result
-        const parsed = parseCSV(text)
-
-        if (parsed.headers.length === 0) {
-          setError('Could not parse CSV file. The file appears to be empty.')
-          return
-        }
-
-        if (parsed.rows.length === 0) {
-          setError('CSV file has headers but no data rows.')
-          return
-        }
-
-        setHeaders(parsed.headers)
-        setRows(parsed.rows)
-
-        // Check for transposed format first
-        if (detectTransposedFormat(parsed.headers, parsed.rows)) {
-          setIsTransposed(true)
-          const tData = parseTransposedCSV(parsed.headers, parsed.rows)
-          setTransposedData(tData)
-          setImportType('district')
-          setStep(3) // Skip mapping step
-          return
-        }
-
-        // Auto-detect import type by comparing match counts
-        const lotHeaderMapping = autoMatchHeaders(parsed.headers, APP_FIELDS)
-        const districtHeaderMapping = autoMatchHeaders(parsed.headers, DISTRICT_FIELDS)
-        const lotMatchCount = Object.values(lotHeaderMapping).filter(v => v !== null).length
-        const districtMatchCount = Object.values(districtHeaderMapping).filter(v => v !== null).length
-
-        const detectedType = districtMatchCount > 0 && districtMatchCount > lotMatchCount ? 'district' : 'lot'
-        setImportType(detectedType)
-
-        // Use the winning mapping
-        const activeMapping = detectedType === 'district' ? districtHeaderMapping : lotHeaderMapping
-        const indexMapping = {}
-        parsed.headers.forEach((header, index) => {
-          indexMapping[index] = activeMapping[header] || null
-        })
-        setMapping(indexMapping)
-
-        // Advance to step 2
-        setStep(2)
-      } catch (err) {
-        setError(`Failed to parse CSV: ${err.message}`)
+    /**
+     * Common handler once we have { headers, rows }
+     */
+    const handleParsed = (parsed) => {
+      if (parsed.headers.length === 0) {
+        setError('Could not parse file. The file appears to be empty.')
+        return
       }
+
+      if (parsed.rows.length === 0) {
+        setError('File has headers but no data rows.')
+        return
+      }
+
+      setHeaders(parsed.headers)
+      setRows(parsed.rows)
+
+      // Check for transposed format first
+      if (detectTransposedFormat(parsed.headers, parsed.rows)) {
+        setIsTransposed(true)
+        const tData = parseTransposedCSV(parsed.headers, parsed.rows)
+        setTransposedData(tData)
+        setImportType('district')
+        setStep(3) // Skip mapping step
+        return
+      }
+
+      // Auto-detect import type by comparing match counts
+      const lotHeaderMapping = autoMatchHeaders(parsed.headers, APP_FIELDS)
+      const districtHeaderMapping = autoMatchHeaders(parsed.headers, DISTRICT_FIELDS)
+      const lotMatchCount = Object.values(lotHeaderMapping).filter(v => v !== null).length
+      const districtMatchCount = Object.values(districtHeaderMapping).filter(v => v !== null).length
+
+      const detectedType = districtMatchCount > 0 && districtMatchCount > lotMatchCount ? 'district' : 'lot'
+      setImportType(detectedType)
+
+      // Use the winning mapping
+      const activeMapping = detectedType === 'district' ? districtHeaderMapping : lotHeaderMapping
+      const indexMapping = {}
+      parsed.headers.forEach((header, index) => {
+        indexMapping[index] = activeMapping[header] || null
+      })
+      setMapping(indexMapping)
+
+      // Advance to step 2
+      setStep(2)
     }
-    reader.onerror = () => {
-      setError('Failed to read file. Please try again.')
+
+    if (isXLSX) {
+      const reader = new FileReader()
+      reader.onload = async (e) => {
+        try {
+          const parsed = await parseXLSXToCSV(e.target.result)
+          handleParsed(parsed)
+        } catch (err) {
+          setError(`Failed to parse Excel file: ${err.message}`)
+        }
+      }
+      reader.onerror = () => setError('Failed to read file. Please try again.')
+      reader.readAsArrayBuffer(file)
+    } else {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        try {
+          const parsed = parseCSV(e.target.result)
+          handleParsed(parsed)
+        } catch (err) {
+          setError(`Failed to parse CSV: ${err.message}`)
+        }
+      }
+      reader.onerror = () => setError('Failed to read file. Please try again.')
+      reader.readAsText(file)
     }
-    reader.readAsText(file)
   }, [])
 
   // ============================================
@@ -427,7 +448,7 @@ const ImportWizard = ({ isOpen, onClose }) => {
           {step === 1 && (
             <div>
               <p className="text-sm mb-4" style={{ color: 'var(--ui-text-secondary)' }}>
-                Upload a CSV file to import data. Column headers will be auto-matched to fields.
+                Upload a CSV or Excel file to import data. Column headers will be auto-matched to fields.
               </p>
 
               {/* Drop Zone */}
@@ -448,36 +469,59 @@ const ImportWizard = ({ isOpen, onClose }) => {
                   style={{ color: dragActive ? 'var(--ui-accent)' : 'var(--ui-text-secondary)' }}
                 />
                 <p className="text-sm font-medium mb-1" style={{ color: 'var(--ui-text-primary)' }}>
-                  Drag and drop your CSV file here
+                  Drag and drop your file here
                 </p>
                 <p className="text-xs" style={{ color: 'var(--ui-text-secondary)' }}>
-                  or click to browse files
+                  CSV or Excel (.xlsx) — or click to browse
                 </p>
               </div>
 
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".csv"
+                accept=".csv,.xlsx,.xls"
                 onChange={handleFileInput}
                 className="hidden"
               />
 
-              {/* File format hint */}
-              <div
-                className="mt-4 p-3 rounded text-xs"
-                style={{
-                  backgroundColor: 'var(--ui-bg-tertiary)',
-                  color: 'var(--ui-text-secondary)',
-                }}
-              >
-                <p className="font-medium mb-1" style={{ color: 'var(--ui-text-primary)' }}>
-                  Expected format:
-                </p>
-                <p>CSV with a header row. Column names will be automatically matched to lot parameters.</p>
-                <p className="mt-1 font-mono" style={{ color: 'var(--ui-text-secondary)', fontSize: '11px' }}>
-                  lot_width, lot_depth, front_setback, building_width, ...
-                </p>
+              {/* Download template + format hint */}
+              <div className="mt-4 flex gap-3">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    downloadDistrictTemplate(2)
+                  }}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded text-xs font-medium transition-opacity hover:opacity-80 shrink-0"
+                  style={{
+                    backgroundColor: 'var(--ui-bg-tertiary)',
+                    border: '1px solid var(--ui-border)',
+                    color: 'var(--ui-text-primary)',
+                  }}
+                >
+                  <Download size={14} style={{ color: 'var(--ui-accent)' }} />
+                  <div className="text-left">
+                    <div>Download Template (.xlsx)</div>
+                    <div style={{ color: 'var(--ui-text-secondary)', fontWeight: 400 }}>
+                      Fill in Excel, then upload here
+                    </div>
+                  </div>
+                </button>
+
+                <div
+                  className="flex-1 p-3 rounded text-xs"
+                  style={{
+                    backgroundColor: 'var(--ui-bg-tertiary)',
+                    color: 'var(--ui-text-secondary)',
+                  }}
+                >
+                  <p className="font-medium mb-1" style={{ color: 'var(--ui-text-primary)' }}>
+                    Accepted formats:
+                  </p>
+                  <p>Excel (.xlsx) or CSV with a header row. Column names are auto-matched to parameters.</p>
+                  <p className="mt-1 font-mono" style={{ color: 'var(--ui-text-secondary)', fontSize: '11px' }}>
+                    lot_width, lot_depth, front_setback, ...
+                  </p>
+                </div>
               </div>
             </div>
           )}

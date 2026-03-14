@@ -724,8 +724,8 @@ export const useStore = create(
                                 color: '#000000',
                                 width: 1.5,
                                 dashed: false,
-                                dashSize: 0.5,
-                                gapSize: 0.2, // Reduced gaps
+                                dashSize: 3,
+                                gapSize: 2,
                                 opacity: 1.0,
                                 overrides: {
                                     front: { enabled: false, color: '#000000', width: 1.5, dashed: false },
@@ -738,8 +738,8 @@ export const useStore = create(
                                 color: '#000000',
                                 width: 1,
                                 dashed: true,
-                                dashSize: 1, // Smaller checks
-                                gapSize: 0.5,
+                                dashSize: 3,
+                                gapSize: 2,
                                 dashScale: 1,
                                 opacity: 1.0,
                                 overrides: {
@@ -772,8 +772,8 @@ export const useStore = create(
                                 lineColor: '#FF0000',
                                 lineWidth: 2,
                                 lineDashed: true,
-                                lineDashSize: 1,
-                                lineGapSize: 0.5,
+                                lineDashSize: 3,
+                                lineGapSize: 2,
                             },
                             roofFaces: {
                                 color: '#B8A088',
@@ -815,8 +815,8 @@ export const useStore = create(
                                 color: '#000000',
                                 width: 1.5,
                                 dashed: false,
-                                dashSize: 0.5,
-                                gapSize: 0.2,
+                                dashSize: 3,
+                                gapSize: 2,
                                 opacity: 1.0,
                                 overrides: {
                                     front: { enabled: false, color: '#000000', width: 1.5, dashed: false },
@@ -829,8 +829,8 @@ export const useStore = create(
                                 color: '#000000',
                                 width: 1,
                                 dashed: true,
-                                dashSize: 1,
-                                gapSize: 0.5,
+                                dashSize: 3,
+                                gapSize: 2,
                                 dashScale: 1,
                                 opacity: 1.0,
                                 overrides: {
@@ -863,8 +863,8 @@ export const useStore = create(
                                 lineColor: '#FF0000',
                                 lineWidth: 2,
                                 lineDashed: true,
-                                lineDashSize: 1,
-                                lineGapSize: 0.5,
+                                lineDashSize: 3,
+                                lineGapSize: 2,
                             },
                             roofFaces: {
                                 color: '#C4B8A8',
@@ -4309,7 +4309,7 @@ export const useStore = create(
                                 const s = persistedState.entityStyles[lotId];
                                 if (!s.maxSetbacks) {
                                     s.maxSetbacks = {
-                                        color: '#000000', width: 1, dashed: true, dashSize: 0.5, gapSize: 0.3, dashScale: 1, opacity: 1.0,
+                                        color: '#000000', width: 1, dashed: true, dashSize: 1.5, gapSize: 2, dashScale: 1, opacity: 1.0,
                                         overrides: {
                                             front: { enabled: false, color: '#000000', width: 1, dashed: true },
                                             rear: { enabled: false, color: '#000000', width: 1, dashed: true },
@@ -4352,7 +4352,7 @@ export const useStore = create(
                                 }
                                 if (!s.accessorySetbacks) {
                                     s.accessorySetbacks = {
-                                        color: '#2196F3', width: 1, dashed: true, dashSize: 0.8, gapSize: 0.4, dashScale: 1, opacity: 1.0,
+                                        color: '#2196F3', width: 1, dashed: true, dashSize: 2.5, gapSize: 1.5, dashScale: 1, opacity: 1.0,
                                         overrides: {
                                             front: { enabled: false, color: '#2196F3', width: 1, dashed: true },
                                             rear: { enabled: false, color: '#2196F3', width: 1, dashed: true },
@@ -4405,7 +4405,7 @@ export const useStore = create(
                                 const s = persistedState.entityStyles[lotId];
                                 if (!s.maxSetbacks) {
                                     s.maxSetbacks = {
-                                        color: '#000000', width: 1, dashed: true, dashSize: 0.5, gapSize: 0.3, dashScale: 1, opacity: 1.0,
+                                        color: '#000000', width: 1, dashed: true, dashSize: 1.5, gapSize: 2, dashScale: 1, opacity: 1.0,
                                         overrides: {
                                             front: { enabled: false, color: '#000000', width: 1, dashed: true },
                                             rear: { enabled: false, color: '#000000', width: 1, dashed: true },
@@ -4419,7 +4419,7 @@ export const useStore = create(
                                 }
                                 if (!s.accessorySetbacks) {
                                     s.accessorySetbacks = {
-                                        color: '#2196F3', width: 1, dashed: true, dashSize: 0.8, gapSize: 0.4, dashScale: 1, opacity: 1.0,
+                                        color: '#2196F3', width: 1, dashed: true, dashSize: 2.5, gapSize: 1.5, dashScale: 1, opacity: 1.0,
                                         overrides: {
                                             front: { enabled: false, color: '#2196F3', width: 1, dashed: true },
                                             rear: { enabled: false, color: '#2196F3', width: 1, dashed: true },
@@ -4738,8 +4738,8 @@ export const useStore = create(
                             // Patch missing sub-keys on maxHeightPlane (lineDashSize/lineGapSize)
                             if (merged.entityStyles[lotId].maxHeightPlane) {
                                 const mhp = merged.entityStyles[lotId].maxHeightPlane;
-                                if (mhp.lineDashSize === undefined) mhp.lineDashSize = 3;
-                                if (mhp.lineGapSize === undefined) mhp.lineGapSize = 2;
+                                if (mhp.lineDashSize === undefined || mhp.lineDashSize < 2) mhp.lineDashSize = 3;
+                                if (mhp.lineGapSize === undefined || mhp.lineGapSize < 1) mhp.lineGapSize = 2;
                             }
                             // Patch dash params: migrate old tiny world-space values to scene-scaled values
                             // Old: dashScale=5 with dashSize=1,gapSize=0.5 → New: dashScale=1 with dashSize=3,gapSize=2
@@ -4752,6 +4752,11 @@ export const useStore = create(
                                         s.dashScale = 1;
                                         s.dashSize = (s.dashSize ?? 1) * 5;
                                         s.gapSize = (s.gapSize ?? 0.5) * 5;
+                                    } else if (s.dashSize != null && s.dashSize < 2) {
+                                        // Old-regime values with dashScale already 1 or undefined — scale up
+                                        s.dashScale = 1;
+                                        s.dashSize = s.dashSize * 5;
+                                        s.gapSize = (s.gapSize ?? 0.5) * 5;
                                     }
                                     if (s.dashScale === undefined) s.dashScale = 1;
                                     if (s.dashSize === undefined) s.dashSize = 3;
@@ -4763,6 +4768,10 @@ export const useStore = create(
                                                 if (o.dashScale === 5) {
                                                     o.dashScale = 1;
                                                     o.dashSize = (o.dashSize ?? 1) * 5;
+                                                    o.gapSize = (o.gapSize ?? 0.5) * 5;
+                                                } else if (o.dashSize != null && o.dashSize < 2) {
+                                                    o.dashScale = 1;
+                                                    o.dashSize = o.dashSize * 5;
                                                     o.gapSize = (o.gapSize ?? 0.5) * 5;
                                                 }
                                                 if (o.dashScale === undefined) o.dashScale = 1;
@@ -4779,6 +4788,10 @@ export const useStore = create(
                                 if (be.dashScale === 5) {
                                     be.dashScale = 1;
                                     be.dashSize = (be.dashSize ?? 1) * 5;
+                                    be.gapSize = (be.gapSize ?? 0.5) * 5;
+                                } else if (be.dashSize != null && be.dashSize < 2) {
+                                    be.dashScale = 1;
+                                    be.dashSize = be.dashSize * 5;
                                     be.gapSize = (be.gapSize ?? 0.5) * 5;
                                 }
                                 if (be.dashSize === undefined) be.dashSize = 3;

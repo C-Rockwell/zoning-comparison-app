@@ -20,7 +20,7 @@ npm run lint             # ESLint
 
 ## Tech Stack
 
-React + Vite + Three.js via @react-three/fiber | Zustand + Zundo (undo/redo, 50-step) | Tailwind CSS + CSS variables (`var(--ui-*)`) | Express backend on port 3001 | react-router-dom (HashRouter) | Lucide React icons | **No TypeScript, no tests**
+React + Vite + Three.js via @react-three/fiber | Zustand + Zundo (undo/redo, 50-step) | Tailwind CSS + CSS variables (`var(--ui-*)`) | Express backend on port 3001 | react-router-dom (HashRouter) | Lucide React icons | xlsx-js-style (dynamic import for XLSX read/write) | **No TypeScript, no tests**
 
 ## Architecture
 
@@ -48,6 +48,7 @@ React + Vite + Three.js via @react-three/fiber | Zustand + Zundo (undo/redo, 50-
 
 **Dimension Positioning**: Side setback dimensions use `sideSetbackDimYPosition` (0=front, 0.5=center, 1=rear) in `dimensionSettings` to control where left/right dims render along lot depth. Applies to both regular and parking setback side dims.
 
+**Import Wizard** (`ImportWizard.jsx`): 3-step modal (upload → mapping → preview/import). Accepts CSV and Excel (.xlsx/.xls). Transposed format (params as rows, districts as columns) auto-detected and skips to step 3. `TRANSPOSED_ROW_MAP` in `importParser.js` is the single source of truth for parameter layout — used by both parser and template generator. `templateGenerator.js` builds a styled .xlsx template via dynamic `import('xlsx-js-style')` to keep it out of the main bundle. `parseXLSXToCSV()` converts Excel to the same `{ headers, rows }` format as CSV, so all downstream detection/parsing is shared.
 
 ## Conventions (CRITICAL)
 
@@ -66,6 +67,7 @@ React + Vite + Three.js via @react-three/fiber | Zustand + Zundo (undo/redo, 50-
 ### Export System
 - **Reactive `exportSettings` subscription** in viewer components — use `useStore(s => s.viewSettings.exportSettings)`, never `getState()` for controlled `<select>` values
 - **`gl.setSize(w, h, false)` for export capture** — `false` prevents CSS update which would trigger R3F's ResizeObserver to race the capture. Restore call uses `true` to re-sync CSS.
+- **Dashed line export fix (DO NOT DELETE — hard-won fix)**: drei's `<Line>` resets `LineMaterial.resolution` to viewport size via `onBeforeRender` on every render call. During export, the GL buffer is export-sized but resolution stays at viewport size → dashed lines render as twisted 3D ribbons. Fix: `freezeLineResolution()` in `Exporter.jsx` temporarily replaces `onBeforeRender` on all Line2 instances to force export resolution during capture, then restores original callbacks after. Both tiled and non-tiled paths use this. **If dashed lines ever look wrong in exports again, check that `onBeforeRender` replacement is still happening — simply setting `material.resolution` before render does NOT work because drei overrides it during `gl.render()`.**
 
 ### React + Three.js Rules
 - **NEVER define components inside render functions** — causes unmount/remount render loops

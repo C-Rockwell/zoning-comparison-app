@@ -555,6 +555,39 @@ export function parseAllDistrictRows(rows, mapping) {
 }
 
 // ============================================
+// XLSX Support
+// ============================================
+
+/**
+ * Parse an XLSX/XLS file buffer into the same { headers, rows } format as parseCSV.
+ * Uses dynamic import to keep xlsx-js-style out of the main bundle.
+ *
+ * @param {ArrayBuffer} arrayBuffer - File contents as ArrayBuffer
+ * @returns {Promise<{ headers: string[], rows: string[][] }>}
+ */
+export async function parseXLSXToCSV(arrayBuffer) {
+  const XLSX = await import('xlsx-js-style')
+  const wb = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' })
+  const ws = wb.Sheets[wb.SheetNames[0]]
+  if (!ws) return { headers: [], rows: [] }
+
+  // Convert to array-of-arrays, all values as strings
+  const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+  if (aoa.length === 0) return { headers: [], rows: [] }
+
+  // Filter out entirely empty rows
+  const nonEmpty = aoa.filter(row => row.some(cell => String(cell ?? '').trim() !== ''))
+  if (nonEmpty.length === 0) return { headers: [], rows: [] }
+
+  const headers = nonEmpty[0].map(h => String(h ?? '').trim())
+  const rows = nonEmpty.slice(1).map(row =>
+    row.map(cell => String(cell ?? '').trim())
+  )
+
+  return { headers, rows }
+}
+
+// ============================================
 // Transposed CSV Support
 // ============================================
 
@@ -568,7 +601,7 @@ export function parseAllDistrictRows(rows, mapping) {
  *  - 'boolean': Y/N → boolean, min col only → path
  *  - 'accessMinMax': min/max + auto-set permitted=true when any value present
  */
-const TRANSPOSED_ROW_MAP = {
+export const TRANSPOSED_ROW_MAP = {
   'LOT DIMENSIONS': {
     'Lot Area': 'lotArea',
     'Lot Coverage': 'lotCoverage',

@@ -15,6 +15,29 @@ import JSZip from 'jszip'
 const TILE_SIZE = 4096
 
 /**
+ * Override onBeforeRender on all Line2 instances to force a specific resolution.
+ * Returns a restore function that puts back the original callbacks.
+ * This prevents drei's <Line> from resetting resolution to viewport size during render.
+ */
+function freezeLineResolution(scene, width, height) {
+    const saved = []
+    scene.traverse((obj) => {
+        if (obj.material?.isLineMaterial) {
+            saved.push({ obj, fn: obj.onBeforeRender })
+            const mat = obj.material
+            obj.onBeforeRender = () => {
+                mat.resolution.set(width, height)
+            }
+        }
+    })
+    return () => {
+        for (const { obj, fn } of saved) {
+            obj.onBeforeRender = fn
+        }
+    }
+}
+
+/**
  * Render scene in GPU-safe tiles, compositing onto an offscreen canvas.
  * Uses camera.setViewOffset() to render each tile's frustum slice.
  */
@@ -46,6 +69,10 @@ function renderTiled(gl, scene, camera, fullWidth, fullHeight, tileSize) {
         v = v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1.0 / 2.4) - 0.055
         lut[i] = Math.round(Math.min(255, Math.max(0, v * 255)))
     }
+
+    // Freeze line resolution for entire tiled render — use full export dimensions
+    // because camera.setViewOffset makes the projection act as if rendering the full image
+    const restoreLines = freezeLineResolution(scene, fullWidth, fullHeight)
 
     for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
@@ -83,6 +110,7 @@ function renderTiled(gl, scene, camera, fullWidth, fullHeight, tileSize) {
         }
     }
 
+    restoreLines()
     gl.setRenderTarget(null)
     camera.clearViewOffset()
     camera.updateProjectionMatrix()
@@ -241,7 +269,11 @@ const Exporter = ({ target }) => {
                         if (needsTiling) {
                             tiledCanvas = renderTiled(gl, scene, camera, width, height, TILE_SIZE)
                         } else {
+                            // Freeze line resolution to export size so drei's onBeforeRender
+                            // doesn't reset it to viewport size during gl.render()
+                            const restoreLines = freezeLineResolution(scene, width, height)
                             gl.render(scene, camera)
+                            restoreLines()
                         }
 
                         // 3. EXPORT LOGIC

@@ -279,7 +279,7 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
                 dashed={rowStyle.dashed}
                 dashSize={rowStyle.dashSize}
                 gapSize={rowStyle.gapSize}
-                dashScale={rowStyle.dashed ? 5 : 1}
+                dashScale={rowStyle.dashed ? (rowStyle.dashScale ?? 1) : 1}
             />
             {/* Line 2: At Y=-rightOfWay (outer edge of right-of-way) */}
             <Line
@@ -291,7 +291,7 @@ const RoadModule = ({ lotWidth, roadModule, styles, model, direction = 'front', 
                 dashed={rowStyle.dashed}
                 dashSize={rowStyle.dashSize}
                 gapSize={rowStyle.gapSize}
-                dashScale={rowStyle.dashed ? 5 : 1}
+                dashScale={rowStyle.dashed ? (rowStyle.dashScale ?? 1) : 1}
             />
 
             {/* Road Width Polygon (centered on centerline) */}
