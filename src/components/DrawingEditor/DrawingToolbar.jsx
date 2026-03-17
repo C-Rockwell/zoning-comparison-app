@@ -2,8 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { useStore } from '../../store/useStore'
 import { useShallow } from 'zustand/react/shallow'
 import {
-    Pencil, Minus, ArrowRight, Pentagon, Square, RectangleHorizontal,
-    Circle, Star, Octagon, Type, MessageSquare, Eraser, MousePointer2,
+    Pencil, Minus, ArrowRight, ArrowLeftRight, Pentagon, Square, RectangleHorizontal,
+    Circle, Star, Octagon, Type, MessageSquare, CornerDownRight, Ruler, Eraser, MousePointer2,
     Play, X, Plus, ChevronDown, FolderOpen
 } from 'lucide-react'
 import DrawingLibraryModal from './DrawingLibraryModal'
@@ -13,6 +13,7 @@ const DRAWING_TOOLS = [
     { id: 'freehand', icon: Pencil, label: 'Freehand (F)', shortcut: 'F' },
     { id: 'line', icon: Minus, label: 'Line (L)', shortcut: 'L' },
     { id: 'arrow', icon: ArrowRight, label: 'Arrow (A)', shortcut: 'A' },
+    { id: 'doubleArrow', icon: ArrowLeftRight, label: 'Double Arrow', shortcut: null },
     { id: 'polygon', icon: Pentagon, label: 'Polygon (P)', shortcut: 'P' },
     { id: 'rectangle', icon: Square, label: 'Rectangle (R)', shortcut: 'R' },
     { id: 'roundedRect', icon: RectangleHorizontal, label: 'Rounded Rect', shortcut: null },
@@ -22,6 +23,8 @@ const DRAWING_TOOLS = [
     { id: 'star', icon: Star, label: 'Star', shortcut: null },
     { id: 'text', icon: Type, label: 'Text (T)', shortcut: 'T' },
     { id: 'leader', icon: MessageSquare, label: 'Leader', shortcut: null },
+    { id: 'elbowLeader', icon: CornerDownRight, label: 'Elbow Leader', shortcut: null },
+    { id: 'dimension', icon: Ruler, label: 'Dimension (D)', shortcut: 'D' },
     { id: 'eraser', icon: Eraser, label: 'Eraser (E)', shortcut: 'E' },
 ]
 
@@ -231,7 +234,7 @@ const DrawingToolbar = () => {
             </div>
 
             {/* ArrowHead toggle (shown when arrow tool is active) */}
-            {activeTool === 'arrow' && (
+            {(activeTool === 'arrow' || activeTool === 'doubleArrow') && (
                 <div className="flex flex-col items-center gap-0.5">
                     <span className="text-[9px]" style={{ color: 'var(--ui-text-muted)' }}>Arrow</span>
                     <select

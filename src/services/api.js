@@ -166,6 +166,29 @@ export async function deleteStylePreset(name) {
   })
 }
 
+// ============ Label Presets ============
+
+export async function listLabelPresets() {
+  return fetchJSON('/label-presets')
+}
+
+export async function saveLabelPreset(name, data) {
+  return fetchJSON('/label-presets', {
+    method: 'POST',
+    body: JSON.stringify({ name, ...data })
+  })
+}
+
+export async function loadLabelPreset(name) {
+  return fetchJSON(`/label-presets/${encodeURIComponent(name)}`)
+}
+
+export async function deleteLabelPreset(name) {
+  return fetchJSON(`/label-presets/${encodeURIComponent(name)}`, {
+    method: 'DELETE'
+  })
+}
+
 // ============ Drawing Layer Presets ============
 
 export async function listDrawingPresets() {

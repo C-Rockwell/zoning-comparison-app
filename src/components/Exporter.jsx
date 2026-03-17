@@ -11,8 +11,19 @@ import {
 } from '../utils/drawingGeometry'
 import * as api from '../services/api'
 import JSZip from 'jszip'
+import { buildViewSnapshot, applyViewSnapshot } from './DistrictParameterPanel'
 
 const TILE_SIZE = 4096
+
+function sanitizeFilename(str) {
+    return str.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_')
+}
+
+function buildSingleExportName(ext) {
+    const scenario = useStore.getState().activeScenario || 'export'
+    const date = new Date().toISOString().slice(0, 10)
+    return `${sanitizeFilename(scenario)}_${date}.${ext}`
+}
 
 /**
  * Override onBeforeRender on all Line2 instances to force a specific resolution.
@@ -376,7 +387,7 @@ const Exporter = ({ target }) => {
                                 const filename = `${queueItem?.label || 'export'}.png`
                                 zipRef.current.file(filename, base64Data, { base64: true })
                             } else {
-                                saveOrDownload(url, 'zoning-model.png', 'image/png', true, projectId, showToast)
+                                saveOrDownload(url, buildSingleExportName('png'), 'image/png', true, projectId, showToast)
                             }
 
                             // Restore background after PNG capture
@@ -396,14 +407,14 @@ const Exporter = ({ target }) => {
                                 const filename = `${queueItem?.label || 'export'}.jpg`
                                 zipRef.current.file(filename, base64Data, { base64: true })
                             } else {
-                                saveOrDownload(url, 'zoning-model.jpg', 'image/jpeg', true, projectId, showToast)
+                                saveOrDownload(url, buildSingleExportName('jpg'), 'image/jpeg', true, projectId, showToast)
                             }
 
                         } else if (exportFormat === 'svg') {
                             // Use the configured width/height + include drawing objects
                             const { drawingObjects: svgDrawObjs, drawingLayers: svgDrawLayers } = useStore.getState()
                             const svgString = generateSVG(tempGroup, camera, width, height, svgDrawObjs, svgDrawLayers)
-                            saveOrDownload(svgString, 'zoning-model.svg', 'image/svg+xml', false, projectId, showToast)
+                            saveOrDownload(svgString, buildSingleExportName('svg'), 'image/svg+xml', false, projectId, showToast)
                         }
 
                         tempGroup.clear()
@@ -472,7 +483,9 @@ const Exporter = ({ target }) => {
 
                 zip.generateAsync({ type: 'blob' }).then((blob) => {
                     const link = document.createElement('a')
-                    link.download = `batch-export-${new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-')}.zip`
+                    const scenario = useStore.getState().activeScenario || 'default'
+                    const sanitized = scenario.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_')
+                    link.download = `${sanitized}_batch_${new Date().toISOString().slice(0, 10)}.zip`
                     link.href = URL.createObjectURL(blob)
                     link.click()
                     setTimeout(() => URL.revokeObjectURL(link.href), 1000)
@@ -483,16 +496,10 @@ const Exporter = ({ target }) => {
                 })
             }
 
-            // Restore saved layer state
+            // Restore saved state
             if (savedLayersRef.current) {
-                const store = useStore.getState()
-                const savedLayers = savedLayersRef.current
+                applyViewSnapshot(savedLayersRef.current)
                 savedLayersRef.current = null
-                for (const [key, value] of Object.entries(savedLayers)) {
-                    if (store.viewSettings.layers[key] !== value) {
-                        store.setLayer(key, value)
-                    }
-                }
             }
 
             clearExportQueue()
@@ -507,15 +514,13 @@ const Exporter = ({ target }) => {
         // Initialize ZIP on first item
         if (!zipRef.current) {
             zipRef.current = new JSZip()
-            // Save current layer state for restoration
-            savedLayersRef.current = { ...store.viewSettings.layers }
+            // Save current full state for restoration
+            savedLayersRef.current = buildViewSnapshot(store)
         }
 
-        // Apply layer state from the queue item
-        if (item.layers) {
-            for (const [key, value] of Object.entries(item.layers)) {
-                store.setLayer(key, value)
-            }
+        // Apply full view snapshot (layers, styles, custom labels, etc.)
+        if (item.snapshot) {
+            applyViewSnapshot(item.snapshot)
         }
 
         // Set export format and view

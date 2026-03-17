@@ -8,9 +8,9 @@ import SliderInput from '../ui/SliderInput'
 
 // --- Type groupings for property visibility ---
 
-const STROKE_TYPES = new Set(['freehand', 'line', 'arrow', 'polygon', 'rectangle', 'roundedRect', 'circle', 'ellipse', 'star', 'octagon', 'leader'])
+const STROKE_TYPES = new Set(['freehand', 'line', 'arrow', 'polygon', 'rectangle', 'roundedRect', 'circle', 'ellipse', 'star', 'octagon', 'leader', 'dimension'])
 const FILL_TYPES = new Set(['polygon', 'rectangle', 'roundedRect', 'circle', 'ellipse', 'star', 'octagon'])
-const TEXT_TYPES = new Set(['text', 'leader'])
+const TEXT_TYPES = new Set(['text', 'leader', 'dimension'])
 const TEXT_OUTLINE_TYPES = new Set(['text'])
 const ARROW_TYPES = new Set(['arrow'])
 const ROUNDED_RECT_TYPES = new Set(['roundedRect'])
@@ -21,7 +21,7 @@ const STAR_TYPES = new Set(['star'])
 const TYPE_LABELS = {
     freehand: 'Freehand', line: 'Line', arrow: 'Arrow', polygon: 'Polygon',
     rectangle: 'Rectangle', roundedRect: 'Rounded Rect', circle: 'Circle',
-    ellipse: 'Ellipse', star: 'Star', octagon: 'Octagon', text: 'Text', leader: 'Leader',
+    ellipse: 'Ellipse', star: 'Star', octagon: 'Octagon', text: 'Text', leader: 'Leader', dimension: 'Dimension',
 }
 
 // --- Inline select styling ---
@@ -104,9 +104,14 @@ const DrawingPropertiesPanel = () => {
     // Text change — single object only (no batch for text content)
     const handleTextChange = useCallback((value) => {
         if (selectedDrawingIds.length === 1) {
-            updateDrawingObject(selectedDrawingIds[0], { text: value })
+            const obj = drawingObjects[selectedDrawingIds[0]]
+            if (obj?.type === 'dimension') {
+                updateDrawingObject(selectedDrawingIds[0], { label: value })
+            } else {
+                updateDrawingObject(selectedDrawingIds[0], { text: value })
+            }
         }
-    }, [selectedDrawingIds, updateDrawingObject])
+    }, [selectedDrawingIds, drawingObjects, updateDrawingObject])
 
     if (selectedObjects.length === 0) return null
 
@@ -206,10 +211,10 @@ const DrawingPropertiesPanel = () => {
                     <div className="space-y-1.5">
                         {selectedObjects.length === 1 && (
                             <div className="flex items-center gap-2">
-                                <span className="text-xs w-20 flex-shrink-0" style={{ color: 'var(--ui-text-muted)' }}>Content</span>
+                                <span className="text-xs w-20 flex-shrink-0" style={{ color: 'var(--ui-text-muted)' }}>{first.type === 'dimension' ? 'Label' : 'Content'}</span>
                                 <input
                                     type="text"
-                                    value={first.text ?? ''}
+                                    value={first.type === 'dimension' ? (first.label ?? '') : (first.text ?? '')}
                                     onChange={(e) => handleTextChange(e.target.value)}
                                     className="flex-1 text-xs rounded px-1 py-0.5"
                                     style={selectStyle}

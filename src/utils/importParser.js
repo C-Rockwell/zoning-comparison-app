@@ -666,6 +666,64 @@ export const TRANSPOSED_ROW_MAP = {
 }
 
 /**
+ * Maps TRANSPOSED_ROW_MAP field paths to custom label keys.
+ * Used to auto-populate custom labels from the "Diagram Key" column during import.
+ */
+export const FIELD_PATH_TO_CUSTOM_LABEL = {
+  // Lot Dimensions
+  'lotArea': 'lotArea',
+  'lotCoverage': 'lotCoverage',
+  'lotWidth': 'lotWidth',
+  'lotWidthAtSetback': 'lotWidthAtSetback',
+  'lotDepth': 'lotDepth',
+  'widthToDepthRatio': 'widthToDepthRatio',
+  'maxImperviousSurface': 'maxImperviousSurface',
+  // Setbacks — Principal
+  'setbacksPrincipal.front': 'setbackFront',
+  'setbacksPrincipal.rear': 'setbackRear',
+  'setbacksPrincipal.sideInterior': 'setbackSideInterior',
+  'setbacksPrincipal.sideStreet': 'setbackSideStreet',
+  'setbacksPrincipal.distanceBetweenBuildings': 'distBetweenBuildingsPrincipal',
+  // Setbacks — Accessory
+  'setbacksAccessory.front': 'setbackFrontAccessory',
+  'setbacksAccessory.rear': 'setbackRearAccessory',
+  'setbacksAccessory.sideInterior': 'setbackSideInteriorAccessory',
+  'setbacksAccessory.sideStreet': 'setbackSideStreetAccessory',
+  'setbacksAccessory.distanceBetweenBuildings': 'distBetweenBuildingsAccessory',
+  // Structure — Principal
+  'structures.principal.height': 'principalMaxHeight',
+  'structures.principal.stories': 'principalMaxStories',
+  'structures.principal.firstStoryHeight': 'firstFloorHeight',
+  'structures.principal.upperStoryHeight': 'principalUpperStoryHeight',
+  // Structure — Accessory
+  'structures.accessory.height': 'accessoryMaxHeight',
+  'structures.accessory.stories': 'accessoryMaxStories',
+  'structures.accessory.firstStoryHeight': 'accessoryFirstFloorHeight',
+  'structures.accessory.upperStoryHeight': 'accessoryUpperStoryHeight',
+  // Build-To Zone — Principal
+  'setbacksPrincipal.btzFront': 'btzFrontPrincipal',
+  'setbacksPrincipal.btzSideStreet': 'btzSideStreetPrincipal',
+  // Build-To Zone — Accessory
+  'setbacksAccessory.btzFront': 'btzFrontAccessory',
+  'setbacksAccessory.btzSideStreet': 'btzSideStreetAccessory',
+  // Lot Access
+  'lotAccess.primaryStreet': 'lotAccessPrimaryStreet',
+  'lotAccess.secondaryStreet': 'lotAccessSecondaryStreet',
+  'lotAccess.rearAlley': 'lotAccessRearAlley',
+  'lotAccess.sharedDrive': 'lotAccessSharedDrive',
+  // Parking Locations
+  'parkingLocations.front.permitted': 'parkingLocationFront',
+  'parkingLocations.sideInterior.permitted': 'parkingLocationSideInterior',
+  'parkingLocations.sideStreet.permitted': 'parkingLocationSideStreet',
+  'parkingLocations.rear.permitted': 'parkingLocationRear',
+  // Parking Setbacks
+  'parkingLocations.front.min': 'parkingSetbackFront',
+  'parkingLocations.sideInterior.min': 'parkingSetbackSideInterior',
+  'parkingLocations.sideStreet.min': 'parkingSetbackSideStreet',
+  'parkingLocations.rear.min': 'parkingSetbackRear',
+}
+
+/**
  * Parse a raw transposed cell value into a typed value.
  * @param {string} rawValue
  * @returns {number|boolean|null}
@@ -690,8 +748,9 @@ function parseTransposedValue(rawValue) {
  */
 export function detectTransposedFormat(headers, rows) {
   if (!headers || headers.length === 0) return false
-  // Check if first header is "Parameter"
-  if (headers[0].toLowerCase().trim() === 'parameter') return true
+  const firstHeader = headers[0].toLowerCase().trim()
+  // Check if first header is "Parameter", "Diagram Key", or "Custom Labels"
+  if (firstHeader === 'parameter' || firstHeader === 'diagram key' || firstHeader === 'custom labels') return true
   // Check if any early row looks like an ALL-CAPS section header
   for (let i = 0; i < Math.min(10, rows.length); i++) {
     const row = rows[i]
@@ -722,15 +781,19 @@ export function detectTransposedFormat(headers, rows) {
 export function parseTransposedCSV(headers, rows) {
   if (!headers || headers.length < 2 || !rows || rows.length < 3) return []
 
+  // Detect Diagram Key column: if first header is "diagram key" or "custom labels", parameter labels shift right by 1
+  const firstHeader = headers[0].toLowerCase().trim()
+  const hasDiagramKeyCol = firstHeader === 'diagram key' || firstHeader === 'custom labels'
+  const paramCol = hasDiagramKeyCol ? 1 : 0 // column index for parameter labels
+  const districtStartCol = paramCol + 1 // first district data column
+
   // Build district column groups from headers
-  // headers[1+] are district short names, possibly repeated for min/max
   const districts = []
-  const districtColMap = [] // index in headers → { districtIdx, isMin }
 
   // Determine min/max sub-headers from rows[1]
   const subHeaders = rows[1] || []
 
-  for (let col = 1; col < headers.length; col++) {
+  for (let col = districtStartCol; col < headers.length; col++) {
     const shortName = (headers[col] || '').trim()
     if (!shortName) continue
     const sub = (subHeaders[col] || '').trim().toLowerCase()
@@ -762,21 +825,24 @@ export function parseTransposedCSV(headers, rows) {
     districtParameters: {},
   }))
 
+  // Collect diagram keys (shared across all districts)
+  const diagramKeys = {}
+
   // Walk data rows (starting from index 2, which is rows[2])
   let currentSection = null
 
   for (let r = 2; r < rows.length; r++) {
     const row = rows[r]
     if (!row) continue
-    const firstCell = (row[0] || '').trim()
-    if (!firstCell) continue // blank row
+    const paramCell = (row[paramCol] || '').trim()
+    if (!paramCell) continue // blank row
 
     // Check if ALL-CAPS section header
-    if (firstCell === firstCell.toUpperCase() && /[A-Z]/.test(firstCell)) {
-      const restEmpty = row.slice(1).every(c => (c || '').trim() === '')
+    if (paramCell === paramCell.toUpperCase() && /[A-Z]/.test(paramCell)) {
+      const restEmpty = row.slice(paramCol + 1).every(c => (c || '').trim() === '')
       if (restEmpty) {
         // Normalize section: replace various dashes with em-dash for matching
-        currentSection = firstCell.replace(/\s*[-–—]\s*/g, ' — ')
+        currentSection = paramCell.replace(/\s*[-–—]\s*/g, ' — ')
         continue
       }
     }
@@ -785,13 +851,24 @@ export function parseTransposedCSV(headers, rows) {
     const sectionMap = TRANSPOSED_ROW_MAP[currentSection]
     if (!sectionMap) continue
 
-    const fieldDef = sectionMap[firstCell]
+    const fieldDef = sectionMap[paramCell]
     if (!fieldDef) continue
 
     // Resolve field config
     const isString = typeof fieldDef === 'string'
     const basePath = isString ? fieldDef : fieldDef.path
     const fieldType = isString ? 'minMax' : fieldDef.type
+
+    // Collect diagram key if present
+    if (hasDiagramKeyCol) {
+      const diagramKey = (row[0] || '').trim()
+      if (diagramKey) {
+        const customLabelKey = FIELD_PATH_TO_CUSTOM_LABEL[basePath]
+        if (customLabelKey) {
+          diagramKeys[customLabelKey] = diagramKey
+        }
+      }
+    }
 
     // Apply value to each district
     for (let di = 0; di < districts.length; di++) {
@@ -821,6 +898,13 @@ export function parseTransposedCSV(headers, rows) {
     }
   }
 
-  // Filter out districts with no params
-  return results.filter(r => Object.keys(r.districtParameters).length > 0)
+  // Attach diagram keys to each result (shared across districts)
+  const hasDiagramKeys = Object.keys(diagramKeys).length > 0
+  const filtered = results.filter(r => Object.keys(r.districtParameters).length > 0)
+  if (hasDiagramKeys) {
+    for (const result of filtered) {
+      result.diagramKeys = diagramKeys
+    }
+  }
+  return filtered
 }

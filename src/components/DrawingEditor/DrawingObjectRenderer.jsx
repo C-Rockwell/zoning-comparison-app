@@ -11,6 +11,7 @@ import {
 } from '../../utils/drawingGeometry'
 import AnnotationText from '../AnnotationText'
 import LeaderCallout from '../LeaderCallout'
+import Dimension from '../Dimension'
 import { DIMENSION_FONT_OPTIONS } from '../../store/useStore'
 
 const SELECTED_COLOR = '#3B82F6'
@@ -29,9 +30,9 @@ const FreehandRenderer = ({ points, strokeColor, strokeWidth, lineType, opacity 
             color={strokeColor}
             lineWidth={strokeWidth}
             dashed={lineType === 'dashed'}
-            dashScale={lineType === 'dashed' ? 5 : 1}
-            dashSize={1}
-            gapSize={0.5}
+            dashScale={1}
+            dashSize={3}
+            gapSize={2}
             transparent={opacity < 1}
             opacity={opacity}
         />
@@ -49,9 +50,9 @@ const LineRenderer = ({ start, end, strokeColor, strokeWidth, lineType, opacity 
             color={strokeColor}
             lineWidth={strokeWidth}
             dashed={lineType === 'dashed'}
-            dashScale={lineType === 'dashed' ? 5 : 1}
-            dashSize={1}
-            gapSize={0.5}
+            dashScale={1}
+            dashSize={3}
+            gapSize={2}
             transparent={opacity < 1}
             opacity={opacity}
         />
@@ -408,18 +409,18 @@ const ArrowRenderer = ({ start, end, strokeColor, strokeWidth, lineType, opacity
                 opacity={opacity}
             />
             {(arrowHead === 'end' || arrowHead === 'both') && len > 0.5 && (
-                <group position={[end[0], end[1], 0]} rotation={[0, 0, angle + Math.PI]}>
-                    <mesh position={[-arrowLength / 2, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
+                <group position={[end[0], end[1], 0]} rotation={[0, 0, angle]}>
+                    <mesh position={[arrowLength / 2, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
                         <coneGeometry args={[arrowWidth, arrowLength, 8]} />
-                        <meshBasicMaterial color={strokeColor} />
+                        <meshBasicMaterial color={strokeColor} transparent={opacity < 1} opacity={opacity} />
                     </mesh>
                 </group>
             )}
             {(arrowHead === 'start' || arrowHead === 'both') && len > 0.5 && (
-                <group position={[start[0], start[1], 0]} rotation={[0, 0, angle]}>
-                    <mesh position={[-arrowLength / 2, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
+                <group position={[start[0], start[1], 0]} rotation={[0, 0, angle + Math.PI]}>
+                    <mesh position={[arrowLength / 2, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
                         <coneGeometry args={[arrowWidth, arrowLength, 8]} />
-                        <meshBasicMaterial color={strokeColor} />
+                        <meshBasicMaterial color={strokeColor} transparent={opacity < 1} opacity={opacity} />
                     </mesh>
                 </group>
             )}
@@ -427,7 +428,7 @@ const ArrowRenderer = ({ start, end, strokeColor, strokeWidth, lineType, opacity
     )
 }
 
-const TextRenderer = ({ position, text, fontSize, fontFamily, textColor, outlineWidth, outlineColor, opacity }) => {
+const TextRenderer = ({ position, text, fontSize, fontFamily, textColor, outlineWidth, outlineColor }) => {
     const fontUrl = useMemo(() => {
         if (!fontFamily) return undefined
         return DIMENSION_FONT_OPTIONS.find(f => f.label === fontFamily)?.url
@@ -451,12 +452,18 @@ const TextRenderer = ({ position, text, fontSize, fontFamily, textColor, outline
     )
 }
 
-const LeaderRenderer = ({ targetPoint, textPosition, text, fontSize, fontFamily, textColor, strokeColor, strokeWidth, lineType, opacity }) => {
+const LeaderRenderer = ({ targetPoint, textPosition, text, fontSize, fontFamily, textColor, strokeColor, strokeWidth, elbow, elbowLength }) => {
+    const fontUrl = useMemo(() => {
+        if (!fontFamily) return undefined
+        return DIMENSION_FONT_OPTIONS.find(f => f.label === fontFamily)?.url
+    }, [fontFamily])
+
     return (
         <LeaderCallout
             targetPoint={[targetPoint[0], targetPoint[1], 0]}
             textPosition={[textPosition[0], textPosition[1], 0]}
             text={text}
+            font={fontUrl}
             settings={{
                 lineColor: strokeColor,
                 lineWidth: strokeWidth,
@@ -467,6 +474,33 @@ const LeaderRenderer = ({ targetPoint, textPosition, text, fontSize, fontFamily,
                 endMarker: 'arrow',
             }}
             textRotation="billboard"
+            visible={true}
+            elbow={elbow}
+            elbowLength={elbowLength}
+        />
+    )
+}
+
+const DimensionRenderer = ({ start, end, label, strokeColor, strokeWidth, lineType, fontSize, fontFamily, textColor }) => {
+    const settings = useMemo(() => ({
+        lineColor: strokeColor,
+        lineWidth: strokeWidth,
+        textColor: textColor ?? strokeColor,
+        fontSize: fontSize ?? 3,
+        endMarker: 'arrow',
+        fontFamily: fontFamily,
+        dimensionLineStyle: lineType ?? 'solid',
+        extensionLineStyle: 'solid',
+    }), [strokeColor, strokeWidth, textColor, fontSize, fontFamily, lineType])
+
+    return (
+        <Dimension
+            start={[start[0], start[1], 0]}
+            end={[end[0], end[1], 0]}
+            label={label}
+            offset={0}
+            settings={settings}
+            textMode="follow-line"
             visible={true}
         />
     )
@@ -622,7 +656,6 @@ const DrawingObjectRenderer = ({ obj, isSelected }) => {
                     textColor={isSelected ? SELECTED_COLOR : (obj.textColor ?? '#000000')}
                     outlineWidth={obj.outlineWidth}
                     outlineColor={obj.outlineColor}
-                    opacity={obj.opacity ?? 1}
                 />
             )
         case 'leader':
@@ -636,8 +669,22 @@ const DrawingObjectRenderer = ({ obj, isSelected }) => {
                     textColor={isSelected ? SELECTED_COLOR : (obj.textColor ?? '#000000')}
                     strokeColor={strokeColor}
                     strokeWidth={strokeWidth}
+                    elbow={obj.elbow}
+                    elbowLength={obj.elbowLength}
+                />
+            )
+        case 'dimension':
+            return (
+                <DimensionRenderer
+                    start={obj.start}
+                    end={obj.end}
+                    label={obj.label}
+                    strokeColor={strokeColor}
+                    strokeWidth={strokeWidth}
                     lineType={obj.lineType ?? 'solid'}
-                    opacity={obj.opacity ?? 1}
+                    fontSize={obj.fontSize}
+                    fontFamily={obj.fontFamily}
+                    textColor={isSelected ? SELECTED_COLOR : (obj.textColor ?? '#000000')}
                 />
             )
         default:

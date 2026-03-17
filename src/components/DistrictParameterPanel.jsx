@@ -16,6 +16,7 @@ import {
     Save, FolderOpen, Search, Check, X, Lock, Unlock,
 } from 'lucide-react'
 import ImportWizard from './ImportWizard'
+import { downloadDistrictTemplate } from '../utils/templateGenerator'
 import DrawingLayersPanel from './DrawingEditor/DrawingLayersPanel'
 import DrawingPropertiesPanel from './DrawingEditor/DrawingPropertiesPanel'
 import DrawingLayerStylesPanel from './DrawingEditor/DrawingLayerStylesPanel'
@@ -2610,13 +2611,137 @@ const RoadModuleCard = ({ road, onRemove, onUpdate, onChangeType }) => {
 }
 
 // ============================================
+// VIEW SNAPSHOT HELPERS (shared by sidebar + canvas overlay)
+// ============================================
+
+/**
+ * Build a complete visual snapshot from the current store state.
+ * Single source of truth for "what's in a saved view."
+ * Callers add camera fields (position, target, zoom) and name.
+ */
+export function buildViewSnapshot(store) {
+    const vs = store.viewSettings
+    return {
+        cameraView: vs.cameraView,
+        projection: vs.projection,
+        layers: { ...vs.layers },
+        savedAt: new Date().toISOString(),
+        // Existing fields
+        entityStyles: structuredClone(store.entityStyles),
+        roadModuleStyles: structuredClone(store.roadModuleStyles),
+        lotVisibility: structuredClone(store.lotVisibility),
+        dimensionSettings: structuredClone(vs?.styleSettings?.dimensionSettings),
+        sunSettings: structuredClone(store.sunSettings),
+        annotationSettings: structuredClone(store.annotationSettings),
+        // New fields — complete visual snapshot
+        backgroundMode: vs.backgroundMode,
+        renderSettings: structuredClone(store.renderSettings),
+        lighting: structuredClone(vs.lighting),
+        annotationCustomLabels: structuredClone(store.annotationCustomLabels),
+        annotationPositions: structuredClone(store.annotationPositions),
+        drawingLayers: structuredClone(store.drawingLayers),
+        drawingLayerOrder: structuredClone(store.drawingLayerOrder),
+        drawingObjects: structuredClone(store.drawingObjects),
+        activeLabelPresetName: store.activeLabelPresetName ?? null,
+    }
+}
+
+/**
+ * Apply a saved view snapshot to the store (all non-camera state).
+ * Uses `if (saved.X)` guards for backward compatibility with old views.
+ */
+export function applyViewSnapshot(saved) {
+    const store = useStore.getState()
+    // Projection + layers
+    if (saved.projection) store.setProjection(saved.projection)
+    if (saved.layers) {
+        Object.entries(saved.layers).forEach(([key, val]) => {
+            store.setLayer(key, val)
+        })
+    }
+    // Per-lot styles — merge to avoid breaking cross-scenario views
+    const currentLots = store.entities?.lots ?? {}
+    if (saved.entityStyles) {
+        const merged = { ...store.entityStyles }
+        for (const lotId of Object.keys(saved.entityStyles)) {
+            if (currentLots[lotId]) {
+                merged[lotId] = structuredClone(saved.entityStyles[lotId])
+            }
+        }
+        useStore.setState({ entityStyles: merged })
+    }
+    if (saved.roadModuleStyles) {
+        useStore.setState({ roadModuleStyles: structuredClone(saved.roadModuleStyles) })
+    }
+    if (saved.lotVisibility) {
+        const merged = { ...store.lotVisibility }
+        for (const lotId of Object.keys(saved.lotVisibility)) {
+            if (currentLots[lotId]) {
+                merged[lotId] = structuredClone(saved.lotVisibility[lotId])
+            }
+        }
+        useStore.setState({ lotVisibility: merged })
+    }
+    if (saved.dimensionSettings) {
+        useStore.setState((state) => ({
+            viewSettings: {
+                ...state.viewSettings,
+                styleSettings: {
+                    ...state.viewSettings.styleSettings,
+                    dimensionSettings: structuredClone(saved.dimensionSettings),
+                },
+            },
+        }))
+    }
+    if (saved.sunSettings) {
+        useStore.setState({ sunSettings: structuredClone(saved.sunSettings) })
+    }
+    if (saved.annotationSettings) {
+        useStore.setState({ annotationSettings: structuredClone(saved.annotationSettings) })
+    }
+    // New fields
+    if (saved.backgroundMode) {
+        useStore.setState((state) => ({
+            viewSettings: { ...state.viewSettings, backgroundMode: saved.backgroundMode },
+        }))
+    }
+    if (saved.renderSettings) {
+        useStore.setState({ renderSettings: structuredClone(saved.renderSettings) })
+    }
+    if (saved.lighting) {
+        useStore.setState((state) => ({
+            viewSettings: { ...state.viewSettings, lighting: structuredClone(saved.lighting) },
+        }))
+    }
+    if (saved.annotationCustomLabels) {
+        useStore.setState({ annotationCustomLabels: structuredClone(saved.annotationCustomLabels) })
+    }
+    if (saved.annotationPositions) {
+        useStore.setState({ annotationPositions: structuredClone(saved.annotationPositions) })
+    }
+    if (saved.drawingLayers) {
+        useStore.setState({ drawingLayers: structuredClone(saved.drawingLayers) })
+    }
+    if (saved.drawingLayerOrder) {
+        useStore.setState({ drawingLayerOrder: structuredClone(saved.drawingLayerOrder) })
+    }
+    if (saved.drawingObjects) {
+        useStore.setState({ drawingObjects: structuredClone(saved.drawingObjects) })
+    }
+    if (saved.activeLabelPresetName !== undefined) {
+        useStore.setState({ activeLabelPresetName: saved.activeLabelPresetName })
+    }
+}
+
+// ============================================
 // VIEWS SECTION (simplified StateManager)
 // ============================================
 
 const ViewsSection = () => {
     const savedViews = useStore((s) => s.savedViews ?? {})
     const setSavedView = useStore((s) => s.setSavedView)
-    const viewSettings = useStore((s) => s.viewSettings)
+    const showToast = useStore((s) => s.showToast)
+    const fileInputRef = useRef(null)
 
     const handleSaveView = useCallback((slot) => {
         const store = useStore.getState()
@@ -2632,77 +2757,22 @@ const ViewsSection = () => {
             target = { x: tgt.x, y: tgt.y, z: tgt.z }
             zoom = controls.camera?.zoom || 1
         }
-        // Preserve existing custom name if re-saving to same slot
         const existingName = store.savedViews?.[slot]?.name ?? ''
         setSavedView(slot, {
+            ...buildViewSnapshot(store),
             position,
             target,
             zoom,
-            cameraView: viewSettings.cameraView,
-            projection: viewSettings.projection,
-            layers: { ...viewSettings.layers },
-            savedAt: new Date().toISOString(),
             name: existingName,
-            entityStyles: structuredClone(store.entityStyles),
-            roadModuleStyles: structuredClone(store.roadModuleStyles),
-            lotVisibility: structuredClone(store.lotVisibility),
-            dimensionSettings: structuredClone(store.viewSettings?.styleSettings?.dimensionSettings),
-            sunSettings: structuredClone(store.sunSettings),
-            annotationSettings: structuredClone(store.annotationSettings),
         })
-    }, [setSavedView, viewSettings])
+    }, [setSavedView])
 
     const handleLoadView = useCallback((slot) => {
         const saved = savedViews[slot]
         if (!saved) return
         const store = useStore.getState()
-        // Restore projection and layers
-        if (saved.projection) store.setProjection(saved.projection)
-        if (saved.layers) {
-            Object.entries(saved.layers).forEach(([key, val]) => {
-                store.setLayer(key, val)
-            })
-        }
-        // Restore comprehensive state snapshot — merge per-lot to avoid breaking cross-scenario views
-        const currentLots = store.entities?.lots ?? {}
-        if (saved.entityStyles) {
-            const merged = { ...store.entityStyles }
-            for (const lotId of Object.keys(saved.entityStyles)) {
-                if (currentLots[lotId]) {
-                    merged[lotId] = structuredClone(saved.entityStyles[lotId])
-                }
-            }
-            useStore.setState({ entityStyles: merged })
-        }
-        if (saved.roadModuleStyles) {
-            useStore.setState({ roadModuleStyles: structuredClone(saved.roadModuleStyles) })
-        }
-        if (saved.lotVisibility) {
-            const merged = { ...store.lotVisibility }
-            for (const lotId of Object.keys(saved.lotVisibility)) {
-                if (currentLots[lotId]) {
-                    merged[lotId] = structuredClone(saved.lotVisibility[lotId])
-                }
-            }
-            useStore.setState({ lotVisibility: merged })
-        }
-        if (saved.dimensionSettings) {
-            useStore.setState((state) => ({
-                viewSettings: {
-                    ...state.viewSettings,
-                    styleSettings: {
-                        ...state.viewSettings.styleSettings,
-                        dimensionSettings: structuredClone(saved.dimensionSettings),
-                    },
-                },
-            }))
-        }
-        if (saved.sunSettings) {
-            useStore.setState({ sunSettings: structuredClone(saved.sunSettings) })
-        }
-        if (saved.annotationSettings) {
-            useStore.setState({ annotationSettings: structuredClone(saved.annotationSettings) })
-        }
+        // Apply all non-camera state
+        applyViewSnapshot(saved)
         // Restore camera position if available
         if (saved.position && saved.target) {
             const canvasRef = store._cameraControlsRef
@@ -2717,15 +2787,153 @@ const ViewsSection = () => {
                     controls.zoomTo(saved.zoom, true)
                 }
             }
-            // Set cameraView to custom so preset buttons don't highlight wrong
             store.setCameraView(saved.cameraView ?? `custom-${slot}`)
         } else if (saved.cameraView) {
             store.setCameraView(saved.cameraView)
         }
     }, [savedViews])
 
+    // --- Export/Import handlers ---
+    const handleExportViews = useCallback(() => {
+        const store = useStore.getState()
+        const payload = {
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            sourceProject: store.projectName ?? 'Untitled',
+            sourceLotOrder: [...(store.entityOrder ?? [])],
+            views: {},
+        }
+        for (let slot = 1; slot <= 5; slot++) {
+            payload.views[slot] = store.savedViews?.[slot] ?? null
+        }
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `views-${(store.projectName ?? 'export').replace(/\s+/g, '_')}.json`
+        a.click()
+        URL.revokeObjectURL(url)
+    }, [])
+
+    const handleImportViews = useCallback((e) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+        const reader = new FileReader()
+        reader.onload = (evt) => {
+            try {
+                const data = JSON.parse(evt.target.result)
+                if (!data.views || data.version !== 1) {
+                    showToast?.('Invalid view export file', 'error')
+                    return
+                }
+                const store = useStore.getState()
+                const targetOrder = store.entityOrder ?? []
+                const sourceOrder = data.sourceLotOrder ?? []
+                let importedCount = 0
+
+                for (let slot = 1; slot <= 5; slot++) {
+                    const view = data.views[slot]
+                    if (!view) continue
+
+                    // Remap lot-keyed objects by index
+                    const remapped = structuredClone(view)
+
+                    // entityStyles remap
+                    if (remapped.entityStyles) {
+                        const newStyles = {}
+                        for (let i = 0; i < sourceOrder.length; i++) {
+                            const srcId = sourceOrder[i]
+                            const tgtId = targetOrder[i]
+                            if (tgtId && remapped.entityStyles[srcId]) {
+                                newStyles[tgtId] = remapped.entityStyles[srcId]
+                            }
+                        }
+                        remapped.entityStyles = newStyles
+                    }
+
+                    // lotVisibility remap
+                    if (remapped.lotVisibility) {
+                        const newVis = {}
+                        for (let i = 0; i < sourceOrder.length; i++) {
+                            const srcId = sourceOrder[i]
+                            const tgtId = targetOrder[i]
+                            if (tgtId && remapped.lotVisibility[srcId]) {
+                                newVis[tgtId] = remapped.lotVisibility[srcId]
+                            }
+                        }
+                        remapped.lotVisibility = newVis
+                    }
+
+                    // annotationCustomLabels remap (lot-{id}-* keys)
+                    if (remapped.annotationCustomLabels) {
+                        const newLabels = {}
+                        for (const [key, val] of Object.entries(remapped.annotationCustomLabels)) {
+                            const lotMatch = key.match(/^lot-(.+?)-(.+)$/)
+                            if (lotMatch) {
+                                const srcLotId = lotMatch[1]
+                                const suffix = lotMatch[2]
+                                const srcIdx = sourceOrder.indexOf(srcLotId)
+                                const tgtId = srcIdx >= 0 ? targetOrder[srcIdx] : null
+                                if (tgtId) {
+                                    newLabels[`lot-${tgtId}-${suffix}`] = val
+                                }
+                            } else {
+                                newLabels[key] = val
+                            }
+                        }
+                        remapped.annotationCustomLabels = newLabels
+                    }
+
+                    // Camera: keep preset, null out position/target/zoom
+                    if (remapped.cameraView && remapped.cameraView.startsWith('custom-')) {
+                        remapped.cameraView = 'iso'
+                    }
+                    remapped.position = null
+                    remapped.target = null
+                    remapped.zoom = null
+
+                    setSavedView(slot, remapped)
+                    importedCount++
+                }
+
+                showToast?.(`Imported ${importedCount} view${importedCount !== 1 ? 's' : ''} from "${data.sourceProject}"`)
+            } catch (err) {
+                showToast?.('Failed to parse view file', 'error')
+            }
+        }
+        reader.readAsText(file)
+        // Reset input so re-importing same file works
+        e.target.value = ''
+    }, [setSavedView, showToast])
+
     return (
-        <Section title="Views" defaultOpen={false}>
+        <Section title="Views" defaultOpen={false} headerRight={
+            <div className="flex gap-1">
+                <button
+                    onClick={handleExportViews}
+                    className="p-0.5 transition-colors"
+                    style={{ color: 'var(--ui-text-muted)' }}
+                    title="Export views"
+                >
+                    <Download className="w-3 h-3" />
+                </button>
+                <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-0.5 transition-colors"
+                    style={{ color: 'var(--ui-text-muted)' }}
+                    title="Import views"
+                >
+                    <Upload className="w-3 h-3" />
+                </button>
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".json"
+                    className="hidden"
+                    onChange={handleImportViews}
+                />
+            </div>
+        }>
             <div className="space-y-1.5">
                 {[1, 2, 3, 4, 5].map((slot) => {
                     const saved = savedViews[slot]
@@ -2815,8 +3023,20 @@ const RESOLUTION_PRESETS = [
     { value: '7680x4320', label: '8K' },
 ]
 
+function sanitizeExportName(str) {
+    return str.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_')
+}
+
+function buildExportLabel(scenario, viewName, slot, cameraView) {
+    const scenarioPart = scenario || 'default'
+    const viewPart = viewName || `view-${slot}`
+    const datePart = new Date().toISOString().slice(0, 10)
+    return `${sanitizeExportName(scenarioPart)}_${sanitizeExportName(viewPart)}_${cameraView}_${datePart}`
+}
+
 const BatchExportSection = () => {
     const savedViews = useStore((s) => s.savedViews ?? {})
+    const activeScenario = useStore((s) => s.activeScenario)
     const isBatchExporting = useStore((s) => s.viewSettings.isBatchExporting)
     const addToExportQueue = useStore((s) => s.addToExportQueue)
     const setIsBatchExporting = useStore((s) => s.setIsBatchExporting)
@@ -2852,9 +3072,9 @@ const BatchExportSection = () => {
                 queue.push({
                     presetSlot: slot,
                     cameraView: view.key,
-                    layers: saved.layers ? { ...saved.layers } : undefined,
+                    snapshot: saved,
                     format,
-                    label: `view-${slot}-${view.key}`,
+                    label: buildExportLabel(activeScenario, saved?.name, slot, view.key),
                 })
             }
         }
@@ -2867,7 +3087,7 @@ const BatchExportSection = () => {
 
         addToExportQueue(queue)
         setIsBatchExporting(true)
-    }, [checkedCount, isBatchExporting, resolution, populatedSlots, savedViews, checked, format, addToExportQueue, setIsBatchExporting])
+    }, [checkedCount, isBatchExporting, resolution, populatedSlots, savedViews, checked, format, activeScenario, addToExportQueue, setIsBatchExporting])
 
     return (
         <Section title="Batch Export" icon={<Download className="w-4 h-4" />} defaultOpen={false}>
@@ -3879,6 +4099,27 @@ const DimSubSection = ({ title, defaultOpen = false, children }) => {
     )
 }
 
+const CustomLabelCategory = ({ title, children }) => {
+    const [isOpen, setIsOpen] = useState(false)
+    return (
+        <div className="mt-1.5" style={{ borderLeft: '2px solid #e84393' }}>
+            <button
+                onClick={() => setIsOpen(v => !v)}
+                className="w-full flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide"
+                style={{ color: '#e84393' }}
+            >
+                {isOpen ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                {title}
+            </button>
+            {isOpen && (
+                <div className="pl-2 pr-0.5 pb-1 space-y-1">
+                    {children}
+                </div>
+            )}
+        </div>
+    )
+}
+
 const DimDivider = () => <div className="my-1" style={{ borderTop: '1px solid var(--ui-bg-primary)' }} />
 
 const DimensionStylesSection = () => {
@@ -3888,8 +4129,80 @@ const DimensionStylesSection = () => {
     const entityOrder = useStore((s) => s.entityOrder)
     const lotVisibility = useStore((s) => s.lotVisibility)
     const setLotVisibility = useStore((s) => s.setLotVisibility)
+    const getLabelPresetData = useStore((s) => s.getLabelPresetData)
+    const applyLabelPreset = useStore((s) => s.applyLabelPreset)
+    const setActiveLabelPresetName = useStore((s) => s.setActiveLabelPresetName)
+    const showToast = useStore((s) => s.showToast)
+
+    // Label preset modal state
+    const [showSaveLabelModal, setShowSaveLabelModal] = useState(false)
+    const [showLoadLabelModal, setShowLoadLabelModal] = useState(false)
+    const [labelPresetName, setLabelPresetName] = useState('')
+    const [labelPresetList, setLabelPresetList] = useState([])
+    const [labelSearchQuery, setLabelSearchQuery] = useState('')
+    const [labelPresetLoading, setLabelPresetLoading] = useState(false)
 
     const ds = styleSettings?.dimensionSettings ?? {}
+
+    const handleSaveLabelPreset = async (e) => {
+        e.preventDefault()
+        if (!labelPresetName.trim()) return
+        setLabelPresetLoading(true)
+        try {
+            const data = getLabelPresetData()
+            await api.saveLabelPreset(labelPresetName.trim(), data)
+            setActiveLabelPresetName(labelPresetName.trim())
+            showToast(`Label preset "${labelPresetName.trim()}" saved`)
+            setShowSaveLabelModal(false)
+            setLabelPresetName('')
+        } catch (err) {
+            showToast(err.message, 'error')
+        }
+        setLabelPresetLoading(false)
+    }
+
+    const handleOpenLoadLabels = async () => {
+        setLabelPresetLoading(true)
+        setLabelSearchQuery('')
+        try {
+            const list = await api.listLabelPresets()
+            setLabelPresetList(list)
+        } catch (err) {
+            showToast(err.message, 'error')
+            setLabelPresetList([])
+        }
+        setLabelPresetLoading(false)
+        setShowLoadLabelModal(true)
+    }
+
+    const handleLoadLabelPreset = async (filename) => {
+        setLabelPresetLoading(true)
+        try {
+            const preset = await api.loadLabelPreset(filename)
+            applyLabelPreset(preset)
+            setActiveLabelPresetName(preset.name)
+            showToast(`Label preset "${preset.name}" applied`)
+            setShowLoadLabelModal(false)
+        } catch (err) {
+            showToast(err.message, 'error')
+        }
+        setLabelPresetLoading(false)
+    }
+
+    const handleDeleteLabelPreset = async (filename, name) => {
+        if (!window.confirm(`Delete label preset "${name}"?`)) return
+        try {
+            await api.deleteLabelPreset(filename)
+            setLabelPresetList((prev) => prev.filter((p) => p.filename !== filename))
+            showToast(`Preset "${name}" deleted`)
+        } catch (err) {
+            showToast(err.message, 'error')
+        }
+    }
+
+    const filteredLabelPresets = labelSearchQuery
+        ? labelPresetList.filter((p) => p.name.toLowerCase().includes(labelSearchQuery.toLowerCase()))
+        : labelPresetList
 
     return (
         <Section title="Dimensions" icon={<Settings className="w-4 h-4" />} defaultOpen={false}>
@@ -4140,25 +4453,201 @@ const DimensionStylesSection = () => {
 
             {/* ── Custom Labels ── */}
             <DimSubSection title="Custom Labels">
+                <div className="flex gap-2 mb-2">
+                    <button
+                        onClick={() => { setLabelPresetName(''); setShowSaveLabelModal(true) }}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs transition-colors"
+                        style={{ backgroundColor: 'var(--ui-bg-secondary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-secondary)' }}
+                    >
+                        <Save className="w-3.5 h-3.5" />
+                        Save Labels
+                    </button>
+                    <button
+                        onClick={handleOpenLoadLabels}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs transition-colors"
+                        style={{ backgroundColor: 'var(--ui-bg-secondary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-secondary)' }}
+                    >
+                        <FolderOpen className="w-3.5 h-3.5" />
+                        Load Labels
+                    </button>
+                </div>
                 <p className="text-[9px] mb-2" style={{ color: 'var(--ui-text-muted)' }}>
                     Override numeric values with custom text. Leave blank to hide the label entirely.
                 </p>
-                <CustomLabelRowDim label="Lot Width" dimensionKey="lotWidth" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
-                <CustomLabelRowDim label="Lot Depth" dimensionKey="lotDepth" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
-                <CustomLabelRowDim label="Front Setback" dimensionKey="setbackFront" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
-                <CustomLabelRowDim label="Rear Setback" dimensionKey="setbackRear" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
-                <CustomLabelRowDim label="Side Interior Setback" dimensionKey="setbackSideInterior" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
-                <CustomLabelRowDim label="Side Street Setback" dimensionKey="setbackSideStreet" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
-                <CustomLabelRowDim label="Bldg Height" dimensionKey="buildingHeight" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
-                <CustomLabelRowDim label="Principal Max Ht" dimensionKey="principalMaxHeight" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
-                <CustomLabelRowDim label="Accessory Max Ht" dimensionKey="accessoryMaxHeight" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
-                <CustomLabelRowDim label="Parking Front" dimensionKey="parkingSetbackFront" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
-                <CustomLabelRowDim label="Parking Rear" dimensionKey="parkingSetbackRear" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
-                <CustomLabelRowDim label="Parking Side Interior" dimensionKey="parkingSetbackSideInterior" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
-                <CustomLabelRowDim label="Parking Side Street" dimensionKey="parkingSetbackSideStreet" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
-                <CustomLabelRowDim label="Max Front Setback" dimensionKey="setbackMaxFront" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
-                <CustomLabelRowDim label="Max Side Street Setback" dimensionKey="setbackMaxSideStreet" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+
+                <CustomLabelCategory title="Lot Dimensions">
+                    <CustomLabelRowDim label="Lot Width" dimensionKey="lotWidth" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Lot Depth" dimensionKey="lotDepth" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Lot Area" dimensionKey="lotArea" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Lot Coverage" dimensionKey="lotCoverage" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Width at Setback" dimensionKey="lotWidthAtSetback" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Width:Depth Ratio" dimensionKey="widthToDepthRatio" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Max Impervious" dimensionKey="maxImperviousSurface" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                </CustomLabelCategory>
+
+                <CustomLabelCategory title="Setbacks — Principal">
+                    <CustomLabelRowDim label="Front" dimensionKey="setbackFront" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Rear" dimensionKey="setbackRear" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Side Interior" dimensionKey="setbackSideInterior" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Side Street" dimensionKey="setbackSideStreet" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Max Front" dimensionKey="setbackMaxFront" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Max Side Street" dimensionKey="setbackMaxSideStreet" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Dist Between Bldgs" dimensionKey="distBetweenBuildingsPrincipal" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                </CustomLabelCategory>
+
+                <CustomLabelCategory title="Setbacks — Accessory">
+                    <CustomLabelRowDim label="Front" dimensionKey="setbackFrontAccessory" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Rear" dimensionKey="setbackRearAccessory" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Side Interior" dimensionKey="setbackSideInteriorAccessory" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Side Street" dimensionKey="setbackSideStreetAccessory" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Dist Between Bldgs" dimensionKey="distBetweenBuildingsAccessory" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                </CustomLabelCategory>
+
+                <CustomLabelCategory title="Structure Dimensions">
+                    <CustomLabelRowDim label="Bldg Height" dimensionKey="buildingHeight" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Principal Max Ht" dimensionKey="principalMaxHeight" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Principal Max Stories" dimensionKey="principalMaxStories" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="1st Floor Ht" dimensionKey="firstFloorHeight" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Principal Upper Story Ht" dimensionKey="principalUpperStoryHeight" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Accessory Max Ht" dimensionKey="accessoryMaxHeight" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Accessory Max Stories" dimensionKey="accessoryMaxStories" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Accessory 1st Floor Ht" dimensionKey="accessoryFirstFloorHeight" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Accessory Upper Story Ht" dimensionKey="accessoryUpperStoryHeight" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                </CustomLabelCategory>
+
+                <CustomLabelCategory title="Build-To Zone">
+                    <CustomLabelRowDim label="Front — Principal" dimensionKey="btzFrontPrincipal" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Side Street — Principal" dimensionKey="btzSideStreetPrincipal" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Front — Accessory" dimensionKey="btzFrontAccessory" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Side Street — Accessory" dimensionKey="btzSideStreetAccessory" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                </CustomLabelCategory>
+
+                <CustomLabelCategory title="Lot Access">
+                    <CustomLabelRowDim label="Primary Street" dimensionKey="lotAccessPrimaryStreet" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Secondary Street" dimensionKey="lotAccessSecondaryStreet" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Rear Alley" dimensionKey="lotAccessRearAlley" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Shared Drive" dimensionKey="lotAccessSharedDrive" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                </CustomLabelCategory>
+
+                <CustomLabelCategory title="Parking Locations">
+                    <CustomLabelRowDim label="Front" dimensionKey="parkingLocationFront" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Side Interior" dimensionKey="parkingLocationSideInterior" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Side Street" dimensionKey="parkingLocationSideStreet" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Rear" dimensionKey="parkingLocationRear" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                </CustomLabelCategory>
+
+                <CustomLabelCategory title="Parking Setbacks">
+                    <CustomLabelRowDim label="Front" dimensionKey="parkingSetbackFront" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Rear" dimensionKey="parkingSetbackRear" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Side Interior" dimensionKey="parkingSetbackSideInterior" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                    <CustomLabelRowDim label="Side Street" dimensionKey="parkingSetbackSideStreet" customLabels={ds.customLabels} setCustomLabel={setCustomLabel} />
+                </CustomLabelCategory>
             </DimSubSection>
+
+            {/* Save Label Preset Modal */}
+            {showSaveLabelModal && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+                    <div className="rounded-lg p-6 w-full max-w-sm mx-4" style={{ backgroundColor: 'var(--ui-bg-primary)', border: '1px solid var(--ui-border)' }}>
+                        <h2 className="text-lg font-bold mb-4" style={{ color: 'var(--ui-text-primary)' }}>
+                            Save Label Preset
+                        </h2>
+                        <form onSubmit={handleSaveLabelPreset}>
+                            <input
+                                type="text"
+                                value={labelPresetName}
+                                onChange={(e) => setLabelPresetName(e.target.value)}
+                                placeholder="Preset name"
+                                className="w-full px-3 py-2 rounded mb-4 placeholder-theme"
+                                style={{ backgroundColor: 'var(--ui-bg-secondary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-primary)' }}
+                                autoFocus
+                            />
+                            <div className="flex justify-end gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowSaveLabelModal(false)}
+                                    className="px-4 py-2 hover-text-primary transition-colors"
+                                    style={{ color: 'var(--ui-text-secondary)' }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={labelPresetLoading || !labelPresetName.trim()}
+                                    className="px-4 py-2 rounded disabled:opacity-50 transition-colors hover-bg-accent-hover"
+                                    style={{ backgroundColor: 'var(--ui-accent)', color: '#fff' }}
+                                >
+                                    {labelPresetLoading ? 'Saving...' : 'Save'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Load Label Preset Modal */}
+            {showLoadLabelModal && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+                    <div className="rounded-lg p-5 w-full max-w-md mx-4" style={{ backgroundColor: 'var(--ui-bg-primary)', border: '1px solid var(--ui-border)' }}>
+                        <h2 className="text-lg font-bold mb-3" style={{ color: 'var(--ui-text-primary)' }}>
+                            Load Label Preset
+                        </h2>
+                        <div className="relative mb-3">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: 'var(--ui-text-muted)' }} />
+                            <input
+                                type="text"
+                                value={labelSearchQuery}
+                                onChange={(e) => setLabelSearchQuery(e.target.value)}
+                                placeholder="Search presets..."
+                                className="w-full pl-8 pr-3 py-2 rounded text-sm placeholder-theme"
+                                style={{ backgroundColor: 'var(--ui-bg-secondary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-primary)' }}
+                                autoFocus
+                            />
+                        </div>
+                        <div className="max-h-64 overflow-y-auto space-y-1 mb-3">
+                            {labelPresetLoading ? (
+                                <p className="text-xs text-center py-4" style={{ color: 'var(--ui-text-muted)' }}>Loading...</p>
+                            ) : filteredLabelPresets.length === 0 ? (
+                                <p className="text-xs text-center py-4" style={{ color: 'var(--ui-text-muted)' }}>
+                                    {labelPresetList.length === 0 ? 'No presets saved yet' : 'No matching presets'}
+                                </p>
+                            ) : (
+                                filteredLabelPresets.map((preset) => (
+                                    <div
+                                        key={preset.filename}
+                                        className="group flex items-center justify-between px-3 py-2 rounded cursor-pointer transition-colors"
+                                        style={{ backgroundColor: 'var(--ui-bg-secondary)' }}
+                                        onClick={() => handleLoadLabelPreset(preset.filename)}
+                                    >
+                                        <div>
+                                            <div className="text-sm" style={{ color: 'var(--ui-text-primary)' }}>{preset.name}</div>
+                                            <div className="text-[10px]" style={{ color: 'var(--ui-text-muted)' }}>
+                                                {new Date(preset.timestamp).toLocaleDateString()} {new Date(preset.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleDeleteLabelPreset(preset.filename, preset.name) }}
+                                            className="opacity-0 group-hover:opacity-100 p-1 rounded transition-opacity"
+                                            style={{ color: 'var(--ui-text-muted)' }}
+                                            title="Delete preset"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                        <div className="flex justify-end">
+                            <button
+                                onClick={() => setShowLoadLabelModal(false)}
+                                className="px-4 py-2 hover-text-primary transition-colors"
+                                style={{ color: 'var(--ui-text-secondary)' }}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
         </Section>
     )
@@ -4475,21 +4964,27 @@ const ScenariosSection = () => {
                         sunSettings: styleData.sunSettings || scenarioData.sunSettings,
                         annotationSettings: styleData.annotationSettings || scenarioData.annotationSettings,
                     }
-                    // Merge entityStyles per-lot — preserve target lots not in source
+                    // Merge entityStyles by index — match lots by position, not ID
+                    const sourceOrder = styleData.entityOrder ?? []
+                    const targetOrder = scenarioData.entityOrder ?? Object.keys(scenarioData.entities?.lots ?? {})
                     if (styleData.entityStyles) {
                         merged.entityStyles = { ...(scenarioData.entityStyles || {}) }
-                        for (const [lotId, style] of Object.entries(styleData.entityStyles)) {
-                            if (scenarioData.entities?.lots?.[lotId]) {
-                                merged.entityStyles[lotId] = style
+                        for (let i = 0; i < sourceOrder.length; i++) {
+                            const srcId = sourceOrder[i]
+                            const tgtId = targetOrder[i]
+                            if (tgtId && styleData.entityStyles[srcId]) {
+                                merged.entityStyles[tgtId] = styleData.entityStyles[srcId]
                             }
                         }
                     }
-                    // Merge lotVisibility per-lot — preserve target lots not in source
+                    // Merge lotVisibility by index — match lots by position, not ID
                     if (styleData.lotVisibility) {
                         merged.lotVisibility = { ...(scenarioData.lotVisibility || {}) }
-                        for (const [lotId, vis] of Object.entries(styleData.lotVisibility)) {
-                            if (scenarioData.entities?.lots?.[lotId]) {
-                                merged.lotVisibility[lotId] = vis
+                        for (let i = 0; i < sourceOrder.length; i++) {
+                            const srcId = sourceOrder[i]
+                            const tgtId = targetOrder[i]
+                            if (tgtId && styleData.lotVisibility[srcId]) {
+                                merged.lotVisibility[tgtId] = styleData.lotVisibility[srcId]
                             }
                         }
                     }
@@ -4523,15 +5018,26 @@ const ScenariosSection = () => {
             icon={<Hexagon className="w-4 h-4" />}
             defaultOpen={false}
             headerRight={
-                <button
-                    onClick={(e) => { e.stopPropagation(); setShowImportWizard(true) }}
-                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] transition-opacity hover:opacity-80"
-                    style={{ color: 'var(--ui-accent)' }}
-                    title="Import district scenarios from CSV"
-                >
-                    <Upload className="w-3 h-3" />
-                    Import CSV
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={(e) => { e.stopPropagation(); downloadDistrictTemplate() }}
+                        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] transition-opacity hover:opacity-80"
+                        style={{ color: 'var(--ui-text-secondary)' }}
+                        title="Download district template (.xlsx)"
+                    >
+                        <Download className="w-3 h-3" />
+                        Template
+                    </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setShowImportWizard(true) }}
+                        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] transition-opacity hover:opacity-80"
+                        style={{ color: 'var(--ui-accent)' }}
+                        title="Import district scenarios from CSV"
+                    >
+                        <Upload className="w-3 h-3" />
+                        Import CSV
+                    </button>
+                </div>
             }
         >
             {showImportWizard && (

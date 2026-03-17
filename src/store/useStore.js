@@ -602,6 +602,7 @@ export const useStore = create(
                     // Lot labels added dynamically: lot-{lotId}-name: { mode: 'default', text: '' }
                 },
                 annotationPositions: {},  // { [annotationId]: [x, y, z] | null }
+                activeLabelPresetName: null,
 
                 // Drawing Editor system
                 drawingLayers: {},           // { [layerId]: { name, visible, locked, zHeight, renderMode, order } }
@@ -622,6 +623,7 @@ export const useStore = create(
                     starPoints: 5,
                     outlineWidth: 0.1,
                     outlineColor: '#ffffff',
+                    elbowLength: 5,
                 },
                 // Drawing transient state (excluded from persist/Zundo)
                 drawingMode: null,           // { tool: string, phase: string } | null
@@ -976,20 +978,48 @@ export const useStore = create(
                             customLabels: {
                                 lotWidth: { mode: 'value', text: 'A' },
                                 lotDepth: { mode: 'value', text: 'B' },
+                                lotArea: { mode: 'value', text: '' },
+                                lotCoverage: { mode: 'value', text: '' },
+                                lotWidthAtSetback: { mode: 'value', text: '' },
+                                widthToDepthRatio: { mode: 'value', text: '' },
+                                maxImperviousSurface: { mode: 'value', text: '' },
                                 setbackFront: { mode: 'value', text: '' },
                                 setbackRear: { mode: 'value', text: '' },
                                 setbackSideInterior: { mode: 'value', text: '' },
                                 setbackSideStreet: { mode: 'value', text: '' },
+                                setbackMaxFront: { mode: 'value', text: '' },
+                                setbackMaxSideStreet: { mode: 'value', text: '' },
+                                distBetweenBuildingsPrincipal: { mode: 'value', text: '' },
+                                setbackFrontAccessory: { mode: 'value', text: '' },
+                                setbackRearAccessory: { mode: 'value', text: '' },
+                                setbackSideInteriorAccessory: { mode: 'value', text: '' },
+                                setbackSideStreetAccessory: { mode: 'value', text: '' },
+                                distBetweenBuildingsAccessory: { mode: 'value', text: '' },
                                 buildingHeight: { mode: 'value', text: '' },
                                 principalMaxHeight: { mode: 'value', text: '' },
-                                accessoryMaxHeight: { mode: 'value', text: '' },
+                                principalMaxStories: { mode: 'value', text: '' },
                                 firstFloorHeight: { mode: 'value', text: '' },
+                                principalUpperStoryHeight: { mode: 'value', text: '' },
+                                accessoryMaxHeight: { mode: 'value', text: '' },
+                                accessoryMaxStories: { mode: 'value', text: '' },
+                                accessoryFirstFloorHeight: { mode: 'value', text: '' },
+                                accessoryUpperStoryHeight: { mode: 'value', text: '' },
+                                btzFrontPrincipal: { mode: 'value', text: '' },
+                                btzSideStreetPrincipal: { mode: 'value', text: '' },
+                                btzFrontAccessory: { mode: 'value', text: '' },
+                                btzSideStreetAccessory: { mode: 'value', text: '' },
+                                lotAccessPrimaryStreet: { mode: 'value', text: '' },
+                                lotAccessSecondaryStreet: { mode: 'value', text: '' },
+                                lotAccessRearAlley: { mode: 'value', text: '' },
+                                lotAccessSharedDrive: { mode: 'value', text: '' },
+                                parkingLocationFront: { mode: 'value', text: '' },
+                                parkingLocationSideInterior: { mode: 'value', text: '' },
+                                parkingLocationSideStreet: { mode: 'value', text: '' },
+                                parkingLocationRear: { mode: 'value', text: '' },
                                 parkingSetbackFront: { mode: 'value', text: '' },
                                 parkingSetbackRear: { mode: 'value', text: '' },
                                 parkingSetbackSideInterior: { mode: 'value', text: '' },
                                 parkingSetbackSideStreet: { mode: 'value', text: '' },
-                                setbackMaxFront: { mode: 'value', text: '' },
-                                setbackMaxSideStreet: { mode: 'value', text: '' },
                             }
                         }
                     },
@@ -2887,6 +2917,48 @@ export const useStore = create(
                     return result
                 }),
 
+                // Label preset helpers
+                getLabelPresetData: () => {
+                    const state = get()
+                    return {
+                        dimensionCustomLabels: state.viewSettings?.styleSettings?.dimensionSettings?.customLabels ?? {},
+                        annotationCustomLabels: state.annotationCustomLabels ?? {},
+                    }
+                },
+
+                applyLabelPreset: (presetData) => set((state) => {
+                    const result = {}
+
+                    // Dimension custom labels — spread-merge to preserve dynamically-added lot-name keys
+                    if (presetData.dimensionCustomLabels !== undefined) {
+                        result.viewSettings = {
+                            ...state.viewSettings,
+                            styleSettings: {
+                                ...state.viewSettings.styleSettings,
+                                dimensionSettings: {
+                                    ...state.viewSettings.styleSettings.dimensionSettings,
+                                    customLabels: {
+                                        ...state.viewSettings.styleSettings.dimensionSettings.customLabels,
+                                        ...presetData.dimensionCustomLabels,
+                                    },
+                                },
+                            },
+                        }
+                    }
+
+                    // Annotation custom labels — spread-merge to preserve dynamic lot keys
+                    if (presetData.annotationCustomLabels !== undefined) {
+                        result.annotationCustomLabels = {
+                            ...state.annotationCustomLabels,
+                            ...presetData.annotationCustomLabels,
+                        }
+                    }
+
+                    return result
+                }),
+
+                setActiveLabelPresetName: (name) => set({ activeLabelPresetName: name }),
+
                 // Per-lot visibility toggles
                 setLotVisibility: (lotId, key, value) => set((state) => {
                     const vis = state.lotVisibility[lotId];
@@ -3680,43 +3752,44 @@ export const useStore = create(
                         sunSettings: state.sunSettings,
                         annotationSettings: state.annotationSettings,
                         drawingLayerVisibility,
+                        entityOrder: state.entityOrder,
                     };
                 },
 
                 // Apply loaded snapshot (full state + camera)
                 applySnapshot: (snapshotData) => set((state) => {
                     const newState = {
-                        existing: snapshotData.existing || state.existing,
-                        proposed: snapshotData.proposed || state.proposed,
+                        existing: snapshotData.existing !== undefined ? snapshotData.existing : state.existing,
+                        proposed: snapshotData.proposed !== undefined ? snapshotData.proposed : state.proposed,
                         viewSettings: {
                             ...state.viewSettings,
-                            mode: snapshotData.viewSettings?.mode || state.viewSettings.mode,
-                            projection: snapshotData.viewSettings?.projection || state.viewSettings.projection,
-                            backgroundMode: snapshotData.viewSettings?.backgroundMode || state.viewSettings.backgroundMode,
-                            layers: snapshotData.viewSettings?.layers || state.viewSettings.layers,
-                            styleSettings: snapshotData.viewSettings?.styleSettings || state.viewSettings.styleSettings,
-                            lighting: snapshotData.viewSettings?.lighting || state.viewSettings.lighting,
+                            mode: snapshotData.viewSettings?.mode !== undefined ? snapshotData.viewSettings.mode : state.viewSettings.mode,
+                            projection: snapshotData.viewSettings?.projection !== undefined ? snapshotData.viewSettings.projection : state.viewSettings.projection,
+                            backgroundMode: snapshotData.viewSettings?.backgroundMode !== undefined ? snapshotData.viewSettings.backgroundMode : state.viewSettings.backgroundMode,
+                            layers: snapshotData.viewSettings?.layers !== undefined ? snapshotData.viewSettings.layers : state.viewSettings.layers,
+                            styleSettings: snapshotData.viewSettings?.styleSettings !== undefined ? snapshotData.viewSettings.styleSettings : state.viewSettings.styleSettings,
+                            lighting: snapshotData.viewSettings?.lighting !== undefined ? snapshotData.viewSettings.lighting : state.viewSettings.lighting,
                             // Increment viewVersion to trigger camera update
                             viewVersion: state.viewSettings.viewVersion + 1,
                         },
-                        roadModule: snapshotData.roadModule || state.roadModule,
-                        roadModuleStyles: snapshotData.roadModuleStyles || state.roadModuleStyles,
-                        comparisonRoads: snapshotData.comparisonRoads || state.comparisonRoads,
-                        renderSettings: snapshotData.renderSettings || state.renderSettings,
-                        sunSettings: snapshotData.sunSettings || state.sunSettings,
-                        layoutSettings: snapshotData.layoutSettings || state.layoutSettings,
+                        roadModule: snapshotData.roadModule !== undefined ? snapshotData.roadModule : state.roadModule,
+                        roadModuleStyles: snapshotData.roadModuleStyles !== undefined ? snapshotData.roadModuleStyles : state.roadModuleStyles,
+                        comparisonRoads: snapshotData.comparisonRoads !== undefined ? snapshotData.comparisonRoads : state.comparisonRoads,
+                        renderSettings: snapshotData.renderSettings !== undefined ? snapshotData.renderSettings : state.renderSettings,
+                        sunSettings: snapshotData.sunSettings !== undefined ? snapshotData.sunSettings : state.sunSettings,
+                        layoutSettings: snapshotData.layoutSettings !== undefined ? snapshotData.layoutSettings : state.layoutSettings,
                         // Entity system restoration
-                        entities: snapshotData.entities || state.entities,
-                        entityOrder: snapshotData.entityOrder || state.entityOrder,
-                        entityStyles: snapshotData.entityStyles || state.entityStyles,
-                        lotVisibility: snapshotData.lotVisibility || state.lotVisibility,
-                        activeModule: snapshotData.activeModule || state.activeModule,
-                        modelSetup: snapshotData.modelSetup || state.modelSetup,
-                        districtParameters: snapshotData.districtParameters || state.districtParameters,
+                        entities: snapshotData.entities !== undefined ? snapshotData.entities : state.entities,
+                        entityOrder: snapshotData.entityOrder !== undefined ? snapshotData.entityOrder : state.entityOrder,
+                        entityStyles: snapshotData.entityStyles !== undefined ? snapshotData.entityStyles : state.entityStyles,
+                        lotVisibility: snapshotData.lotVisibility !== undefined ? snapshotData.lotVisibility : state.lotVisibility,
+                        activeModule: snapshotData.activeModule !== undefined ? snapshotData.activeModule : state.activeModule,
+                        modelSetup: snapshotData.modelSetup !== undefined ? snapshotData.modelSetup : state.modelSetup,
+                        districtParameters: snapshotData.districtParameters !== undefined ? snapshotData.districtParameters : state.districtParameters,
                         // Drawing editor
-                        drawingLayers: snapshotData.drawingLayers || state.drawingLayers,
-                        drawingLayerOrder: snapshotData.drawingLayerOrder || state.drawingLayerOrder,
-                        drawingObjects: snapshotData.drawingObjects || state.drawingObjects,
+                        drawingLayers: snapshotData.drawingLayers !== undefined ? snapshotData.drawingLayers : state.drawingLayers,
+                        drawingLayerOrder: snapshotData.drawingLayerOrder !== undefined ? snapshotData.drawingLayerOrder : state.drawingLayerOrder,
+                        drawingObjects: snapshotData.drawingObjects !== undefined ? snapshotData.drawingObjects : state.drawingObjects,
                     };
                     // Camera will be restored separately by the CameraHandler
                     if (snapshotData.camera) {
@@ -3788,34 +3861,37 @@ export const useStore = create(
 
                 // Apply loaded project state
                 applyProjectState: (projectState) => set((state) => ({
-                    existing: projectState.existing || state.existing,
-                    proposed: projectState.proposed || state.proposed,
+                    existing: projectState.existing !== undefined ? projectState.existing : state.existing,
+                    proposed: projectState.proposed !== undefined ? projectState.proposed : state.proposed,
                     viewSettings: {
                         ...state.viewSettings,
                         ...projectState.viewSettings,
                         viewVersion: state.viewSettings.viewVersion + 1,
                     },
-                    roadModule: projectState.roadModule || state.roadModule,
-                    roadModuleStyles: projectState.roadModuleStyles || state.roadModuleStyles,
-                    comparisonRoads: projectState.comparisonRoads || state.comparisonRoads,
-                    renderSettings: projectState.renderSettings || state.renderSettings,
-                    sunSettings: projectState.sunSettings || state.sunSettings,
-                    layoutSettings: projectState.layoutSettings || state.layoutSettings,
-                    savedViews: projectState.savedViews || state.savedViews,
-                    uiTheme: projectState.uiTheme || state.uiTheme,
+                    roadModule: projectState.roadModule !== undefined ? projectState.roadModule : state.roadModule,
+                    roadModuleStyles: projectState.roadModuleStyles !== undefined ? projectState.roadModuleStyles : state.roadModuleStyles,
+                    comparisonRoads: projectState.comparisonRoads !== undefined ? projectState.comparisonRoads : state.comparisonRoads,
+                    renderSettings: projectState.renderSettings !== undefined ? projectState.renderSettings : state.renderSettings,
+                    sunSettings: projectState.sunSettings !== undefined ? projectState.sunSettings : state.sunSettings,
+                    layoutSettings: projectState.layoutSettings !== undefined ? projectState.layoutSettings : state.layoutSettings,
+                    savedViews: projectState.savedViews !== undefined ? projectState.savedViews : state.savedViews,
+                    uiTheme: projectState.uiTheme !== undefined ? projectState.uiTheme : state.uiTheme,
                     // Entity system restoration
-                    entities: projectState.entities || state.entities,
-                    entityOrder: projectState.entityOrder || state.entityOrder,
-                    entityStyles: projectState.entityStyles || state.entityStyles,
-                    lotVisibility: projectState.lotVisibility || state.lotVisibility,
-                    activeModule: projectState.activeModule || state.activeModule,
-                    modelSetup: projectState.modelSetup || state.modelSetup,
-                    districtParameters: projectState.districtParameters || state.districtParameters,
+                    entities: projectState.entities !== undefined ? projectState.entities : state.entities,
+                    entityOrder: projectState.entityOrder !== undefined ? projectState.entityOrder : state.entityOrder,
+                    entityStyles: projectState.entityStyles !== undefined ? projectState.entityStyles : state.entityStyles,
+                    lotVisibility: projectState.lotVisibility !== undefined ? projectState.lotVisibility : state.lotVisibility,
+                    activeModule: projectState.activeModule !== undefined ? projectState.activeModule : state.activeModule,
+                    modelSetup: projectState.modelSetup !== undefined ? projectState.modelSetup : state.modelSetup,
+                    districtParameters: projectState.districtParameters !== undefined ? projectState.districtParameters : state.districtParameters,
+                    // Reset scenario state to prevent stale cross-project phantom saves
+                    activeScenario: projectState.activeScenario ?? null,
+                    scenarios: projectState.scenarios ?? [],
                     // Drawing editor
-                    drawingLayers: projectState.drawingLayers || state.drawingLayers,
-                    drawingLayerOrder: projectState.drawingLayerOrder || state.drawingLayerOrder,
-                    drawingObjects: projectState.drawingObjects || state.drawingObjects,
-                    drawingDefaults: projectState.drawingDefaults || state.drawingDefaults,
+                    drawingLayers: projectState.drawingLayers !== undefined ? projectState.drawingLayers : state.drawingLayers,
+                    drawingLayerOrder: projectState.drawingLayerOrder !== undefined ? projectState.drawingLayerOrder : state.drawingLayerOrder,
+                    drawingObjects: projectState.drawingObjects !== undefined ? projectState.drawingObjects : state.drawingObjects,
+                    drawingDefaults: projectState.drawingDefaults !== undefined ? projectState.drawingDefaults : state.drawingDefaults,
                 })),
 
                 // Flag to signal camera restoration needed
@@ -4248,6 +4324,9 @@ export const useStore = create(
                     }
                     if (!persistedState.annotationPositions) {
                         persistedState.annotationPositions = {};
+                    }
+                    if (persistedState.activeLabelPresetName === undefined) {
+                        persistedState.activeLabelPresetName = null;
                     }
                     // Add new layer keys
                     const lyrs = persistedState.viewSettings?.layers;
@@ -4708,6 +4787,7 @@ export const useStore = create(
                     annotationSettings: state.annotationSettings,
                     annotationCustomLabels: state.annotationCustomLabels,
                     annotationPositions: state.annotationPositions,
+                    activeLabelPresetName: state.activeLabelPresetName,
                     // Drawing editor (exclude transient: drawingMode, selectedDrawingIds, textEditState)
                     drawingLayers: state.drawingLayers,
                     drawingLayerOrder: state.drawingLayerOrder,
@@ -4966,17 +5046,45 @@ export const useStore = create(
                             ds.customLabels.setbackSideStreet = ds.customLabels.setbackRight;
                         }
                         const customLabelDefaults = {
+                            lotArea: { mode: 'value', text: '' },
+                            lotCoverage: { mode: 'value', text: '' },
+                            lotWidthAtSetback: { mode: 'value', text: '' },
+                            widthToDepthRatio: { mode: 'value', text: '' },
+                            maxImperviousSurface: { mode: 'value', text: '' },
                             principalMaxHeight: { mode: 'value', text: '' },
                             accessoryMaxHeight: { mode: 'value', text: '' },
                             setbackSideInterior: { mode: 'value', text: '' },
                             setbackSideStreet: { mode: 'value', text: '' },
+                            setbackMaxFront: { mode: 'value', text: '' },
+                            setbackMaxSideStreet: { mode: 'value', text: '' },
+                            distBetweenBuildingsPrincipal: { mode: 'value', text: '' },
+                            setbackFrontAccessory: { mode: 'value', text: '' },
+                            setbackRearAccessory: { mode: 'value', text: '' },
+                            setbackSideInteriorAccessory: { mode: 'value', text: '' },
+                            setbackSideStreetAccessory: { mode: 'value', text: '' },
+                            distBetweenBuildingsAccessory: { mode: 'value', text: '' },
                             firstFloorHeight: { mode: 'value', text: '' },
+                            principalMaxStories: { mode: 'value', text: '' },
+                            principalUpperStoryHeight: { mode: 'value', text: '' },
+                            accessoryMaxStories: { mode: 'value', text: '' },
+                            accessoryFirstFloorHeight: { mode: 'value', text: '' },
+                            accessoryUpperStoryHeight: { mode: 'value', text: '' },
+                            btzFrontPrincipal: { mode: 'value', text: '' },
+                            btzSideStreetPrincipal: { mode: 'value', text: '' },
+                            btzFrontAccessory: { mode: 'value', text: '' },
+                            btzSideStreetAccessory: { mode: 'value', text: '' },
+                            lotAccessPrimaryStreet: { mode: 'value', text: '' },
+                            lotAccessSecondaryStreet: { mode: 'value', text: '' },
+                            lotAccessRearAlley: { mode: 'value', text: '' },
+                            lotAccessSharedDrive: { mode: 'value', text: '' },
+                            parkingLocationFront: { mode: 'value', text: '' },
+                            parkingLocationSideInterior: { mode: 'value', text: '' },
+                            parkingLocationSideStreet: { mode: 'value', text: '' },
+                            parkingLocationRear: { mode: 'value', text: '' },
                             parkingSetbackFront: { mode: 'value', text: '' },
                             parkingSetbackRear: { mode: 'value', text: '' },
                             parkingSetbackSideInterior: { mode: 'value', text: '' },
                             parkingSetbackSideStreet: { mode: 'value', text: '' },
-                            setbackMaxFront: { mode: 'value', text: '' },
-                            setbackMaxSideStreet: { mode: 'value', text: '' },
                         };
                         for (const [key, val] of Object.entries(customLabelDefaults)) {
                             if (ds.customLabels[key] === undefined) {
@@ -5009,13 +5117,14 @@ export const useStore = create(
                             strokeColor: '#000000', strokeWidth: 2, fillColor: '#cccccc',
                             fillOpacity: 0.3, lineType: 'solid', fontSize: 3, fontFamily: null,
                             textColor: '#000000', arrowHead: 'end', cornerRadius: 0, starPoints: 5,
-                            outlineWidth: 0.1, outlineColor: '#ffffff',
+                            outlineWidth: 0.1, outlineColor: '#ffffff', elbowLength: 5,
                         }
                     } else {
                         // Patch individual missing keys (Phase 2+3 additions)
                         if (merged.drawingDefaults.starPoints === undefined) merged.drawingDefaults.starPoints = 5
                         if (merged.drawingDefaults.outlineWidth === undefined) merged.drawingDefaults.outlineWidth = 0.1
                         if (merged.drawingDefaults.outlineColor === undefined) merged.drawingDefaults.outlineColor = '#ffffff'
+                        if (merged.drawingDefaults.elbowLength === undefined) merged.drawingDefaults.elbowLength = 5
                     }
                     return merged;
                 },

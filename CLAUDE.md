@@ -34,7 +34,7 @@ React + Vite + Three.js via @react-three/fiber | Zustand + Zundo (undo/redo, 50-
 
 **Scenarios** (`ScenariosSection` in `DistrictParameterPanel.jsx`): Auto-saves active scenario before switching. Re-clicking active scenario triggers save. Duplicate button creates a copy under a new name. Active scenario shown with accent dot indicator. "Save as New" button shown when no scenario is active. **Known bug**: `handleApplyStyleToAll()` has a per-lot merge for `entityStyles`/`lotVisibility` that was intended to prevent lot disappearance across scenarios with different lot counts, but the fix isn't working yet — needs further investigation.
 
-**Saved Views**: Comprehensive state snapshots — camera position/target/zoom, projection, layers, plus `entityStyles`, `roadModuleStyles`, `lotVisibility`, `dimensionSettings`, `sunSettings`, `annotationSettings`. Custom names per slot (editable inline). Old views without new fields load fine (`if (saved.X)` guards). `_cameraControlsRef` (transient) set by `DistrictViewer` for sidebar `ViewsSection` access to camera controls. Both sidebar and canvas overlay REC save the full snapshot.
+**Saved Views**: Complete visual snapshots via `buildViewSnapshot()` (exported from `DistrictParameterPanel.jsx`) — the single source of truth for what's in a view. Fields: camera position/target/zoom, projection, layers, `entityStyles`, `roadModuleStyles`, `lotVisibility`, `dimensionSettings`, `sunSettings`, `annotationSettings`, `backgroundMode`, `renderSettings`, `lighting`, `annotationCustomLabels`, `annotationPositions`, `drawingLayers`, `drawingLayerOrder`, `drawingObjects`. NOT in views: camera zoom/position (auto-fits), parameter values (project-specific), imported 3D models (project-specific). Restore via `applyViewSnapshot()` (exported from `DistrictParameterPanel.jsx`, non-camera state) — used by sidebar load, view import, and batch export. Old views without new fields load fine (`if (saved.X)` guards). `_cameraControlsRef` (transient) set by `DistrictViewer` for sidebar `ViewsSection` access to camera controls. Both sidebar and canvas overlay REC use `buildViewSnapshot()`. **Cross-project export/import**: Views export as JSON with `sourceLotOrder` for lot-index remapping on import. Import remaps `entityStyles`, `lotVisibility`, and `annotationCustomLabels` lot keys by index. Camera presets preserved but position nulled (auto-fits). Download/Upload buttons in Views `<Section>` `headerRight`.
 
 **Lot Access Arrows**: `LotAccessArrow.jsx` renders flat 2D arrows + shared drive T-junctions. Style props: `scale` (width), `heightScale` (length/height axis), `positionOffsetX`/`positionOffsetY` (additive offsets applied in `LotEntity.jsx` after drag position). Scale range 0.5–15. Shared drive uses separate `sharedDriveArrow` style key with outline controls.
 
@@ -47,6 +47,8 @@ React + Vite + Three.js via @react-three/fiber | Zustand + Zundo (undo/redo, 50-
 **Placement Zone**: `PlacementZone` in `LotEntity.jsx` renders a ground-plane polygon highlighting the area between min and max front/side street setbacks — the zone where a building must be placed. Derives from existing `maxFront`/`maxSideStreet` setback values (no new params). Geometry: front-only strip, side-only strip(s), L-shape, or U-shape (with `THREE.Shape` hole). Fill at z=0.06, outline at z=0.065. Hybrid style key `placementZone` (fill color/opacity + line color/width/dash). Distinct from BTZ planes (vertical facade percentage planes).
 
 **Dimension Positioning**: Side setback dimensions use `sideSetbackDimYPosition` (0=front, 0.5=center, 1=rear) in `dimensionSettings` to control where left/right dims render along lot depth. Applies to both regular and parking setback side dims.
+
+**Drawing Editor**: Layer-based 2D drawing system overlaid on the 3D scene. Files in `src/components/DrawingEditor/`. Tools: select, freehand, line, arrow, double arrow, polygon, rectangle, rounded rect, circle, ellipse, octagon, star, text, leader, elbow leader, dimension, eraser. Objects stored in `drawingObjects` (by objectId), organized into `drawingLayers`. `DrawingCapturePlane` handles pointer events + live preview. `DrawingObjectRenderer` dispatches to per-type sub-renderers (module-scope components). `DrawingSelectionOverlay` renders bounding box + type-specific resize/vertex handles. `DrawingPropertiesPanel` shows stroke/fill/text controls for selected objects. `DrawingTextInput` is an HTML overlay for text/leader input. `drawingHitTest.js` has hit-testing + bounding box + move-update logic for all types. `drawingDefaults` in store holds defaults for new objects (stroke, fill, text, arrowHead, elbowLength, etc.) with merge patching for new keys. Drawing dash values use `dashScale=1, dashSize=3, gapSize=2` (world-space feet, matching model dimensions). Double arrow creates `type: 'arrow'` with `arrowHead: 'both'`. Elbow leader creates `type: 'leader'` with `elbow: true, elbowLength: N` — `LeaderCallout.jsx` handles the bent line rendering. Dimension creates `type: 'dimension'` wrapping the existing `Dimension` component with `endMarker: 'arrow'`. LeaderCallout accepts optional `font` prop (URL) passed through to AnnotationText.
 
 **Import Wizard** (`ImportWizard.jsx`): 3-step modal (upload → mapping → preview/import). Accepts CSV and Excel (.xlsx/.xls). Transposed format (params as rows, districts as columns) auto-detected and skips to step 3. `TRANSPOSED_ROW_MAP` in `importParser.js` is the single source of truth for parameter layout — used by both parser and template generator. `templateGenerator.js` builds a styled .xlsx template via dynamic `import('xlsx-js-style')` to keep it out of the main bundle. `parseXLSXToCSV()` converts Excel to the same `{ headers, rows }` format as CSV, so all downstream detection/parsing is shared.
 
@@ -67,6 +69,8 @@ React + Vite + Three.js via @react-three/fiber | Zustand + Zundo (undo/redo, 50-
 ### Export System
 - **Reactive `exportSettings` subscription** in viewer components — use `useStore(s => s.viewSettings.exportSettings)`, never `getState()` for controlled `<select>` values
 - **`gl.setSize(w, h, false)` for export capture** — `false` prevents CSS update which would trigger R3F's ResizeObserver to race the capture. Restore call uses `true` to re-sync CSS.
+- **Batch export applies full view snapshots**: Queue items carry the full `snapshot` object. `Exporter.jsx` calls `applyViewSnapshot()` per item (layers, entityStyles, lotVisibility, customLabels, dimensionSettings, etc.), then restores pre-export state via `buildViewSnapshot()`/`applyViewSnapshot()` after all items complete.
+- **Export naming**: Single exports: `{scenario}_{date}.{ext}`. Batch ZIP files: `{scenario}_{viewname}_{camera}_{date}.{ext}`. Batch ZIP archive: `{scenario}_batch_{date}.zip`. `sanitizeFilename()` strips non-alphanumeric chars. Helpers in `Exporter.jsx` (`buildSingleExportName`, `sanitizeFilename`) and `DistrictParameterPanel.jsx` (`buildExportLabel`, `sanitizeExportName`).
 - **Dashed line export fix (DO NOT DELETE — hard-won fix, two layers)**:
   - **Layer 1 — `onBeforeRender` override**: drei's `<Line>` resets `LineMaterial.resolution` to viewport size via `onBeforeRender` on every render call. During export, the GL buffer is export-sized but resolution stays at viewport size → dashed lines render as twisted 3D ribbons. Fix: `freezeLineResolution()` in `Exporter.jsx` temporarily replaces `onBeforeRender` on all Line2 instances to force export resolution during capture, then restores original callbacks after. Simply setting `material.resolution` before render does NOT work because drei overrides it during `gl.render()`.
   - **Layer 2 — per-tile resolution in `renderTiled()`**: `LineMaterial`'s vertex shader uses `resolution.x / resolution.y` for aspect-ratio correction of line perpendicular offsets. When tiling (8K), each tile renders to a tile-sized viewport (e.g., 4096×4096 = 1:1 aspect) but if resolution is frozen to the full export dimensions (7680×4320 = 16:9 aspect), the shader applies 16:9 correction to 1:1 pixels → **perpendicular direction skews → parallelogram dashes**. Fix: `freezeLineResolution()` returns `{ setResolution(w, h), restore() }` using a shared `Vector2`. The tiled path calls `lineFreeze.setResolution(tileW, tileH)` before each tile render so the shader's aspect ratio matches the actual tile viewport. This only affects resolutions that trigger tiling (currently 8K where `width > 4096 || height > 4096`).
@@ -88,6 +92,40 @@ React + Vite + Three.js via @react-three/fiber | Zustand + Zundo (undo/redo, 50-
 
 ### Road System
 Roads stop at lot boundaries. Intersection fills use notched geometry with quarter-circle cutouts (`intersectionGeometry.js`). S3 (Alley) T-junctions: fillets/fills suppressed when meeting non-S3. Road types: S1 (Primary, ROW 50'), S2 (Secondary, ROW 40'), S3 (Alley, ROW 20'). Alley-specific style keys default `null` (fall back to regular style).
+
+## Active Task: KNOX Integration Test
+
+**Goal**: Test the full import pipeline with all 18 Knox districts + cross-project view import.
+
+**Status (2026-03-16)**: Scripts run and pass automated verification, but **saved views do not work in the app**. Two attempts made:
+1. `scripts/knox-import.mjs` — Clone-and-stamp from KNOX-LI (camera-only views). Views copied but were only camera position — no layer/style/visibility changes applied.
+2. `scripts/knox-copy-views.mjs` — Copied full-snapshot views from Knox_Light_Industrial (which has proper LOT/SETBACKS/HEIGHT/ACCESS/PARKING views with layers, entityStyles, lotVisibility, dimensionSettings, etc.), remapped lot IDs. Script passes all checks but views still don't work in-app.
+
+**Root cause unknown** — needs investigation. Likely candidates: (a) `applyViewSnapshot()` in the app may not handle the view format the scripts produce, (b) lot ID remapping may be incomplete (missing keys beyond entityStyles/lotVisibility/annotationCustomLabels/annotationPositions), (c) the view slot keys (1-5) may not match what the app expects, (d) savedViews may need to live inside `viewSettings` not at state root depending on app version.
+
+**Scripts**:
+- `scripts/knox-import.mjs` — Clone-and-stamp: reads KNOX-LI, clones styling, stamps 18 districts by swapping `districtParameters`. All scenarios share one lot ID.
+- `scripts/knox-copy-views.mjs` — Copies 5 full-snapshot saved views from Knox_Light_Industrial → KNOX with lot ID remapping.
+
+**What knox-import.mjs does**:
+1. Parses `docs/Knox District Parameters.xlsx` using mirrored `TRANSPOSED_ROW_MAP` logic (18 districts)
+2. `GET /api/projects/KNOX-LI` — reads first lot's `entityStyles`, `lotVisibility`, `roadModule`, `roadModuleStyles`, `viewSettings`, `renderSettings`, `sunSettings`, etc.
+3. Builds reference snapshot matching `getSnapshotData()` format (1 lot, stripped `importedModels`)
+4. Creates/resets KNOX project, stamps 18 scenarios (deep-clone snapshot + swap `districtParameters`)
+5. Sets project state with first district's params
+
+**Next steps to debug saved views**:
+- Inspect `applyViewSnapshot()` in `DistrictParameterPanel.jsx` to see what keys it reads from a view
+- Compare a working view (saved interactively in-app) vs script-generated view structure
+- Check if `savedViews` location (state root vs `viewSettings.savedViews`) matters
+- Verify the view slot keys match (numeric "1"-"5" vs other format)
+
+**Key design decisions**:
+- 1 lot per scenario (not 2) — KNOX-LI is single-lot composition
+- Stable shared lot ID across all 18 scenarios — `applySnapshot()` restores `entityStyles[lotId]`
+- Styles cloned from KNOX-LI project state (not its scenarios, which have defaults)
+
+**Key reference**: KNOX-LI project at `/Users/oliverseabolt/Documents/ZoningProjects/KNOX-LI/`. Knox_Light_Industrial has the working full-snapshot views. Knox spreadsheet section headers match `TRANSPOSED_ROW_MAP` in `src/utils/importParser.js`. `importParser.js` recognizes "Custom Labels" column header (Knox spreadsheet uses this instead of "Diagram Key").
 
 ## Git
 

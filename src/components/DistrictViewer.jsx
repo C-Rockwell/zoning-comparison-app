@@ -6,6 +6,7 @@ import DistrictSceneContent from './DistrictSceneContent'
 import DrawingToolbar from './DrawingEditor/DrawingToolbar'
 import DrawingTextInput from './DrawingEditor/DrawingTextInput'
 import ImportedModelStylePopup from './ImportedModelStylePopup'
+import { buildViewSnapshot } from './DistrictParameterPanel'
 
 // ============================================
 // DistrictViewer — main 3D viewer for the
@@ -60,24 +61,14 @@ const DistrictViewer = () => {
                 controls.getPosition(position)
                 controls.getTarget(target)
                 const zoom = controls.camera?.zoom || 1
-                const vs = useStore.getState().viewSettings
                 const store = useStore.getState()
                 const existingName = store.savedViews?.[index]?.name ?? ''
                 setSavedView(index, {
+                    ...buildViewSnapshot(store),
                     position: { x: position.x, y: position.y, z: position.z },
                     target: { x: target.x, y: target.y, z: target.z },
                     zoom,
-                    cameraView: vs.cameraView,
-                    projection: vs.projection,
-                    layers: { ...vs.layers },
-                    savedAt: new Date().toISOString(),
                     name: existingName,
-                    entityStyles: structuredClone(store.entityStyles),
-                    roadModuleStyles: structuredClone(store.roadModuleStyles),
-                    lotVisibility: structuredClone(store.lotVisibility),
-                    dimensionSettings: structuredClone(store.viewSettings?.styleSettings?.dimensionSettings),
-                    sunSettings: structuredClone(store.sunSettings),
-                    annotationSettings: structuredClone(store.annotationSettings),
                 })
                 setIsSaving(false)
             }

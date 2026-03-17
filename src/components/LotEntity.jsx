@@ -61,7 +61,6 @@ const SingleLine = ({ start, end, style, side, lineScale = 1 }) => {
             transparent
             opacity={style.opacity}
             renderOrder={3}
-            depthTest={false}
         />
     )
 }

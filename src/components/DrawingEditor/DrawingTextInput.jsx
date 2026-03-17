@@ -64,6 +64,23 @@ const DrawingTextInput = () => {
                 lineType: defaults.lineType,
                 opacity: 1,
             })
+        } else if (tool === 'elbowLeader') {
+            addDrawingObject({
+                layerId,
+                type: 'leader',
+                targetPoint: [...targetPoint],
+                textPosition: [...worldPosition],
+                text: inputText.trim(),
+                fontSize: defaults.fontSize,
+                fontFamily: defaults.fontFamily,
+                textColor: defaults.textColor,
+                strokeColor: defaults.strokeColor,
+                strokeWidth: defaults.strokeWidth,
+                lineType: defaults.lineType,
+                elbow: true,
+                elbowLength: defaults.elbowLength ?? 5,
+                opacity: 1,
+            })
         }
 
         setTextEditState(null)

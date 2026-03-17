@@ -53,7 +53,7 @@ const DrawingVertexHandle = ({ position, index, onDrag, onDragEnd }) => {
         if (onDrag) onDrag(index, x, y)
     }
 
-    const size = dragging ? 2.0 : (hovered ? 1.8 : 1.5)
+    const size = dragging ? 6.0 : (hovered ? 5.4 : 4.5)
     const color = dragging ? '#ffff00' : (hovered ? '#00ff00' : '#ffffff')
 
     return (

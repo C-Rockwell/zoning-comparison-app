@@ -21,6 +21,7 @@ const ImportWizard = ({ isOpen, onClose }) => {
   const setScenarios = useStore(state => state.setScenarios)
   const setActiveScenario = useStore(state => state.setActiveScenario)
   const getSnapshotData = useStore(state => state.getSnapshotData)
+  const setCustomLabel = useStore(state => state.setCustomLabel)
 
   // Wizard state
   const [step, setStep] = useState(1)
@@ -272,8 +273,15 @@ const ImportWizard = ({ isOpen, onClose }) => {
       }
       setImportCount(data.length)
     }
+    // Apply diagram keys to custom labels if present
+    if (data?.[0]?.diagramKeys) {
+      for (const [labelKey, text] of Object.entries(data[0].diagramKeys)) {
+        setCustomLabel(labelKey, 'custom', text)
+      }
+    }
+
     setImported(true)
-  }, [getMappedData, addLot, setDistrictParameter, importType, currentProject, getSnapshotData, setScenarios])
+  }, [getMappedData, addLot, setDistrictParameter, setCustomLabel, importType, currentProject, getSnapshotData, setScenarios])
 
   // ============================================
   // Reset / Close

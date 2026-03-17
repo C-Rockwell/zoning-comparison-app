@@ -26,9 +26,9 @@ const BoundingBox = ({ bounds }) => {
             color={BBOX_COLOR}
             lineWidth={1}
             dashed
-            dashScale={5}
-            dashSize={1}
-            gapSize={0.5}
+            dashScale={1}
+            dashSize={3}
+            gapSize={2}
             depthTest={false}
         />
     )
@@ -196,7 +196,7 @@ const RectResizeHandles = ({ obj, objId }) => {
                 <DrawingResizeHandle
                     key={`corner-${i}`}
                     position={pos}
-                    size={1.0}
+                    size={3.0}
                     onDragStart={() => handleCornerDragStart(i)}
                     onDrag={(x, y) => handleCornerDrag(x, y)}
                 />
@@ -206,7 +206,7 @@ const RectResizeHandles = ({ obj, objId }) => {
                 <DrawingResizeHandle
                     key={`edge-${i}`}
                     position={pos}
-                    size={0.8}
+                    size={2.4}
                     onDrag={(x, y) => handleEdgeDrag(i, x, y)}
                 />
             ))}
@@ -232,7 +232,7 @@ const CircleResizeHandle = ({ obj, objId, radiusKey = 'radius' }) => {
     return (
         <DrawingResizeHandle
             position={handlePos}
-            size={1.0}
+            size={3.0}
             onDrag={handleDrag}
         />
     )
@@ -256,8 +256,8 @@ const EllipseResizeHandles = ({ obj, objId }) => {
 
     return (
         <>
-            <DrawingResizeHandle position={handlePosX} size={1.0} onDrag={handleDragX} />
-            <DrawingResizeHandle position={handlePosY} size={1.0} onDrag={handleDragY} />
+            <DrawingResizeHandle position={handlePosX} size={3.0} onDrag={handleDragX} />
+            <DrawingResizeHandle position={handlePosY} size={3.0} onDrag={handleDragY} />
         </>
     )
 }
@@ -292,8 +292,8 @@ const StarResizeHandles = ({ obj, objId }) => {
 
     return (
         <>
-            <DrawingResizeHandle position={outerPos} size={1.0} onDrag={handleOuterDrag} />
-            <DrawingResizeHandle position={innerPos} size={0.8} onDrag={handleInnerDrag} />
+            <DrawingResizeHandle position={outerPos} size={3.0} onDrag={handleOuterDrag} />
+            <DrawingResizeHandle position={innerPos} size={2.4} onDrag={handleInnerDrag} />
         </>
     )
 }
@@ -309,6 +309,7 @@ const ObjectHandles = ({ obj, objId, interactive }) => {
             return <PolygonVertexHandles obj={obj} objId={objId} />
         case 'line':
         case 'arrow':
+        case 'dimension':
             return <LineEndpointHandles obj={obj} objId={objId} />
         case 'leader':
             return <LeaderEndpointHandles obj={obj} objId={objId} />

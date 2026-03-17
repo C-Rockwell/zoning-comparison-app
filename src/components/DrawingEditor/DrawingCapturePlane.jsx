@@ -36,11 +36,11 @@ const DrawingPreview = ({ tool, drawingState, defaults }) => {
         )
     }
 
-    if (tool === 'arrow' && startPoint && currentPoint) {
+    if ((tool === 'arrow' || tool === 'doubleArrow') && startPoint && currentPoint) {
         const dx = currentPoint[0] - startPoint[0]
         const dy = currentPoint[1] - startPoint[1]
         const len = Math.sqrt(dx * dx + dy * dy)
-        const arrowHead = defaults.arrowHead ?? 'end'
+        const arrowHead = tool === 'doubleArrow' ? 'both' : (defaults.arrowHead ?? 'end')
         return (
             <group>
                 <Line
@@ -50,8 +50,8 @@ const DrawingPreview = ({ tool, drawingState, defaults }) => {
                 />
                 {(arrowHead === 'end' || arrowHead === 'both') && len > 1 && (
                     <group position={[currentPoint[0], currentPoint[1], 0]}
-                           rotation={[0, 0, Math.atan2(dy, dx) + Math.PI]}>
-                        <mesh position={[-0.5, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
+                           rotation={[0, 0, Math.atan2(dy, dx)]}>
+                        <mesh position={[0.5, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
                             <coneGeometry args={[0.4, 1, 8]} />
                             <meshBasicMaterial color={color} />
                         </mesh>
@@ -59,13 +59,78 @@ const DrawingPreview = ({ tool, drawingState, defaults }) => {
                 )}
                 {(arrowHead === 'start' || arrowHead === 'both') && len > 1 && (
                     <group position={[startPoint[0], startPoint[1], 0]}
-                           rotation={[0, 0, Math.atan2(dy, dx)]}>
-                        <mesh position={[-0.5, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
+                           rotation={[0, 0, Math.atan2(dy, dx) + Math.PI]}>
+                        <mesh position={[0.5, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
                             <coneGeometry args={[0.4, 1, 8]} />
                             <meshBasicMaterial color={color} />
                         </mesh>
                     </group>
                 )}
+            </group>
+        )
+    }
+
+    // Dimension: same as double arrow preview
+    if (tool === 'dimension' && startPoint && currentPoint) {
+        const dx = currentPoint[0] - startPoint[0]
+        const dy = currentPoint[1] - startPoint[1]
+        const len = Math.sqrt(dx * dx + dy * dy)
+        return (
+            <group>
+                <Line
+                    points={[[startPoint[0], startPoint[1], 0], [currentPoint[0], currentPoint[1], 0]]}
+                    color={color}
+                    lineWidth={width}
+                />
+                {len > 1 && (
+                    <>
+                        <group position={[currentPoint[0], currentPoint[1], 0]}
+                               rotation={[0, 0, Math.atan2(dy, dx)]}>
+                            <mesh position={[0.5, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
+                                <coneGeometry args={[0.4, 1, 8]} />
+                                <meshBasicMaterial color={color} />
+                            </mesh>
+                        </group>
+                        <group position={[startPoint[0], startPoint[1], 0]}
+                               rotation={[0, 0, Math.atan2(dy, dx) + Math.PI]}>
+                            <mesh position={[0.5, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
+                                <coneGeometry args={[0.4, 1, 8]} />
+                                <meshBasicMaterial color={color} />
+                            </mesh>
+                        </group>
+                    </>
+                )}
+            </group>
+        )
+    }
+
+    // Elbow Leader: show line from target to cursor with elbow bend
+    if (tool === 'elbowLeader' && points.length === 1 && currentPoint) {
+        const target = points[0]
+        const elbowDir = currentPoint[0] >= target[0] ? 1 : -1
+        const elbowPt = [currentPoint[0] - elbowDir * 5, currentPoint[1], 0]
+        return (
+            <group>
+                <Line
+                    points={[[target[0], target[1], 0], elbowPt, [currentPoint[0], currentPoint[1], 0]]}
+                    color={color}
+                    lineWidth={width}
+                />
+                {(() => {
+                    const dx = elbowPt[0] - target[0]
+                    const dy = elbowPt[1] - target[1]
+                    const len = Math.sqrt(dx * dx + dy * dy)
+                    if (len <= 1) return null
+                    return (
+                        <group position={[target[0], target[1], 0]}
+                               rotation={[0, 0, Math.atan2(-dy, -dx)]}>
+                            <mesh position={[-0.5, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
+                                <coneGeometry args={[0.4, 1, 8]} />
+                                <meshBasicMaterial color={color} />
+                            </mesh>
+                        </group>
+                    )
+                })()}
             </group>
         )
     }
@@ -141,9 +206,9 @@ const DrawingPreview = ({ tool, drawingState, defaults }) => {
                         color={color}
                         lineWidth={width}
                         dashed
-                        dashScale={5}
-                        dashSize={1}
-                        gapSize={0.5}
+                        dashScale={1}
+                        dashSize={3}
+                        gapSize={2}
                     />
                 )}
             </group>
@@ -210,7 +275,7 @@ const DrawingPreview = ({ tool, drawingState, defaults }) => {
 }
 
 // --- Set of drag-based tools (not polygon) ---
-const DRAG_TOOLS = new Set(['freehand', 'line', 'arrow', 'rectangle', 'circle', 'ellipse', 'star', 'octagon', 'roundedRect'])
+const DRAG_TOOLS = new Set(['freehand', 'line', 'arrow', 'doubleArrow', 'rectangle', 'circle', 'ellipse', 'star', 'octagon', 'roundedRect', 'dimension'])
 
 // --- Main component ---
 
@@ -462,8 +527,8 @@ const DrawingCapturePlane = () => {
             return
         }
 
-        // --- Leader: two-click placement ---
-        if (tool === 'leader') {
+        // --- Leader / Elbow Leader: two-click placement ---
+        if (tool === 'leader' || tool === 'elbowLeader') {
             if (!drawingState.current.leaderPlacing) {
                 // First click: target point (arrow tip)
                 if (controls) controls.enabled = false
@@ -490,7 +555,7 @@ const DrawingCapturePlane = () => {
                     screenPosition: [screenX, screenY],
                     targetPoint: targetPt,
                     objectId: null,
-                    tool: 'leader',
+                    tool: tool,
                 })
                 drawingState.current = { isDrawing: false, startPoint: null, currentPoint: null, points: [], polygonPlacing: false, leaderPlacing: false }
                 setPreviewVersion(v => v + 1)
@@ -636,7 +701,7 @@ const DrawingCapturePlane = () => {
         }
 
         // These tools don't commit on pointer-up
-        if (tool === 'polygon' || tool === 'text' || tool === 'leader') return
+        if (tool === 'polygon' || tool === 'text' || tool === 'leader' || tool === 'elbowLeader') return
 
         if (!drawingState.current.isDrawing) return
 
@@ -671,7 +736,7 @@ const DrawingCapturePlane = () => {
                     opacity: 1,
                 })
             }
-        } else if (tool === 'arrow') {
+        } else if (tool === 'arrow' || tool === 'doubleArrow') {
             const dx = currentPoint[0] - startPoint[0]
             const dy = currentPoint[1] - startPoint[1]
             if (dx * dx + dy * dy > 0.25) {
@@ -683,7 +748,7 @@ const DrawingCapturePlane = () => {
                     strokeColor: defaults.strokeColor,
                     strokeWidth: defaults.strokeWidth,
                     lineType: defaults.lineType,
-                    arrowHead: defaults.arrowHead ?? 'end',
+                    arrowHead: tool === 'doubleArrow' ? 'both' : (defaults.arrowHead ?? 'end'),
                     opacity: 1,
                 })
             }
@@ -797,6 +862,26 @@ const DrawingCapturePlane = () => {
                     lineType: defaults.lineType,
                     fillColor: defaults.fillColor,
                     fillOpacity: defaults.fillOpacity,
+                    opacity: 1,
+                })
+            }
+        } else if (tool === 'dimension') {
+            const dx = currentPoint[0] - startPoint[0]
+            const dy = currentPoint[1] - startPoint[1]
+            const len = Math.sqrt(dx * dx + dy * dy)
+            if (len > 0.5) {
+                addDrawingObject({
+                    layerId,
+                    type: 'dimension',
+                    start: [...startPoint],
+                    end: [...currentPoint],
+                    label: `${len.toFixed(1)}'`,
+                    strokeColor: defaults.strokeColor,
+                    strokeWidth: defaults.strokeWidth,
+                    lineType: defaults.lineType,
+                    fontSize: defaults.fontSize,
+                    fontFamily: defaults.fontFamily,
+                    textColor: defaults.textColor,
                     opacity: 1,
                 })
             }

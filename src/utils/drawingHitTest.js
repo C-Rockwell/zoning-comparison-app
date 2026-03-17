@@ -39,7 +39,7 @@ export const hitTestObject = (obj, clickPoint, tolerance) => {
         return false
     }
 
-    if (obj.type === 'line' || obj.type === 'arrow') {
+    if (obj.type === 'line' || obj.type === 'arrow' || obj.type === 'dimension') {
         return pointToSegmentDistSq(cx, cy, obj.start[0], obj.start[1], obj.end[0], obj.end[1]) <= tolSq
     }
 
@@ -109,7 +109,13 @@ export const hitTestObject = (obj, clickPoint, tolerance) => {
     }
 
     if (obj.type === 'leader') {
-        if (pointToSegmentDistSq(cx, cy, obj.targetPoint[0], obj.targetPoint[1], obj.textPosition[0], obj.textPosition[1]) <= tolSq) {
+        if (obj.elbow) {
+            const elbowDir = obj.textPosition[0] >= obj.targetPoint[0] ? 1 : -1
+            const elbowX = obj.textPosition[0] - elbowDir * (obj.elbowLength ?? 5)
+            const elbowY = obj.textPosition[1]
+            if (pointToSegmentDistSq(cx, cy, obj.targetPoint[0], obj.targetPoint[1], elbowX, elbowY) <= tolSq) return true
+            if (pointToSegmentDistSq(cx, cy, elbowX, elbowY, obj.textPosition[0], obj.textPosition[1]) <= tolSq) return true
+        } else if (pointToSegmentDistSq(cx, cy, obj.targetPoint[0], obj.targetPoint[1], obj.textPosition[0], obj.textPosition[1]) <= tolSq) {
             return true
         }
         const [px, py] = obj.textPosition
@@ -139,6 +145,7 @@ export const computeObjectBounds = (obj) => {
         }
         case 'line':
         case 'arrow':
+        case 'dimension':
             return {
                 minX: Math.min(obj.start[0], obj.end[0]),
                 minY: Math.min(obj.start[1], obj.end[1]),
@@ -214,6 +221,7 @@ export const computeMoveUpdate = (obj, dx, dy) => {
             return { points: obj.points.map(([x, y]) => [x + dx, y + dy]) }
         case 'line':
         case 'arrow':
+        case 'dimension':
             return {
                 start: [obj.start[0] + dx, obj.start[1] + dy],
                 end: [obj.end[0] + dx, obj.end[1] + dy],
