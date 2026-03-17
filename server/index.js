@@ -14,6 +14,8 @@ import layerStatesRoutes from './routes/layer-states.js'
 import stylePresetsRoutes from './routes/style-presets.js'
 import drawingPresetsRoutes from './routes/drawing-presets.js'
 import labelPresetsRoutes from './routes/label-presets.js'
+import dimensionPresetsRoutes from './routes/dimension-presets.js'
+import annotationPresetsRoutes from './routes/annotation-presets.js'
 import scenariosRoutes from './routes/scenarios.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -60,6 +62,8 @@ app.use('/api/projects', layerStatesRoutes)
 app.use('/api/style-presets', stylePresetsRoutes)
 app.use('/api/drawing-presets', drawingPresetsRoutes)
 app.use('/api/label-presets', labelPresetsRoutes)
+app.use('/api/dimension-presets', dimensionPresetsRoutes)
+app.use('/api/annotation-presets', annotationPresetsRoutes)
 app.use('/api/projects', scenariosRoutes)
 
 // Health check

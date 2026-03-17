@@ -603,6 +603,8 @@ export const useStore = create(
                 },
                 annotationPositions: {},  // { [annotationId]: [x, y, z] | null }
                 activeLabelPresetName: null,
+                activeDimensionPresetName: null,
+                activeAnnotationPresetName: null,
 
                 // Drawing Editor system
                 drawingLayers: {},           // { [layerId]: { name, visible, locked, zHeight, renderMode, order } }
@@ -2959,6 +2961,58 @@ export const useStore = create(
 
                 setActiveLabelPresetName: (name) => set({ activeLabelPresetName: name }),
 
+                // Dimension style preset helpers
+                getDimensionPresetData: () => {
+                    const state = get()
+                    const dimSettings = state.viewSettings?.styleSettings?.dimensionSettings ?? {}
+                    const { customLabels, ...styleOnly } = dimSettings
+                    return { dimensionStyleData: structuredClone(styleOnly) }
+                },
+
+                applyDimensionPreset: (presetData) => set((state) => {
+                    if (!presetData.dimensionStyleData) return state
+                    const currentDimSettings = state.viewSettings?.styleSettings?.dimensionSettings ?? {}
+                    return {
+                        viewSettings: {
+                            ...state.viewSettings,
+                            styleSettings: {
+                                ...state.viewSettings.styleSettings,
+                                dimensionSettings: {
+                                    ...currentDimSettings,
+                                    ...presetData.dimensionStyleData,
+                                    // Nested merge for textBackground
+                                    textBackground: {
+                                        ...(currentDimSettings.textBackground ?? {}),
+                                        ...(presetData.dimensionStyleData.textBackground ?? {}),
+                                    },
+                                    // Preserve customLabels from current state
+                                    customLabels: currentDimSettings.customLabels,
+                                },
+                            },
+                        },
+                    }
+                }),
+
+                setActiveDimensionPresetName: (name) => set({ activeDimensionPresetName: name }),
+
+                // Annotation style preset helpers
+                getAnnotationPresetData: () => {
+                    const state = get()
+                    return { annotationStyleData: structuredClone(state.annotationSettings) }
+                },
+
+                applyAnnotationPreset: (presetData) => set((state) => {
+                    if (!presetData.annotationStyleData) return state
+                    return {
+                        annotationSettings: {
+                            ...state.annotationSettings,
+                            ...presetData.annotationStyleData,
+                        },
+                    }
+                }),
+
+                setActiveAnnotationPresetName: (name) => set({ activeAnnotationPresetName: name }),
+
                 // Per-lot visibility toggles
                 setLotVisibility: (lotId, key, value) => set((state) => {
                     const vis = state.lotVisibility[lotId];
@@ -4328,6 +4382,12 @@ export const useStore = create(
                     if (persistedState.activeLabelPresetName === undefined) {
                         persistedState.activeLabelPresetName = null;
                     }
+                    if (persistedState.activeDimensionPresetName === undefined) {
+                        persistedState.activeDimensionPresetName = null;
+                    }
+                    if (persistedState.activeAnnotationPresetName === undefined) {
+                        persistedState.activeAnnotationPresetName = null;
+                    }
                     // Add new layer keys
                     const lyrs = persistedState.viewSettings?.layers;
                     if (lyrs) {
@@ -4788,6 +4848,8 @@ export const useStore = create(
                     annotationCustomLabels: state.annotationCustomLabels,
                     annotationPositions: state.annotationPositions,
                     activeLabelPresetName: state.activeLabelPresetName,
+                    activeDimensionPresetName: state.activeDimensionPresetName,
+                    activeAnnotationPresetName: state.activeAnnotationPresetName,
                     // Drawing editor (exclude transient: drawingMode, selectedDrawingIds, textEditState)
                     drawingLayers: state.drawingLayers,
                     drawingLayerOrder: state.drawingLayerOrder,

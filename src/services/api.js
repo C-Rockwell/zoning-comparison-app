@@ -189,6 +189,52 @@ export async function deleteLabelPreset(name) {
   })
 }
 
+// ============ Dimension Style Presets ============
+
+export async function listDimensionPresets() {
+  return fetchJSON('/dimension-presets')
+}
+
+export async function saveDimensionPreset(name, data) {
+  return fetchJSON('/dimension-presets', {
+    method: 'POST',
+    body: JSON.stringify({ name, ...data })
+  })
+}
+
+export async function loadDimensionPreset(name) {
+  return fetchJSON(`/dimension-presets/${encodeURIComponent(name)}`)
+}
+
+export async function deleteDimensionPreset(name) {
+  return fetchJSON(`/dimension-presets/${encodeURIComponent(name)}`, {
+    method: 'DELETE'
+  })
+}
+
+// ============ Annotation Style Presets ============
+
+export async function listAnnotationPresets() {
+  return fetchJSON('/annotation-presets')
+}
+
+export async function saveAnnotationPreset(name, data) {
+  return fetchJSON('/annotation-presets', {
+    method: 'POST',
+    body: JSON.stringify({ name, ...data })
+  })
+}
+
+export async function loadAnnotationPreset(name) {
+  return fetchJSON(`/annotation-presets/${encodeURIComponent(name)}`)
+}
+
+export async function deleteAnnotationPreset(name) {
+  return fetchJSON(`/annotation-presets/${encodeURIComponent(name)}`, {
+    method: 'DELETE'
+  })
+}
+
 // ============ Drawing Layer Presets ============
 
 export async function listDrawingPresets() {

@@ -617,6 +617,8 @@ export const TRANSPOSED_ROW_MAP = {
     'Side Interior': 'setbacksPrincipal.sideInterior',
     'Side Street': 'setbacksPrincipal.sideStreet',
     'Dist. Between Buildings': 'setbacksPrincipal.distanceBetweenBuildings',
+    'BTZ - Front (%)': { path: 'setbacksPrincipal.btzFront', type: 'single' },
+    'BTZ - Side Street (%)': { path: 'setbacksPrincipal.btzSideStreet', type: 'single' },
   },
   'SETBACKS — ACCESSORY STRUCTURE': {
     'Front': 'setbacksAccessory.front',
@@ -624,6 +626,8 @@ export const TRANSPOSED_ROW_MAP = {
     'Side Interior': 'setbacksAccessory.sideInterior',
     'Side Street': 'setbacksAccessory.sideStreet',
     'Dist. Between Buildings': 'setbacksAccessory.distanceBetweenBuildings',
+    'BTZ - Front (%)': { path: 'setbacksAccessory.btzFront', type: 'single' },
+    'BTZ - Side Street (%)': { path: 'setbacksAccessory.btzSideStreet', type: 'single' },
   },
   'STRUCTURE DIMENSIONS — PRINCIPAL': {
     'Height (max)': 'structures.principal.height',
@@ -636,14 +640,6 @@ export const TRANSPOSED_ROW_MAP = {
     'Stories (max)': 'structures.accessory.stories',
     'First Story Height (min)': 'structures.accessory.firstStoryHeight',
     'Upper Story Height': 'structures.accessory.upperStoryHeight',
-  },
-  'BUILD-TO ZONE — PRINCIPAL': {
-    'Front (%)': { path: 'setbacksPrincipal.btzFront', type: 'single' },
-    'Side Street (%)': { path: 'setbacksPrincipal.btzSideStreet', type: 'single' },
-  },
-  'BUILD-TO ZONE — ACCESSORY': {
-    'Front (%)': { path: 'setbacksAccessory.btzFront', type: 'single' },
-    'Side Street (%)': { path: 'setbacksAccessory.btzSideStreet', type: 'single' },
   },
   'LOT ACCESS': {
     'Primary Street (Front Street)': { path: 'lotAccess.primaryStreet', type: 'accessMinMax' },
@@ -662,6 +658,22 @@ export const TRANSPOSED_ROW_MAP = {
     'Side Interior': { path: 'parkingLocations.sideInterior.min', type: 'single' },
     'Side Street': { path: 'parkingLocations.sideStreet.min', type: 'single' },
     'Rear': { path: 'parkingLocations.rear.min', type: 'single' },
+  },
+}
+
+/**
+ * Backward-compat aliases for old template section names.
+ * Old templates with separate BTZ sections still import correctly —
+ * the parser checks this map when a section header doesn't match TRANSPOSED_ROW_MAP.
+ */
+export const TRANSPOSED_SECTION_ALIASES = {
+  'BUILD-TO ZONE — PRINCIPAL': {
+    'Front (%)': { path: 'setbacksPrincipal.btzFront', type: 'single' },
+    'Side Street (%)': { path: 'setbacksPrincipal.btzSideStreet', type: 'single' },
+  },
+  'BUILD-TO ZONE — ACCESSORY': {
+    'Front (%)': { path: 'setbacksAccessory.btzFront', type: 'single' },
+    'Side Street (%)': { path: 'setbacksAccessory.btzSideStreet', type: 'single' },
   },
 }
 
@@ -848,7 +860,7 @@ export function parseTransposedCSV(headers, rows) {
     }
 
     if (!currentSection) continue
-    const sectionMap = TRANSPOSED_ROW_MAP[currentSection]
+    const sectionMap = TRANSPOSED_ROW_MAP[currentSection] || TRANSPOSED_SECTION_ALIASES[currentSection]
     if (!sectionMap) continue
 
     const fieldDef = sectionMap[paramCell]

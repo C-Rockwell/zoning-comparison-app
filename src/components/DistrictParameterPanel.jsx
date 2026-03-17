@@ -3871,9 +3871,81 @@ const AnnotationSettingsSection = () => {
     const resetAnnotationPositions = useStore((s) => s.resetAnnotationPositions)
     const annotationCustomLabels = useStore((s) => s.annotationCustomLabels)
     const setAnnotationCustomLabel = useStore((s) => s.setAnnotationCustomLabel)
+    const getAnnotationPresetData = useStore((s) => s.getAnnotationPresetData)
+    const applyAnnotationPreset = useStore((s) => s.applyAnnotationPreset)
+    const setActiveAnnotationPresetName = useStore((s) => s.setActiveAnnotationPresetName)
+    const showToast = useStore((s) => s.showToast)
     const modelSetup = useModelSetup()
     const lotIds = useLotIds()
     const [customLabelsOpen, setCustomLabelsOpen] = useState(false)
+
+    // Annotation style preset modal state
+    const [showSaveAnnotModal, setShowSaveAnnotModal] = useState(false)
+    const [showLoadAnnotModal, setShowLoadAnnotModal] = useState(false)
+    const [annotPresetName, setAnnotPresetName] = useState('')
+    const [annotPresetList, setAnnotPresetList] = useState([])
+    const [annotSearchQuery, setAnnotSearchQuery] = useState('')
+    const [annotPresetLoading, setAnnotPresetLoading] = useState(false)
+
+    const handleSaveAnnotPreset = async (e) => {
+        e.preventDefault()
+        if (!annotPresetName.trim()) return
+        setAnnotPresetLoading(true)
+        try {
+            const data = getAnnotationPresetData()
+            await api.saveAnnotationPreset(annotPresetName.trim(), data)
+            setActiveAnnotationPresetName(annotPresetName.trim())
+            showToast(`Annotation preset "${annotPresetName.trim()}" saved`)
+            setShowSaveAnnotModal(false)
+            setAnnotPresetName('')
+        } catch (err) {
+            showToast(err.message, 'error')
+        }
+        setAnnotPresetLoading(false)
+    }
+
+    const handleOpenLoadAnnot = async () => {
+        setAnnotPresetLoading(true)
+        setAnnotSearchQuery('')
+        try {
+            const list = await api.listAnnotationPresets()
+            setAnnotPresetList(list)
+        } catch (err) {
+            showToast(err.message, 'error')
+            setAnnotPresetList([])
+        }
+        setAnnotPresetLoading(false)
+        setShowLoadAnnotModal(true)
+    }
+
+    const handleLoadAnnotPreset = async (filename) => {
+        setAnnotPresetLoading(true)
+        try {
+            const preset = await api.loadAnnotationPreset(filename)
+            applyAnnotationPreset(preset)
+            setActiveAnnotationPresetName(preset.name)
+            showToast(`Annotation preset "${preset.name}" applied`)
+            setShowLoadAnnotModal(false)
+        } catch (err) {
+            showToast(err.message, 'error')
+        }
+        setAnnotPresetLoading(false)
+    }
+
+    const handleDeleteAnnotPreset = async (filename, name) => {
+        if (!window.confirm(`Delete annotation preset "${name}"?`)) return
+        try {
+            await api.deleteAnnotationPreset(filename)
+            setAnnotPresetList((prev) => prev.filter((p) => p.filename !== filename))
+            showToast(`Preset "${name}" deleted`)
+        } catch (err) {
+            showToast(err.message, 'error')
+        }
+    }
+
+    const filteredAnnotPresets = annotSearchQuery
+        ? annotPresetList.filter((p) => p.name.toLowerCase().includes(annotSearchQuery.toLowerCase()))
+        : annotPresetList
 
     if (!annotationSettings) return null
 
@@ -3882,6 +3954,24 @@ const AnnotationSettingsSection = () => {
     return (
         <Section title="Annotation Labels" icon={<Settings className="w-4 h-4" />} defaultOpen={false}>
             <div className="space-y-2">
+                <div className="flex gap-2 mb-2">
+                    <button
+                        onClick={() => { setAnnotPresetName(''); setShowSaveAnnotModal(true) }}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs transition-colors"
+                        style={{ backgroundColor: 'var(--ui-bg-secondary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-secondary)' }}
+                    >
+                        <Save className="w-3.5 h-3.5" />
+                        Save Styles
+                    </button>
+                    <button
+                        onClick={handleOpenLoadAnnot}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs transition-colors"
+                        style={{ backgroundColor: 'var(--ui-bg-secondary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-secondary)' }}
+                    >
+                        <FolderOpen className="w-3.5 h-3.5" />
+                        Load Styles
+                    </button>
+                </div>
                 <div className="flex items-center justify-between">
                     <span className="text-[10px] font-medium" style={{ color: 'var(--ui-text-secondary)' }}>Text Rotation</span>
                     <div className="flex gap-1 text-[9px]">
@@ -4002,6 +4092,111 @@ const AnnotationSettingsSection = () => {
                     Reset All Label Positions
                 </button>
             </div>
+
+            {/* Save Annotation Preset Modal */}
+            {showSaveAnnotModal && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+                    <div className="rounded-lg p-6 w-full max-w-sm mx-4" style={{ backgroundColor: 'var(--ui-bg-primary)', border: '1px solid var(--ui-border)' }}>
+                        <h2 className="text-lg font-bold mb-4" style={{ color: 'var(--ui-text-primary)' }}>
+                            Save Annotation Style Preset
+                        </h2>
+                        <form onSubmit={handleSaveAnnotPreset}>
+                            <input
+                                type="text"
+                                value={annotPresetName}
+                                onChange={(e) => setAnnotPresetName(e.target.value)}
+                                placeholder="Preset name"
+                                className="w-full px-3 py-2 rounded mb-4 placeholder-theme"
+                                style={{ backgroundColor: 'var(--ui-bg-secondary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-primary)' }}
+                                autoFocus
+                            />
+                            <div className="flex justify-end gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowSaveAnnotModal(false)}
+                                    className="px-4 py-2 hover-text-primary transition-colors"
+                                    style={{ color: 'var(--ui-text-secondary)' }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={annotPresetLoading || !annotPresetName.trim()}
+                                    className="px-4 py-2 rounded disabled:opacity-50 transition-colors hover-bg-accent-hover"
+                                    style={{ backgroundColor: 'var(--ui-accent)', color: '#fff' }}
+                                >
+                                    {annotPresetLoading ? 'Saving...' : 'Save'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Load Annotation Preset Modal */}
+            {showLoadAnnotModal && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+                    <div className="rounded-lg p-5 w-full max-w-md mx-4" style={{ backgroundColor: 'var(--ui-bg-primary)', border: '1px solid var(--ui-border)' }}>
+                        <h2 className="text-lg font-bold mb-3" style={{ color: 'var(--ui-text-primary)' }}>
+                            Load Annotation Style Preset
+                        </h2>
+                        <div className="relative mb-3">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: 'var(--ui-text-muted)' }} />
+                            <input
+                                type="text"
+                                value={annotSearchQuery}
+                                onChange={(e) => setAnnotSearchQuery(e.target.value)}
+                                placeholder="Search presets..."
+                                className="w-full pl-8 pr-3 py-2 rounded text-sm placeholder-theme"
+                                style={{ backgroundColor: 'var(--ui-bg-secondary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-primary)' }}
+                                autoFocus
+                            />
+                        </div>
+                        <div className="max-h-64 overflow-y-auto space-y-1 mb-3">
+                            {annotPresetLoading ? (
+                                <p className="text-xs text-center py-4" style={{ color: 'var(--ui-text-muted)' }}>Loading...</p>
+                            ) : filteredAnnotPresets.length === 0 ? (
+                                <p className="text-xs text-center py-4" style={{ color: 'var(--ui-text-muted)' }}>
+                                    {annotPresetList.length === 0 ? 'No presets saved yet' : 'No matching presets'}
+                                </p>
+                            ) : (
+                                filteredAnnotPresets.map((preset) => (
+                                    <div
+                                        key={preset.filename}
+                                        className="group flex items-center justify-between px-3 py-2 rounded cursor-pointer transition-colors"
+                                        style={{ backgroundColor: 'var(--ui-bg-secondary)' }}
+                                        onClick={() => handleLoadAnnotPreset(preset.filename)}
+                                    >
+                                        <div>
+                                            <div className="text-sm" style={{ color: 'var(--ui-text-primary)' }}>{preset.name}</div>
+                                            <div className="text-[10px]" style={{ color: 'var(--ui-text-muted)' }}>
+                                                {new Date(preset.timestamp).toLocaleDateString()} {new Date(preset.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleDeleteAnnotPreset(preset.filename, preset.name) }}
+                                            className="opacity-0 group-hover:opacity-100 p-1 rounded transition-opacity"
+                                            style={{ color: 'var(--ui-text-muted)' }}
+                                            title="Delete preset"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                        <div className="flex justify-end">
+                            <button
+                                onClick={() => setShowLoadAnnotModal(false)}
+                                className="px-4 py-2 hover-text-primary transition-colors"
+                                style={{ color: 'var(--ui-text-secondary)' }}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </Section>
     )
 }
@@ -4132,6 +4327,9 @@ const DimensionStylesSection = () => {
     const getLabelPresetData = useStore((s) => s.getLabelPresetData)
     const applyLabelPreset = useStore((s) => s.applyLabelPreset)
     const setActiveLabelPresetName = useStore((s) => s.setActiveLabelPresetName)
+    const getDimensionPresetData = useStore((s) => s.getDimensionPresetData)
+    const applyDimensionPreset = useStore((s) => s.applyDimensionPreset)
+    const setActiveDimensionPresetName = useStore((s) => s.setActiveDimensionPresetName)
     const showToast = useStore((s) => s.showToast)
 
     // Label preset modal state
@@ -4141,6 +4339,14 @@ const DimensionStylesSection = () => {
     const [labelPresetList, setLabelPresetList] = useState([])
     const [labelSearchQuery, setLabelSearchQuery] = useState('')
     const [labelPresetLoading, setLabelPresetLoading] = useState(false)
+
+    // Dimension style preset modal state
+    const [showSaveDimStyleModal, setShowSaveDimStyleModal] = useState(false)
+    const [showLoadDimStyleModal, setShowLoadDimStyleModal] = useState(false)
+    const [dimStylePresetName, setDimStylePresetName] = useState('')
+    const [dimStylePresetList, setDimStylePresetList] = useState([])
+    const [dimStyleSearchQuery, setDimStyleSearchQuery] = useState('')
+    const [dimStylePresetLoading, setDimStylePresetLoading] = useState(false)
 
     const ds = styleSettings?.dimensionSettings ?? {}
 
@@ -4204,8 +4410,93 @@ const DimensionStylesSection = () => {
         ? labelPresetList.filter((p) => p.name.toLowerCase().includes(labelSearchQuery.toLowerCase()))
         : labelPresetList
 
+    const handleSaveDimStylePreset = async (e) => {
+        e.preventDefault()
+        if (!dimStylePresetName.trim()) return
+        setDimStylePresetLoading(true)
+        try {
+            const data = getDimensionPresetData()
+            await api.saveDimensionPreset(dimStylePresetName.trim(), data)
+            setActiveDimensionPresetName(dimStylePresetName.trim())
+            showToast(`Dimension preset "${dimStylePresetName.trim()}" saved`)
+            setShowSaveDimStyleModal(false)
+            setDimStylePresetName('')
+        } catch (err) {
+            showToast(err.message, 'error')
+        }
+        setDimStylePresetLoading(false)
+    }
+
+    const handleOpenLoadDimStyles = async () => {
+        setDimStylePresetLoading(true)
+        setDimStyleSearchQuery('')
+        try {
+            const list = await api.listDimensionPresets()
+            setDimStylePresetList(list)
+        } catch (err) {
+            showToast(err.message, 'error')
+            setDimStylePresetList([])
+        }
+        setDimStylePresetLoading(false)
+        setShowLoadDimStyleModal(true)
+    }
+
+    const handleLoadDimStylePreset = async (filename) => {
+        setDimStylePresetLoading(true)
+        try {
+            const preset = await api.loadDimensionPreset(filename)
+            applyDimensionPreset(preset)
+            setActiveDimensionPresetName(preset.name)
+            showToast(`Dimension preset "${preset.name}" applied`)
+            setShowLoadDimStyleModal(false)
+        } catch (err) {
+            showToast(err.message, 'error')
+        }
+        setDimStylePresetLoading(false)
+    }
+
+    const handleDeleteDimStylePreset = async (filename, name) => {
+        if (!window.confirm(`Delete dimension preset "${name}"?`)) return
+        try {
+            await api.deleteDimensionPreset(filename)
+            setDimStylePresetList((prev) => prev.filter((p) => p.filename !== filename))
+            showToast(`Preset "${name}" deleted`)
+        } catch (err) {
+            showToast(err.message, 'error')
+        }
+    }
+
+    const filteredDimStylePresets = dimStyleSearchQuery
+        ? dimStylePresetList.filter((p) => p.name.toLowerCase().includes(dimStyleSearchQuery.toLowerCase()))
+        : dimStylePresetList
+
     return (
         <Section title="Dimensions" icon={<Settings className="w-4 h-4" />} defaultOpen={false}>
+
+            {/* ── Dimension Style Presets ── */}
+            <DimSubSection title="Dimension Style Presets" defaultOpen={false}>
+                <div className="flex gap-2 mb-1">
+                    <button
+                        onClick={() => { setDimStylePresetName(''); setShowSaveDimStyleModal(true) }}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs transition-colors"
+                        style={{ backgroundColor: 'var(--ui-bg-secondary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-secondary)' }}
+                    >
+                        <Save className="w-3.5 h-3.5" />
+                        Save Styles
+                    </button>
+                    <button
+                        onClick={handleOpenLoadDimStyles}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs transition-colors"
+                        style={{ backgroundColor: 'var(--ui-bg-secondary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-secondary)' }}
+                    >
+                        <FolderOpen className="w-3.5 h-3.5" />
+                        Load Styles
+                    </button>
+                </div>
+                <p className="text-[9px]" style={{ color: 'var(--ui-text-muted)' }}>
+                    Save/load dimension line widths, colors, text sizes, and markers independently of full style presets. Custom labels are not affected.
+                </p>
+            </DimSubSection>
 
             {/* ── Line & Marker Styles ── */}
             <DimSubSection title="Line & Marker Styles" defaultOpen={false}>
@@ -4639,6 +4930,111 @@ const DimensionStylesSection = () => {
                         <div className="flex justify-end">
                             <button
                                 onClick={() => setShowLoadLabelModal(false)}
+                                className="px-4 py-2 hover-text-primary transition-colors"
+                                style={{ color: 'var(--ui-text-secondary)' }}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Save Dimension Style Preset Modal */}
+            {showSaveDimStyleModal && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+                    <div className="rounded-lg p-6 w-full max-w-sm mx-4" style={{ backgroundColor: 'var(--ui-bg-primary)', border: '1px solid var(--ui-border)' }}>
+                        <h2 className="text-lg font-bold mb-4" style={{ color: 'var(--ui-text-primary)' }}>
+                            Save Dimension Style Preset
+                        </h2>
+                        <form onSubmit={handleSaveDimStylePreset}>
+                            <input
+                                type="text"
+                                value={dimStylePresetName}
+                                onChange={(e) => setDimStylePresetName(e.target.value)}
+                                placeholder="Preset name"
+                                className="w-full px-3 py-2 rounded mb-4 placeholder-theme"
+                                style={{ backgroundColor: 'var(--ui-bg-secondary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-primary)' }}
+                                autoFocus
+                            />
+                            <div className="flex justify-end gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowSaveDimStyleModal(false)}
+                                    className="px-4 py-2 hover-text-primary transition-colors"
+                                    style={{ color: 'var(--ui-text-secondary)' }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={dimStylePresetLoading || !dimStylePresetName.trim()}
+                                    className="px-4 py-2 rounded disabled:opacity-50 transition-colors hover-bg-accent-hover"
+                                    style={{ backgroundColor: 'var(--ui-accent)', color: '#fff' }}
+                                >
+                                    {dimStylePresetLoading ? 'Saving...' : 'Save'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Load Dimension Style Preset Modal */}
+            {showLoadDimStyleModal && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+                    <div className="rounded-lg p-5 w-full max-w-md mx-4" style={{ backgroundColor: 'var(--ui-bg-primary)', border: '1px solid var(--ui-border)' }}>
+                        <h2 className="text-lg font-bold mb-3" style={{ color: 'var(--ui-text-primary)' }}>
+                            Load Dimension Style Preset
+                        </h2>
+                        <div className="relative mb-3">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: 'var(--ui-text-muted)' }} />
+                            <input
+                                type="text"
+                                value={dimStyleSearchQuery}
+                                onChange={(e) => setDimStyleSearchQuery(e.target.value)}
+                                placeholder="Search presets..."
+                                className="w-full pl-8 pr-3 py-2 rounded text-sm placeholder-theme"
+                                style={{ backgroundColor: 'var(--ui-bg-secondary)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-primary)' }}
+                                autoFocus
+                            />
+                        </div>
+                        <div className="max-h-64 overflow-y-auto space-y-1 mb-3">
+                            {dimStylePresetLoading ? (
+                                <p className="text-xs text-center py-4" style={{ color: 'var(--ui-text-muted)' }}>Loading...</p>
+                            ) : filteredDimStylePresets.length === 0 ? (
+                                <p className="text-xs text-center py-4" style={{ color: 'var(--ui-text-muted)' }}>
+                                    {dimStylePresetList.length === 0 ? 'No presets saved yet' : 'No matching presets'}
+                                </p>
+                            ) : (
+                                filteredDimStylePresets.map((preset) => (
+                                    <div
+                                        key={preset.filename}
+                                        className="group flex items-center justify-between px-3 py-2 rounded cursor-pointer transition-colors"
+                                        style={{ backgroundColor: 'var(--ui-bg-secondary)' }}
+                                        onClick={() => handleLoadDimStylePreset(preset.filename)}
+                                    >
+                                        <div>
+                                            <div className="text-sm" style={{ color: 'var(--ui-text-primary)' }}>{preset.name}</div>
+                                            <div className="text-[10px]" style={{ color: 'var(--ui-text-muted)' }}>
+                                                {new Date(preset.timestamp).toLocaleDateString()} {new Date(preset.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleDeleteDimStylePreset(preset.filename, preset.name) }}
+                                            className="opacity-0 group-hover:opacity-100 p-1 rounded transition-opacity"
+                                            style={{ color: 'var(--ui-text-muted)' }}
+                                            title="Delete preset"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                        <div className="flex justify-end">
+                            <button
+                                onClick={() => setShowLoadDimStyleModal(false)}
                                 className="px-4 py-2 hover-text-primary transition-colors"
                                 style={{ color: 'var(--ui-text-secondary)' }}
                             >
