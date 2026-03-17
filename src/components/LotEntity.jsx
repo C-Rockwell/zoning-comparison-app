@@ -811,9 +811,11 @@ const BTZPlanes = ({ principal, setbacks, streetSides = {}, style }) => {
         // Offset 0.1 ft (~1.2 in) toward front of lot (negative Y) for depth buffer margin
         const planeY = buildingFrontY - 0.1
 
-        // Left-aligned: starts at left edge of building
-        const buildingLeftX = px - buildingWidth / 2
-        const planeCenterX = buildingLeftX + planeWidth / 2
+        // Align front BTZ toward the street-side corner so it meets the side BTZ at 90°
+        const hasRightStreet = streetSides.right
+        const planeCenterX = hasRightStreet
+            ? (px + buildingWidth / 2) - planeWidth / 2   // right-aligned
+            : (px - buildingWidth / 2) + planeWidth / 2   // left-aligned (fallback)
 
         planes.push(
             <mesh

@@ -229,6 +229,7 @@ const SharedCanvas = forwardRef(({ children, onPointerMissed }, ref) => {
     const gridSettings = useStore(state => state.viewSettings.styleSettings?.grid)
     const renderSettings = useStore(useShallow(state => state.renderSettings))
     const sunEnabled = useStore(state => state.sunSettings?.enabled ?? false)
+    const drawingMode = useStore(state => state.drawingMode)
 
     // Expose cameraControlsRef and contentRef to parent
     useImperativeHandle(ref, () => ({
@@ -275,6 +276,7 @@ const SharedCanvas = forwardRef(({ children, onPointerMissed }, ref) => {
             <CameraControls
                 ref={cameraControlsRef}
                 makeDefault
+                enabled={!drawingMode}
                 dollySpeed={0.25}
                 smoothTime={0.35}
             />

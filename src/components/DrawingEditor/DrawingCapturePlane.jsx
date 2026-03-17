@@ -326,15 +326,14 @@ const DrawingCapturePlane = () => {
         return [intersection.x, intersection.y]
     }, [camera, raycaster, groundPlane])
 
-    // Safety: re-enable camera on unmount if drawing/move was interrupted
+    // Safety: resume undo on unmount if move was interrupted
     useEffect(() => {
         return () => {
             if (moveState.current.mode === 'active') {
                 useStore.temporal.getState().resume()
             }
-            if (controls) controls.enabled = true
         }
-    }, [controls])
+    }, [])
 
     // Escape key handler for polygon/leader cancel and move cancel
     useEffect(() => {
@@ -891,9 +890,8 @@ const DrawingCapturePlane = () => {
         drawingState.current = { isDrawing: false, startPoint: null, currentPoint: null, points: [], polygonPlacing: false, leaderPlacing: false }
         setPreviewVersion(v => v + 1)
 
-        // Resume undo, re-enable camera, release pointer
+        // Resume undo, release pointer
         useStore.temporal.getState().resume()
-        if (controls) controls.enabled = true
         e.target.releasePointerCapture(e.pointerId)
     }, [drawingMode, controls, addDrawingObject])
 
@@ -910,10 +908,9 @@ const DrawingCapturePlane = () => {
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
-                visible={false}
             >
                 <planeGeometry args={[10000, 10000]} />
-                <meshBasicMaterial transparent opacity={0} side={THREE.DoubleSide} />
+                <meshBasicMaterial visible={false} side={THREE.DoubleSide} />
             </mesh>
 
             {/* Live preview during drawing */}
