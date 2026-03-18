@@ -281,7 +281,7 @@ const SharedCanvas = forwardRef(({ children, onPointerMissed }, ref) => {
                 smoothTime={0.35}
             />
             <CameraHandler controlsRef={cameraControlsRef} />
-            <Exporter target={contentRef} />
+            <Exporter target={contentRef} cameraControlsRef={cameraControlsRef} />
 
             {showAxes && (
                 <primitive object={new THREE.AxesHelper(100)} />

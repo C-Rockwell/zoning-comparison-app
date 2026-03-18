@@ -336,7 +336,7 @@ const Viewer3D = () => {
                         <option value="1920x1080">1080p (1920x1080)</option>
                         <option value="3840x2160">4K (3840x2160)</option>
                         <option value="7680x4320">8K (7680x4320)</option>
-                        <option value="15360x8640">Max (16K)</option>
+                        <option value="11520x6480">12K (11520×6480)</option>
                         <option value="1080x1080">Square (1080x1080)</option>
                         <option value="3508x2480">A4 (Landscape)</option>
                     </select>
@@ -405,7 +405,7 @@ const Viewer3D = () => {
 
                 <CameraControls ref={cameraControlsRef} makeDefault />
                 <CameraHandler controlsRef={cameraControlsRef} />
-                <Exporter target={contentRef} />
+                <Exporter target={contentRef} cameraControlsRef={cameraControlsRef} />
 
                 {showAxes && (
                     <primitive object={new THREE.AxesHelper(100)} />

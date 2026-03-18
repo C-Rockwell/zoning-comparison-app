@@ -20,6 +20,7 @@ import { downloadDistrictTemplate } from '../utils/templateGenerator'
 import DrawingLayersPanel from './DrawingEditor/DrawingLayersPanel'
 import DrawingPropertiesPanel from './DrawingEditor/DrawingPropertiesPanel'
 import DrawingLayerStylesPanel from './DrawingEditor/DrawingLayerStylesPanel'
+import MassExportModal from './MassExportModal'
 import * as api from '../services/api'
 
 // ============================================
@@ -2681,9 +2682,10 @@ export function buildViewSnapshot(store) {
         lighting: structuredClone(vs.lighting),
         annotationCustomLabels: structuredClone(store.annotationCustomLabels),
         annotationPositions: structuredClone(store.annotationPositions),
-        drawingLayers: structuredClone(store.drawingLayers),
-        drawingLayerOrder: structuredClone(store.drawingLayerOrder),
-        drawingObjects: structuredClone(store.drawingObjects),
+        // Only capture drawing layer visibility (not objects — those are persistent content)
+        drawingLayers: Object.fromEntries(
+            Object.entries(store.drawingLayers).map(([id, layer]) => [id, { visible: layer.visible }])
+        ),
         activeLabelPresetName: store.activeLabelPresetName ?? null,
     }
 }
@@ -2761,15 +2763,19 @@ export function applyViewSnapshot(saved) {
     if (saved.annotationPositions) {
         useStore.setState({ annotationPositions: structuredClone(saved.annotationPositions) })
     }
+    // Drawing layers: only restore VISIBILITY, not the objects themselves.
+    // Drawing objects are content, not view style — they persist across view switches.
     if (saved.drawingLayers) {
-        useStore.setState({ drawingLayers: structuredClone(saved.drawingLayers) })
+        const currentLayers = useStore.getState().drawingLayers
+        const updatedLayers = { ...currentLayers }
+        for (const [layerId, savedLayer] of Object.entries(saved.drawingLayers)) {
+            if (updatedLayers[layerId]) {
+                updatedLayers[layerId] = { ...updatedLayers[layerId], visible: savedLayer.visible }
+            }
+        }
+        useStore.setState({ drawingLayers: updatedLayers })
     }
-    if (saved.drawingLayerOrder) {
-        useStore.setState({ drawingLayerOrder: structuredClone(saved.drawingLayerOrder) })
-    }
-    if (saved.drawingObjects) {
-        useStore.setState({ drawingObjects: structuredClone(saved.drawingObjects) })
-    }
+    // Do NOT apply drawingLayerOrder or drawingObjects — those are persistent content
     if (saved.activeLabelPresetName !== undefined) {
         useStore.setState({ activeLabelPresetName: saved.activeLabelPresetName })
     }
@@ -3050,7 +3056,7 @@ const ViewsSection = () => {
 // BATCH EXPORT SECTION
 // ============================================
 
-const CAMERA_VIEWS = [
+export const CAMERA_VIEWS = [
     { key: 'iso', label: 'ISO' },
     { key: 'top', label: 'Top' },
     { key: 'front', label: 'Front' },
@@ -3058,18 +3064,19 @@ const CAMERA_VIEWS = [
     { key: 'left', label: 'Left' },
 ]
 
-const RESOLUTION_PRESETS = [
+export const RESOLUTION_PRESETS = [
     { value: '1280x720', label: '720p' },
     { value: '1920x1080', label: '1080p' },
     { value: '3840x2160', label: '4K' },
     { value: '7680x4320', label: '8K' },
+    { value: '11520x6480', label: '12K' },
 ]
 
-function sanitizeExportName(str) {
+export function sanitizeExportName(str) {
     return str.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_')
 }
 
-function buildExportLabel(scenario, viewName, slot, cameraView) {
+export function buildExportLabel(scenario, viewName, slot, cameraView) {
     const scenarioPart = scenario || 'default'
     const viewPart = viewName || `view-${slot}`
     const datePart = new Date().toISOString().slice(0, 10)
@@ -3082,10 +3089,13 @@ const BatchExportSection = () => {
     const isBatchExporting = useStore((s) => s.viewSettings.isBatchExporting)
     const addToExportQueue = useStore((s) => s.addToExportQueue)
     const setIsBatchExporting = useStore((s) => s.setIsBatchExporting)
+    const scenarios = useStore((s) => s.scenarios)
+    const massExportActive = useStore((s) => s.massExportActive)
 
     const [checked, setChecked] = useState({}) // { 'slot-view': true }
     const [format, setFormat] = useState('png')
     const [resolution, setResolution] = useState('1920x1080')
+    const [showMassExport, setShowMassExport] = useState(false)
 
     const populatedSlots = useMemo(() =>
         [1, 2, 3, 4, 5].filter(slot => savedViews[slot] != null),
@@ -3221,7 +3231,7 @@ const BatchExportSection = () => {
                     {/* Export button */}
                     <button
                         onClick={handleExport}
-                        disabled={checkedCount === 0 || isBatchExporting}
+                        disabled={checkedCount === 0 || isBatchExporting || massExportActive}
                         className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-opacity disabled:opacity-40"
                         style={{
                             backgroundColor: 'var(--ui-accent)',
@@ -3234,6 +3244,31 @@ const BatchExportSection = () => {
                             : `Export ${checkedCount} Diagram${checkedCount !== 1 ? 's' : ''}`
                         }
                     </button>
+
+                    {/* Mass Export button */}
+                    {scenarios.length > 0 && (
+                        <button
+                            onClick={() => setShowMassExport(true)}
+                            disabled={isBatchExporting || massExportActive}
+                            className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-opacity disabled:opacity-40"
+                            style={{
+                                backgroundColor: 'var(--ui-bg-tertiary)',
+                                color: 'var(--ui-text-primary)',
+                                borderWidth: '1px',
+                                borderStyle: 'solid',
+                                borderColor: 'var(--ui-border)',
+                            }}
+                        >
+                            <Layers className="w-3.5 h-3.5" />
+                            Mass Export All Scenarios
+                        </button>
+                    )}
+
+                    <MassExportModal
+                        isOpen={showMassExport}
+                        onClose={() => setShowMassExport(false)}
+                        scenarios={scenarios}
+                    />
                 </div>
             )}
         </Section>

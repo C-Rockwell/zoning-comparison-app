@@ -721,6 +721,12 @@ export const useStore = create(
                     exportLineScale: 1, // Scale factor for line widths during export (WYSIWYG)
                     exportQueue: [],          // Array of { presetSlot, cameraView, layers, label } for batch export
                     isBatchExporting: false,  // Batch export in progress flag
+                // Mass export — transient (excluded from persist/Zundo)
+                massExportActive: false,
+                massExportPlan: null,      // { scenarios: [{ name }], viewSlots: [1,3,5], cameraViews: ['iso','top'], format: 'png', resolution: '1920x1080' }
+                massExportProgress: null,  // { scenarioIndex, scenarioCount, scenarioName }
+                massExportOriginalScenario: null,
+                massExportOriginalSnapshot: null,
                     // Visual Customization Settings - Split for Existing and Proposed models
                     styleSettings: {
                         existing: {
@@ -3128,6 +3134,35 @@ export const useStore = create(
                 setIsBatchExporting: (bool) => set((state) => ({
                     viewSettings: { ...state.viewSettings, isBatchExporting: bool }
                 })),
+                // Mass export actions
+                startMassExport: (plan) => {
+                    const state = get()
+                    const snapshot = state.getSnapshotData()
+                    set({
+                        massExportActive: true,
+                        massExportPlan: plan,
+                        massExportProgress: { scenarioIndex: -1, scenarioCount: plan.scenarios.length, scenarioName: null },
+                        massExportOriginalScenario: state.activeScenario,
+                        massExportOriginalSnapshot: snapshot,
+                    })
+                },
+                advanceMassExport: () => set((state) => ({
+                    massExportProgress: state.massExportProgress
+                        ? { ...state.massExportProgress, scenarioIndex: state.massExportProgress.scenarioIndex + 1 }
+                        : null
+                })),
+                completeMassExport: () => set({
+                    massExportActive: false,
+                    massExportPlan: null,
+                    massExportProgress: null,
+                    massExportOriginalScenario: null,
+                    massExportOriginalSnapshot: null,
+                }),
+                cancelMassExport: () => set({
+                    massExportActive: false,
+                    massExportPlan: null,
+                    massExportProgress: null,
+                }),
                 // Sun simulation actions
                 setSunSetting: (key, value) => set((state) => ({
                     sunSettings: { ...state.sunSettings, [key]: value }
@@ -5074,6 +5109,11 @@ export const useStore = create(
                         merged.viewSettings.exportQueue = []
                         merged.viewSettings.isBatchExporting = false
                     }
+                    merged.massExportActive = false
+                    merged.massExportPlan = null
+                    merged.massExportProgress = null
+                    merged.massExportOriginalScenario = null
+                    merged.massExportOriginalSnapshot = null
                     // Patch missing dimensionSettings keys (new fields added in v25)
                     if (merged.viewSettings?.styleSettings?.dimensionSettings) {
                         const dimDefaults = {

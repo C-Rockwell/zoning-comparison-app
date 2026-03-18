@@ -11,7 +11,8 @@ import {
 } from '../utils/drawingGeometry'
 import * as api from '../services/api'
 import JSZip from 'jszip'
-import { buildViewSnapshot, applyViewSnapshot } from './DistrictParameterPanel'
+import { buildViewSnapshot, applyViewSnapshot, CAMERA_VIEWS, RESOLUTION_PRESETS, buildExportLabel, sanitizeExportName } from './DistrictParameterPanel'
+import { useShallow } from 'zustand/react/shallow'
 
 const TILE_SIZE = 4096
 
@@ -139,7 +140,7 @@ function renderTiled(gl, scene, camera, fullWidth, fullHeight, tileSize) {
     return offscreen
 }
 
-const Exporter = ({ target }) => {
+const Exporter = ({ target, cameraControlsRef }) => {
     const exportRequested = useStore(state => state.viewSettings.exportRequested)
     const exportFormat = useStore(state => state.viewSettings.exportFormat)
     const exportSettings = useStore(state => state.viewSettings.exportSettings)
@@ -166,6 +167,16 @@ const Exporter = ({ target }) => {
 
             if (objectToExport) {
                 // 1. SAVE STATE
+                // Save camera-controls internal state for proper restoration
+                const controls = cameraControlsRef?.current
+                const savedControlsPos = new THREE.Vector3()
+                const savedControlsTarget = new THREE.Vector3()
+                const savedControlsZoom = camera.zoom
+                if (controls) {
+                    controls.getPosition(savedControlsPos)
+                    controls.getTarget(savedControlsTarget)
+                }
+
                 const originalSize = new THREE.Vector2()
                 gl.getSize(originalSize)
 
@@ -430,21 +441,41 @@ const Exporter = ({ target }) => {
                         gl.setPixelRatio(originalPixelRatio)
                         gl.setSize(originalSize.x, originalSize.y, true)
 
-                        // Restore camera properties
-                        if (originalOrtho) {
-                            camera.left = originalOrtho.left
-                            camera.right = originalOrtho.right
-                            camera.top = originalOrtho.top
-                            camera.bottom = originalOrtho.bottom
-                        } else {
-                            camera.aspect = originalAspect
-                        }
-                        camera.zoom = originalZoom
+                        // Restore camera via camera-controls API (syncs internal state)
+                        if (controls) {
+                            // Restore frustum for ortho cameras (camera-controls doesn't manage these)
+                            if (originalOrtho) {
+                                camera.left = originalOrtho.left
+                                camera.right = originalOrtho.right
+                                camera.top = originalOrtho.top
+                                camera.bottom = originalOrtho.bottom
+                            } else {
+                                camera.aspect = originalAspect
+                            }
 
-                        // Restore Camera Pose
-                        camera.position.copy(originalPosition)
-                        camera.quaternion.copy(originalQuaternion)
-                        camera.up.copy(originalUp)
+                            // Restore position + target via controls API (no transition)
+                            controls.setLookAt(
+                                savedControlsPos.x, savedControlsPos.y, savedControlsPos.z,
+                                savedControlsTarget.x, savedControlsTarget.y, savedControlsTarget.z,
+                                false
+                            )
+                            controls.zoomTo(savedControlsZoom, false)
+                            controls.update(0) // Force immediate sync
+                        } else {
+                            // Fallback: manual restore (no camera-controls available)
+                            if (originalOrtho) {
+                                camera.left = originalOrtho.left
+                                camera.right = originalOrtho.right
+                                camera.top = originalOrtho.top
+                                camera.bottom = originalOrtho.bottom
+                            } else {
+                                camera.aspect = originalAspect
+                            }
+                            camera.zoom = originalZoom
+                            camera.position.copy(originalPosition)
+                            camera.quaternion.copy(originalQuaternion)
+                            camera.up.copy(originalUp)
+                        }
 
                         camera.updateProjectionMatrix()
 
@@ -489,20 +520,28 @@ const Exporter = ({ target }) => {
                     link.href = URL.createObjectURL(blob)
                     link.click()
                     setTimeout(() => URL.revokeObjectURL(link.href), 1000)
-                    showToast?.('Batch export complete', 'success')
+                    if (!useStore.getState().massExportActive) {
+                        showToast?.('Batch export complete', 'success')
+                    }
                 }).catch((err) => {
                     console.error('ZIP generation failed:', err)
                     showToast?.(`Batch export failed: ${err.message}`, 'error')
                 })
             }
 
-            // Restore saved state
-            if (savedLayersRef.current) {
-                applyViewSnapshot(savedLayersRef.current)
-                savedLayersRef.current = null
+            const massActive = useStore.getState().massExportActive
+            if (massActive) {
+                // Don't restore view state — mass orchestrator loads next scenario
+                clearExportQueue()
+                useStore.getState().advanceMassExport()
+            } else {
+                // Original behavior
+                if (savedLayersRef.current) {
+                    applyViewSnapshot(savedLayersRef.current)
+                    savedLayersRef.current = null
+                }
+                clearExportQueue()
             }
-
-            clearExportQueue()
             return
         }
 
@@ -534,6 +573,85 @@ const Exporter = ({ target }) => {
             })
         })
     }, [isBatchExporting, exportQueue, exportRequested, clearExportQueue, showToast])
+
+    // Mass export orchestrator — loads scenarios sequentially, feeds views into batch queue
+    const massExportActive = useStore(s => s.massExportActive)
+    const massExportProgress = useStore(s => s.massExportProgress, useShallow)
+    const massExportPlan = useStore(s => s.massExportPlan)
+
+    useEffect(() => {
+        if (!massExportActive || !massExportPlan || !massExportProgress) return
+        if (isBatchExporting || exportRequested) return  // Wait for current batch
+
+        const { scenarioIndex, scenarioCount } = massExportProgress
+        const nextIndex = scenarioIndex  // Already advanced by advanceMassExport()
+
+        if (nextIndex >= scenarioCount) {
+            // All done — restore original state
+            const { massExportOriginalSnapshot, massExportOriginalScenario } = useStore.getState()
+            if (massExportOriginalSnapshot) {
+                useStore.getState().applySnapshot(massExportOriginalSnapshot)
+            }
+            if (massExportOriginalScenario) {
+                useStore.getState().setActiveScenario(massExportOriginalScenario)
+                const projectId = currentProject?.id
+                if (projectId) {
+                    api.saveScenario(projectId, massExportOriginalScenario, massExportOriginalSnapshot)
+                }
+            }
+            useStore.getState().completeMassExport()
+            showToast?.(`Mass export complete — ${scenarioCount} ZIP${scenarioCount !== 1 ? 's' : ''} downloaded`, 'success')
+            return
+        }
+
+        const scenario = massExportPlan.scenarios[nextIndex]
+        const projectId = currentProject?.id
+        if (!projectId) return
+
+        ;(async () => {
+            try {
+                const data = await api.loadScenario(projectId, scenario.name)
+                const store = useStore.getState()
+                store.applySnapshot(data)
+                store.setActiveScenario(scenario.name)
+
+                // Build queue for this scenario's views
+                const [w, h] = massExportPlan.resolution.split('x').map(Number)
+                store.setExportSettings({ width: w, height: h, label: massExportPlan.resolution })
+
+                const queue = []
+                for (const slot of massExportPlan.viewSlots) {
+                    const saved = store.savedViews?.[slot]
+                    if (!saved) continue
+                    for (const camView of massExportPlan.cameraViews) {
+                        queue.push({
+                            presetSlot: slot,
+                            cameraView: camView,
+                            snapshot: saved,
+                            format: massExportPlan.format,
+                            label: buildExportLabel(scenario.name, saved?.name, slot, camView),
+                        })
+                    }
+                }
+
+                if (queue.length > 0) {
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            store.addToExportQueue(queue)
+                            store.setIsBatchExporting(true)
+                        })
+                    })
+                } else {
+                    // No views for this scenario — skip
+                    store.advanceMassExport()
+                }
+            } catch (err) {
+                console.error(`Mass export: failed to load scenario "${scenario.name}"`, err)
+                showToast?.(`Failed: ${scenario.name}`, 'error')
+                useStore.getState().advanceMassExport()  // Skip failed scenario
+            }
+        })()
+    }, [massExportActive, massExportProgress, massExportPlan, isBatchExporting, exportRequested, currentProject, showToast])
 
     return null
 }
