@@ -330,6 +330,20 @@ const ModelParametersTable = ({ collapseKey, allModelCollapsed }) => {
                     type: 'number', min: 0,
                 },
                 {
+                    label: 'Side, Int. Left (ft)',
+                    visKey: 'setbacks',
+                    getValue: (lot) => lot.setbacks?.principal?.sideInteriorLeft,
+                    setValue: (lotId, v) => updateLotSetback(lotId, 'principal', 'sideInteriorLeft', v),
+                    type: 'number', min: 0,
+                },
+                {
+                    label: 'Side, Int. Right (ft)',
+                    visKey: 'setbacks',
+                    getValue: (lot) => lot.setbacks?.principal?.sideInteriorRight,
+                    setValue: (lotId, v) => updateLotSetback(lotId, 'principal', 'sideInteriorRight', v),
+                    type: 'number', min: 0,
+                },
+                {
                     label: 'Min. Side, Street (ft)',
                     visKey: 'setbacks',
                     cornerOnly: true,
@@ -377,6 +391,20 @@ const ModelParametersTable = ({ collapseKey, allModelCollapsed }) => {
                     visKey: 'accessorySetbacks',
                     getValue: (lot) => lot.setbacks?.accessory?.sideInterior,
                     setValue: (lotId, v) => updateLotSetback(lotId, 'accessory', 'sideInterior', v),
+                    type: 'number', min: 0,
+                },
+                {
+                    label: 'Side, Int. Left (ft)',
+                    visKey: 'accessorySetbacks',
+                    getValue: (lot) => lot.setbacks?.accessory?.sideInteriorLeft,
+                    setValue: (lotId, v) => updateLotSetback(lotId, 'accessory', 'sideInteriorLeft', v),
+                    type: 'number', min: 0,
+                },
+                {
+                    label: 'Side, Int. Right (ft)',
+                    visKey: 'accessorySetbacks',
+                    getValue: (lot) => lot.setbacks?.accessory?.sideInteriorRight,
+                    setValue: (lotId, v) => updateLotSetback(lotId, 'accessory', 'sideInteriorRight', v),
                     type: 'number', min: 0,
                 },
                 {
@@ -653,6 +681,20 @@ const ModelParametersTable = ({ collapseKey, allModelCollapsed }) => {
                     visKey: 'parkingSetbacks',
                     getValue: (lot) => lot.parkingSetbacks?.sideInterior,
                     setValue: (lotId, v) => updateLotParam(lotId, 'parkingSetbacks', { ...lots[lotId]?.parkingSetbacks, sideInterior: v }),
+                    type: 'number', min: 0,
+                },
+                {
+                    label: 'Side, Int. Left (ft)',
+                    visKey: 'parkingSetbacks',
+                    getValue: (lot) => lot.parkingSetbacks?.sideInteriorLeft,
+                    setValue: (lotId, v) => updateLotParam(lotId, 'parkingSetbacks', { ...lots[lotId]?.parkingSetbacks, sideInteriorLeft: v }),
+                    type: 'number', min: 0,
+                },
+                {
+                    label: 'Side, Int. Right (ft)',
+                    visKey: 'parkingSetbacks',
+                    getValue: (lot) => lot.parkingSetbacks?.sideInteriorRight,
+                    setValue: (lotId, v) => updateLotParam(lotId, 'parkingSetbacks', { ...lots[lotId]?.parkingSetbacks, sideInteriorRight: v }),
                     type: 'number', min: 0,
                 },
                 {
@@ -4693,7 +4735,10 @@ const DimensionStylesSection = () => {
                 <SliderInput label="Max Side Street Setback Offset" value={ds.maxSideStreetSetbackDimOffset ?? 5} onChange={(v) => setDimensionSetting('maxSideStreetSetbackDimOffset', v)} min={1} max={100} step={1} />
                 <SliderInput label="Lot Width Offset" value={ds.lotDimOffset ?? 15} onChange={(v) => setDimensionSetting('lotDimOffset', v)} min={5} max={100} step={1} />
                 <SliderInput label="Lot Depth Offset" value={ds.lotDepthDimOffset ?? ds.lotDimOffset ?? 15} onChange={(v) => setDimensionSetting('lotDepthDimOffset', v)} min={5} max={100} step={1} />
-                <SliderInput label="Side Dim Position" value={ds.sideSetbackDimYPosition ?? 0.5} onChange={(v) => setDimensionSetting('sideSetbackDimYPosition', v)} min={0} max={1} step={0.01} />
+                <SliderInput label="Front Dim Position" value={ds.frontSetbackDimPosition ?? 0.5} onChange={(v) => setDimensionSetting('frontSetbackDimPosition', v)} min={-0.5} max={1.5} step={0.01} />
+                <SliderInput label="Rear Dim Position" value={ds.rearSetbackDimPosition ?? 0.5} onChange={(v) => setDimensionSetting('rearSetbackDimPosition', v)} min={-0.5} max={1.5} step={0.01} />
+                <SliderInput label="Left Dim Position" value={ds.leftSetbackDimPosition ?? 0.5} onChange={(v) => setDimensionSetting('leftSetbackDimPosition', v)} min={-0.5} max={1.5} step={0.01} />
+                <SliderInput label="Right Dim Position" value={ds.rightSetbackDimPosition ?? 0.5} onChange={(v) => setDimensionSetting('rightSetbackDimPosition', v)} min={-0.5} max={1.5} step={0.01} />
                 <SliderInput label="Building Height Dim Offset" value={ds.buildingHeightDimOffset ?? -10} onChange={(v) => setDimensionSetting('buildingHeightDimOffset', v)} min={-60} max={0} step={1} />
                 <SliderInput label="Max Height Dim Offset" value={ds.maxHeightDimOffset ?? -20} onChange={(v) => setDimensionSetting('maxHeightDimOffset', v)} min={-60} max={0} step={1} />
                 <SliderInput label="1st Floor Height Dim Offset" value={ds.firstFloorHeightDimOffset ?? -30} onChange={(v) => setDimensionSetting('firstFloorHeightDimOffset', v)} min={-60} max={0} step={1} />

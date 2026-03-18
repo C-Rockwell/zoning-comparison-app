@@ -145,11 +145,11 @@ export const createDefaultLot = (overrides = {}) => ({
         principal: {
             front: 20, maxFront: null, btzFront: null,
             rear: 10,
-            sideInterior: 5,
+            sideInterior: 5, sideInteriorLeft: null, sideInteriorRight: null,
             minSideStreet: null, maxSideStreet: null, btzSideStreet: null,
         },
         accessory: {
-            front: null, rear: null, sideInterior: null, sideStreet: null,
+            front: null, rear: null, sideInterior: null, sideInteriorLeft: null, sideInteriorRight: null, sideStreet: null,
             btzFront: null, btzSideStreet: null,
         },
     },
@@ -177,7 +177,7 @@ export const createDefaultLot = (overrides = {}) => ({
     // Parking locations (Model Parameters)
     parking: { front: false, sideInterior: false, sideStreet: false, rear: false },
     // Parking setbacks (Model Parameters)
-    parkingSetbacks: { front: null, sideInterior: null, sideStreet: null, rear: null },
+    parkingSetbacks: { front: null, sideInterior: null, sideInteriorLeft: null, sideInteriorRight: null, sideStreet: null, rear: null },
     importedModels: {},        // { [modelId]: { filename, name, x, y, rotation, scale, units, style } }
     importedModelOrder: [],    // [modelId, ...] for display order
     ...overrides,
@@ -970,7 +970,11 @@ export const useStore = create(
                             textPerpOffsetDepth: 0,    // depth dim text perp offset (independent)
                             textAnchorYDepth: 'center', // depth dim text side (independent)
                             textModeDepth: 'billboard', // depth dim text mode (billboard faces camera)
-                            sideSetbackDimYPosition: 0.5, // 0=front, 0.5=center, 1=rear
+                            sideSetbackDimYPosition: 0.5, // DEPRECATED — kept for backward compat
+                            frontSetbackDimPosition: 0.5,  // 0=left edge, 0.5=center, 1=right edge (X along lot width)
+                            rearSetbackDimPosition: 0.5,   // same as front
+                            leftSetbackDimPosition: 0.5,   // 0=front edge, 0.5=center, 1=rear edge (Y along lot depth)
+                            rightSetbackDimPosition: 0.5,  // same as left
                             maxFrontSetbackDimOffset: 5,
                             maxSideStreetSetbackDimOffset: 5,
                             lotDepthDimSide: 'right',
@@ -4996,6 +5000,19 @@ export const useStore = create(
                                 if (lot.setbacks.accessory.btzFront === undefined) lot.setbacks.accessory.btzFront = null;
                                 if (lot.setbacks.accessory.btzSideStreet === undefined) lot.setbacks.accessory.btzSideStreet = null;
                             }
+                            // Patch missing per-side interior setback overrides (townhome support)
+                            if (lot.setbacks?.principal) {
+                                if (lot.setbacks.principal.sideInteriorLeft === undefined) lot.setbacks.principal.sideInteriorLeft = null;
+                                if (lot.setbacks.principal.sideInteriorRight === undefined) lot.setbacks.principal.sideInteriorRight = null;
+                            }
+                            if (lot.setbacks?.accessory) {
+                                if (lot.setbacks.accessory.sideInteriorLeft === undefined) lot.setbacks.accessory.sideInteriorLeft = null;
+                                if (lot.setbacks.accessory.sideInteriorRight === undefined) lot.setbacks.accessory.sideInteriorRight = null;
+                            }
+                            if (lot.parkingSetbacks) {
+                                if (lot.parkingSetbacks.sideInteriorLeft === undefined) lot.parkingSetbacks.sideInteriorLeft = null;
+                                if (lot.parkingSetbacks.sideInteriorRight === undefined) lot.parkingSetbacks.sideInteriorRight = null;
+                            }
                             if (!lot.parkingSetbacks) {
                                 lot.parkingSetbacks = { front: null, sideInterior: null, sideStreet: null, rear: null };
                             }
@@ -5087,6 +5104,10 @@ export const useStore = create(
                         if (ds.textAnchorY === undefined) ds.textAnchorY = 'bottom';
                         if (ds.lotDepthDimSide === undefined) ds.lotDepthDimSide = 'right';
                         if (ds.sideSetbackDimYPosition === undefined) ds.sideSetbackDimYPosition = 0.5;
+                        if (ds.frontSetbackDimPosition === undefined) ds.frontSetbackDimPosition = 0.5;
+                        if (ds.rearSetbackDimPosition === undefined) ds.rearSetbackDimPosition = 0.5;
+                        if (ds.leftSetbackDimPosition === undefined) ds.leftSetbackDimPosition = ds.sideSetbackDimYPosition ?? 0.5;
+                        if (ds.rightSetbackDimPosition === undefined) ds.rightSetbackDimPosition = ds.sideSetbackDimYPosition ?? 0.5;
                         // Patch new depth-independent keys
                         if (ds.lotDepthDimOffset === undefined) ds.lotDepthDimOffset = ds.lotDimOffset ?? 15;
                         if (ds.textPerpOffsetDepth === undefined) ds.textPerpOffsetDepth = 0;

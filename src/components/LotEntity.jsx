@@ -70,9 +70,9 @@ const SingleLine = ({ start, end, style, side, lineScale = 1 }) => {
 // ============================================
 const computeSetbackInner = (lotWidth, lotDepth, setbacks, streetSides) => {
     if (!setbacks) return null
-    const { front, rear, sideInterior, minSideStreet } = setbacks
-    const leftValue = streetSides?.left ? (minSideStreet ?? 0) : (sideInterior ?? 0)
-    const rightValue = streetSides?.right ? (minSideStreet ?? 0) : (sideInterior ?? 0)
+    const { front, rear, sideInterior, sideInteriorLeft, sideInteriorRight, minSideStreet } = setbacks
+    const leftValue = streetSides?.left ? (minSideStreet ?? 0) : ((sideInteriorLeft ?? sideInterior) ?? 0)
+    const rightValue = streetSides?.right ? (minSideStreet ?? 0) : ((sideInteriorRight ?? sideInterior) ?? 0)
     const frontValue = front ?? 0
     const rearValue = rear ?? 0
     const w2 = lotWidth / 2, d2 = lotDepth / 2
@@ -231,9 +231,9 @@ const RectLot = ({ width, depth, style, fillStyle, setbackFillActive = false, se
 // SetbackFillOutline — outline lines for buildable area (fill handled by RectLot)
 // ============================================
 const SetbackFillOutline = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, lineScale = 1 }) => {
-    const { front, rear, sideInterior, minSideStreet } = setbacks
-    const leftValue = streetSides.left ? (minSideStreet ?? 0) : (sideInterior ?? 0)
-    const rightValue = streetSides.right ? (minSideStreet ?? 0) : (sideInterior ?? 0)
+    const { front, rear, sideInterior, sideInteriorLeft, sideInteriorRight, minSideStreet } = setbacks
+    const leftValue = streetSides.left ? (minSideStreet ?? 0) : ((sideInteriorLeft ?? sideInterior) ?? 0)
+    const rightValue = streetSides.right ? (minSideStreet ?? 0) : ((sideInteriorRight ?? sideInterior) ?? 0)
     const frontValue = front ?? 0
     const rearValue = rear ?? 0
 
@@ -270,11 +270,11 @@ const SetbackFillOutline = ({ lotWidth, lotDepth, setbacks, style, streetSides =
 // SetbackLines — setback rectangle inside lot
 // ============================================
 const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, showDimensions = false, dimensionSettings = {}, lineScale = 1 }) => {
-    const { front, rear, sideInterior, minSideStreet } = setbacks
+    const { front, rear, sideInterior, sideInteriorLeft, sideInteriorRight, minSideStreet } = setbacks
 
-    // Street-facing sides use minSideStreet; interior sides use sideInterior
-    const leftValue = streetSides.left ? minSideStreet : sideInterior
-    const rightValue = streetSides.right ? minSideStreet : sideInterior
+    // Street-facing sides use minSideStreet; interior sides use sideInterior (per-side overrides)
+    const leftValue = streetSides.left ? minSideStreet : (sideInteriorLeft ?? sideInterior)
+    const rightValue = streetSides.right ? minSideStreet : (sideInteriorRight ?? sideInterior)
 
     // Only render lines for sides with actual positive values
     const hasFront = front != null && front > 0
@@ -303,10 +303,12 @@ const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, s
             {hasSideLeft && <SingleLine start={p4} end={p1} style={style} side="left" lineScale={lineScale} />}
 
             {/* Front Setback dimension */}
-            {hasFront && (
+            {hasFront && (() => {
+                const frontX = -lotWidth / 2 + (dimensionSettings.frontSetbackDimPosition ?? 0.5) * lotWidth
+                return (
                 <Dimension
-                    start={[0, -lotDepth / 2, 0.1]}
-                    end={[0, y1, 0.1]}
+                    start={[frontX, -lotDepth / 2, 0.1]}
+                    end={[frontX, y1, 0.1]}
                     label={resolveDimensionLabel(front, 'setbackFront', dimensionSettings)}
                     offset={dimensionSettings.setbackDimOffset ?? 5}
                     color={style.color || 'red'}
@@ -314,12 +316,15 @@ const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, s
                     settings={dimensionSettings}
                     lineScale={lineScale}
                 />
-            )}
+                )
+            })()}
             {/* Rear Setback dimension */}
-            {hasRear && (
+            {hasRear && (() => {
+                const rearX = -lotWidth / 2 + (dimensionSettings.rearSetbackDimPosition ?? 0.5) * lotWidth
+                return (
                 <Dimension
-                    start={[0, y2, 0.1]}
-                    end={[0, lotDepth / 2, 0.1]}
+                    start={[rearX, y2, 0.1]}
+                    end={[rearX, lotDepth / 2, 0.1]}
                     label={resolveDimensionLabel(rear, 'setbackRear', dimensionSettings)}
                     offset={dimensionSettings.setbackDimOffset ?? 5}
                     color={style.color || 'red'}
@@ -327,10 +332,11 @@ const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, s
                     settings={dimensionSettings}
                     lineScale={lineScale}
                 />
-            )}
+                )
+            })()}
             {/* Left Setback dimension */}
             {hasSideLeft && (() => {
-                const sideY = -lotDepth / 2 + (dimensionSettings.sideSetbackDimYPosition ?? 0.5) * lotDepth
+                const sideY = -lotDepth / 2 + (dimensionSettings.leftSetbackDimPosition ?? 0.5) * lotDepth
                 return (
                 <Dimension
                     start={[-lotWidth / 2, sideY, 0.1]}
@@ -346,7 +352,7 @@ const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, s
             })()}
             {/* Right Setback dimension */}
             {hasSideRight && (() => {
-                const sideY = -lotDepth / 2 + (dimensionSettings.sideSetbackDimYPosition ?? 0.5) * lotDepth
+                const sideY = -lotDepth / 2 + (dimensionSettings.rightSetbackDimPosition ?? 0.5) * lotDepth
                 return (
                 <Dimension
                     start={[x2, sideY, 0.1]}
@@ -370,12 +376,12 @@ const SetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, s
 // Front uses maxFront; street-facing sides use maxSideStreet.
 // ============================================
 const MaxSetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, lineScale = 1, showMaxFrontDim, showMaxSideStreetDim, dimensionSettings }) => {
-    const { maxFront, maxSideStreet, front, rear, sideInterior, minSideStreet } = setbacks
+    const { maxFront, maxSideStreet, front, rear, sideInterior, sideInteriorLeft, sideInteriorRight, minSideStreet } = setbacks
     const z = 0.12 // Above min setback lines at z=0.1
 
-    // Resolve per-side min setback values (same logic as SetbackLines)
-    const leftMinValue = streetSides.left ? minSideStreet : sideInterior
-    const rightMinValue = streetSides.right ? minSideStreet : sideInterior
+    // Resolve per-side min setback values (same logic as SetbackLines, with per-side overrides)
+    const leftMinValue = streetSides.left ? minSideStreet : (sideInteriorLeft ?? sideInterior)
+    const rightMinValue = streetSides.right ? minSideStreet : (sideInteriorRight ?? sideInterior)
 
     // Compute clipped boundaries from min setbacks (fall back to lot edge if no min setback)
     const hasMinLeft = leftMinValue != null && leftMinValue > 0
@@ -440,8 +446,8 @@ const MaxSetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}
             )}
             {/* Max side street setback dimension (first street side found) */}
             {showMaxSideStreetDim && maxSideStreet != null && maxSideStreet > 0 && dimensionSettings && (() => {
-                const sideY = -lotDepth / 2 + (dimensionSettings.sideSetbackDimYPosition ?? 0.5) * lotDepth
                 if (streetSides.left) {
+                    const sideY = -lotDepth / 2 + (dimensionSettings.leftSetbackDimPosition ?? 0.5) * lotDepth
                     return (
                         <Dimension
                             start={[-lotWidth / 2, sideY, z]}
@@ -456,6 +462,7 @@ const MaxSetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}
                     )
                 }
                 if (streetSides.right) {
+                    const sideY = -lotDepth / 2 + (dimensionSettings.rightSetbackDimPosition ?? 0.5) * lotDepth
                     return (
                         <Dimension
                             start={[lotWidth / 2 - maxSideStreet, sideY, z]}
@@ -480,11 +487,11 @@ const MaxSetbackLines = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}
 // Renders sides where accessory setback has a positive value.
 // ============================================
 const AccessorySetbackLines = ({ lotWidth, lotDepth, accessorySetbacks, style, streetSides = {}, lineScale = 1 }) => {
-    const { front: aFront, rear: aRear, sideInterior: aSideInt, sideStreet: aSideStr } = accessorySetbacks
+    const { front: aFront, rear: aRear, sideInterior: aSideInt, sideInteriorLeft: aSideIntLeft, sideInteriorRight: aSideIntRight, sideStreet: aSideStr } = accessorySetbacks
 
-    // Street-facing sides use sideStreet; interior sides use sideInterior
-    const aLeftValue = streetSides.left ? aSideStr : aSideInt
-    const aRightValue = streetSides.right ? aSideStr : aSideInt
+    // Street-facing sides use sideStreet; interior sides use sideInterior (per-side overrides)
+    const aLeftValue = streetSides.left ? aSideStr : (aSideIntLeft ?? aSideInt)
+    const aRightValue = streetSides.right ? aSideStr : (aSideIntRight ?? aSideInt)
 
     // Only render lines for sides with actual positive values
     const hasFront = aFront != null && aFront > 0
@@ -522,7 +529,7 @@ const AccessorySetbackLines = ({ lotWidth, lotDepth, accessorySetbacks, style, s
 // Appears between min and max front/side street setbacks.
 // ============================================
 const PlacementZone = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, lineScale = 1 }) => {
-    const { front, rear, sideInterior, minSideStreet, maxFront, maxSideStreet } = setbacks
+    const { front, rear, sideInterior, sideInteriorLeft, sideInteriorRight, minSideStreet, maxFront, maxSideStreet } = setbacks
 
     const hasMaxFront = maxFront != null && maxFront > 0
     const hasMaxSideLeft = streetSides.left && maxSideStreet != null && maxSideStreet > 0
@@ -537,12 +544,14 @@ const PlacementZone = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, 
         // Outer boundary = min setback positions
         const minFrontY = (front != null && front > 0) ? -d2 + front : -d2
         const rearY = (rear != null && rear > 0) ? d2 - rear : d2
+        const leftInt = sideInteriorLeft ?? sideInterior
+        const rightInt = sideInteriorRight ?? sideInterior
         const leftMinX = streetSides.left
             ? (minSideStreet != null && minSideStreet > 0 ? -w2 + minSideStreet : -w2)
-            : (sideInterior != null && sideInterior > 0 ? -w2 + sideInterior : -w2)
+            : (leftInt != null && leftInt > 0 ? -w2 + leftInt : -w2)
         const rightMinX = streetSides.right
             ? (minSideStreet != null && minSideStreet > 0 ? w2 - minSideStreet : w2)
-            : (sideInterior != null && sideInterior > 0 ? w2 - sideInterior : w2)
+            : (rightInt != null && rightInt > 0 ? w2 - rightInt : w2)
 
         // Inner boundary = max setback positions
         const maxFrontY = hasMaxFront ? -d2 + maxFront : minFrontY
@@ -632,7 +641,7 @@ const PlacementZone = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, 
         }
 
         return { shape: s, outlinePts: pts }
-    }, [lotWidth, lotDepth, front, rear, sideInterior, minSideStreet, maxFront, maxSideStreet, streetSides.left, streetSides.right, hasMaxFront, hasMaxSideLeft, hasMaxSideRight])
+    }, [lotWidth, lotDepth, front, rear, sideInterior, sideInteriorLeft, sideInteriorRight, minSideStreet, maxFront, maxSideStreet, streetSides.left, streetSides.right, hasMaxFront, hasMaxSideLeft, hasMaxSideRight])
 
     if (!shape) return null
 
@@ -689,11 +698,11 @@ const PlacementZone = ({ lotWidth, lotDepth, setbacks, style, streetSides = {}, 
 // Renders sides where parking setback has a positive value.
 // ============================================
 const ParkingSetbackLines = ({ lotWidth, lotDepth, parkingSetbacks, style, streetSides = {}, showDimensions = false, dimensionSettings = {}, lineScale = 1 }) => {
-    const { front: pFront, rear: pRear, sideInterior: pSideInt, sideStreet: pSideStr } = parkingSetbacks
+    const { front: pFront, rear: pRear, sideInterior: pSideInt, sideInteriorLeft: pSideIntLeft, sideInteriorRight: pSideIntRight, sideStreet: pSideStr } = parkingSetbacks
 
-    // Street-facing sides use sideStreet; interior sides use sideInterior
-    const pLeftValue = streetSides.left ? pSideStr : pSideInt
-    const pRightValue = streetSides.right ? pSideStr : pSideInt
+    // Street-facing sides use sideStreet; interior sides use sideInterior (per-side overrides)
+    const pLeftValue = streetSides.left ? pSideStr : (pSideIntLeft ?? pSideInt)
+    const pRightValue = streetSides.right ? pSideStr : (pSideIntRight ?? pSideInt)
 
     // Only render lines for sides with actual positive values
     const hasFront = pFront != null && pFront > 0
@@ -724,10 +733,12 @@ const ParkingSetbackLines = ({ lotWidth, lotDepth, parkingSetbacks, style, stree
             {hasSideLeft && <SingleLine start={p4} end={p1} style={style} side="left" lineScale={lineScale} />}
 
             {/* Front Parking Setback dimension */}
-            {hasFront && (
+            {hasFront && (() => {
+                const frontX = -lotWidth / 2 + (dimensionSettings.frontSetbackDimPosition ?? 0.5) * lotWidth
+                return (
                 <Dimension
-                    start={[0, -lotDepth / 2, z]}
-                    end={[0, y1, z]}
+                    start={[frontX, -lotDepth / 2, z]}
+                    end={[frontX, y1, z]}
                     label={resolveDimensionLabel(pFront, 'parkingSetbackFront', dimensionSettings)}
                     offset={dimensionSettings.setbackDimOffset ?? 5}
                     color={style.color || '#FF9800'}
@@ -735,12 +746,15 @@ const ParkingSetbackLines = ({ lotWidth, lotDepth, parkingSetbacks, style, stree
                     settings={dimensionSettings}
                     lineScale={lineScale}
                 />
-            )}
+                )
+            })()}
             {/* Rear Parking Setback dimension */}
-            {hasRear && (
+            {hasRear && (() => {
+                const rearX = -lotWidth / 2 + (dimensionSettings.rearSetbackDimPosition ?? 0.5) * lotWidth
+                return (
                 <Dimension
-                    start={[0, y2, z]}
-                    end={[0, lotDepth / 2, z]}
+                    start={[rearX, y2, z]}
+                    end={[rearX, lotDepth / 2, z]}
                     label={resolveDimensionLabel(pRear, 'parkingSetbackRear', dimensionSettings)}
                     offset={dimensionSettings.setbackDimOffset ?? 5}
                     color={style.color || '#FF9800'}
@@ -748,10 +762,11 @@ const ParkingSetbackLines = ({ lotWidth, lotDepth, parkingSetbacks, style, stree
                     settings={dimensionSettings}
                     lineScale={lineScale}
                 />
-            )}
+                )
+            })()}
             {/* Left Parking Setback dimension */}
             {hasSideLeft && (() => {
-                const sideY = -lotDepth / 2 + (dimensionSettings.sideSetbackDimYPosition ?? 0.5) * lotDepth
+                const sideY = -lotDepth / 2 + (dimensionSettings.leftSetbackDimPosition ?? 0.5) * lotDepth
                 return (
                 <Dimension
                     start={[-lotWidth / 2, sideY, z]}
@@ -767,7 +782,7 @@ const ParkingSetbackLines = ({ lotWidth, lotDepth, parkingSetbacks, style, stree
             })()}
             {/* Right Parking Setback dimension */}
             {hasSideRight && (() => {
-                const sideY = -lotDepth / 2 + (dimensionSettings.sideSetbackDimYPosition ?? 0.5) * lotDepth
+                const sideY = -lotDepth / 2 + (dimensionSettings.rightSetbackDimPosition ?? 0.5) * lotDepth
                 return (
                 <Dimension
                     start={[x2, sideY, z]}
@@ -1372,8 +1387,8 @@ const LotEntity = ({ lotId, offset = 0, lotIndex = 1, streetSides = {} }) => {
                     setbacks={{
                         front: setbacks?.principal?.front || 0,
                         rear: setbacks?.principal?.rear || 0,
-                        left: (streetSides.left ? setbacks?.principal?.minSideStreet : setbacks?.principal?.sideInterior) || 0,
-                        right: (streetSides.right ? setbacks?.principal?.minSideStreet : setbacks?.principal?.sideInterior) || 0,
+                        left: (streetSides.left ? setbacks?.principal?.minSideStreet : (setbacks?.principal?.sideInteriorLeft ?? setbacks?.principal?.sideInterior)) || 0,
+                        right: (streetSides.right ? setbacks?.principal?.minSideStreet : (setbacks?.principal?.sideInteriorRight ?? setbacks?.principal?.sideInterior)) || 0,
                     }}
                     buildings={{
                         principal: principal ? {
