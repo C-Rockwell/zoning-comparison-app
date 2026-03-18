@@ -910,7 +910,7 @@ const DrawingCapturePlane = () => {
                 onPointerUp={handlePointerUp}
             >
                 <planeGeometry args={[10000, 10000]} />
-                <meshBasicMaterial visible={false} side={THREE.DoubleSide} />
+                <meshBasicMaterial transparent opacity={0} side={THREE.DoubleSide} />
             </mesh>
 
             {/* Live preview during drawing */}

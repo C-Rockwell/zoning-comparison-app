@@ -59,6 +59,7 @@ const Dimension = ({
     plane = 'XY',                   // 'XY' | 'XZ' | 'YZ' | 'auto'
     textMode,                       // 'follow-line' | 'billboard' — overrides settings.textMode
     textBackground,                 // { enabled, color, opacity, padding } — overrides settings.textBackground
+    depthTest = true,               // false for drawing editor overlays
 }) => {
     if (!visible) return null
 
@@ -182,6 +183,7 @@ const Dimension = ({
             anchorY: resolvedAnchorY,
             outlineWidth: fontSize * (settings.outlineWidth ?? 0.1),
             outlineColor: settings.outlineColor || "white",
+            depthTest,
             onSync: bg ? handleSync : undefined,
             ...(fontUrl ? { font: fontUrl } : {}),
         }
@@ -196,6 +198,7 @@ const Dimension = ({
                     color={bg.color || '#ffffff'}
                     opacity={bg.opacity ?? 0.85}
                     transparent
+                    depthTest={depthTest}
                     side={THREE.DoubleSide}
                 />
             </mesh>

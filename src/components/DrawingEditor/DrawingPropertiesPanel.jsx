@@ -11,7 +11,7 @@ import SliderInput from '../ui/SliderInput'
 const STROKE_TYPES = new Set(['freehand', 'line', 'arrow', 'polygon', 'rectangle', 'roundedRect', 'circle', 'ellipse', 'star', 'octagon', 'leader', 'dimension'])
 const FILL_TYPES = new Set(['polygon', 'rectangle', 'roundedRect', 'circle', 'ellipse', 'star', 'octagon'])
 const TEXT_TYPES = new Set(['text', 'leader', 'dimension'])
-const TEXT_OUTLINE_TYPES = new Set(['text'])
+const TEXT_OUTLINE_TYPES = new Set(['text', 'leader', 'dimension'])
 const ARROW_TYPES = new Set(['arrow'])
 const ROUNDED_RECT_TYPES = new Set(['roundedRect'])
 const STAR_TYPES = new Set(['star'])

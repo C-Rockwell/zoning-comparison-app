@@ -446,13 +446,13 @@ const TextRenderer = ({ position, text, fontSize, fontFamily, textColor, outline
             outlineWidth={outlineWidth ?? 0.1}
             outlineColor={outlineColor ?? '#ffffff'}
             font={fontUrl}
-            depthTest={true}
+            depthTest={false}
             visible={true}
         />
     )
 }
 
-const LeaderRenderer = ({ targetPoint, textPosition, text, fontSize, fontFamily, textColor, strokeColor, strokeWidth, elbow, elbowLength }) => {
+const LeaderRenderer = ({ targetPoint, textPosition, text, fontSize, fontFamily, textColor, strokeColor, strokeWidth, elbow, elbowLength, outlineWidth, outlineColor }) => {
     const fontUrl = useMemo(() => {
         if (!fontFamily) return undefined
         return DIMENSION_FONT_OPTIONS.find(f => f.label === fontFamily)?.url
@@ -469,19 +469,20 @@ const LeaderRenderer = ({ targetPoint, textPosition, text, fontSize, fontFamily,
                 lineWidth: strokeWidth,
                 textColor: textColor ?? strokeColor,
                 fontSize: fontSize ?? 3,
-                outlineWidth: 0.1,
-                outlineColor: '#ffffff',
+                outlineWidth: outlineWidth ?? 0.1,
+                outlineColor: outlineColor ?? '#ffffff',
                 endMarker: 'arrow',
             }}
             textRotation="billboard"
             visible={true}
             elbow={elbow}
             elbowLength={elbowLength}
+            depthTest={false}
         />
     )
 }
 
-const DimensionRenderer = ({ start, end, label, strokeColor, strokeWidth, lineType, fontSize, fontFamily, textColor }) => {
+const DimensionRenderer = ({ start, end, label, strokeColor, strokeWidth, lineType, fontSize, fontFamily, textColor, outlineWidth, outlineColor }) => {
     const settings = useMemo(() => ({
         lineColor: strokeColor,
         lineWidth: strokeWidth,
@@ -491,7 +492,9 @@ const DimensionRenderer = ({ start, end, label, strokeColor, strokeWidth, lineTy
         fontFamily: fontFamily,
         dimensionLineStyle: lineType ?? 'solid',
         extensionLineStyle: 'solid',
-    }), [strokeColor, strokeWidth, textColor, fontSize, fontFamily, lineType])
+        outlineWidth: outlineWidth ?? 0.1,
+        outlineColor: outlineColor ?? '#ffffff',
+    }), [strokeColor, strokeWidth, textColor, fontSize, fontFamily, lineType, outlineWidth, outlineColor])
 
     return (
         <Dimension
@@ -500,8 +503,9 @@ const DimensionRenderer = ({ start, end, label, strokeColor, strokeWidth, lineTy
             label={label}
             offset={0}
             settings={settings}
-            textMode="follow-line"
+            textMode="billboard"
             visible={true}
+            depthTest={false}
         />
     )
 }
@@ -671,6 +675,8 @@ const DrawingObjectRenderer = ({ obj, isSelected }) => {
                     strokeWidth={strokeWidth}
                     elbow={obj.elbow}
                     elbowLength={obj.elbowLength}
+                    outlineWidth={obj.outlineWidth}
+                    outlineColor={obj.outlineColor}
                 />
             )
         case 'dimension':
@@ -685,6 +691,8 @@ const DrawingObjectRenderer = ({ obj, isSelected }) => {
                     fontSize={obj.fontSize}
                     fontFamily={obj.fontFamily}
                     textColor={isSelected ? SELECTED_COLOR : (obj.textColor ?? '#000000')}
+                    outlineWidth={obj.outlineWidth}
+                    outlineColor={obj.outlineColor}
                 />
             )
         default:

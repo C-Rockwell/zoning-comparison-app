@@ -18,6 +18,7 @@ const LeaderCallout = ({
     elbow = false,                  // use bent leader with horizontal landing
     elbowLength = 5,                // length of horizontal landing line
     font,                           // optional font URL for text
+    depthTest = true,               // false for drawing editor overlays
 }) => {
     if (!visible || !text) return null
 
@@ -92,6 +93,7 @@ const LeaderCallout = ({
                 outlineColor={settings.outlineColor || '#ffffff'}
                 lineScale={lineScale}
                 font={font}
+                depthTest={depthTest}
             />
         </group>
     )
